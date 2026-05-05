@@ -50,3 +50,46 @@ export async function getRepositoryCommits(
     throw error;
   }
 }
+
+export async function getRepositoryBranches(
+  owner: string,
+  repo: string,
+): Promise<string[]> {
+  "use cache";
+  cacheTag(`branches:${owner}:${repo}`);
+
+  try {
+    const { data } = await octokit.request(
+      "GET /repos/{owner}/{repo}/branches",
+      {
+        owner,
+        repo,
+        per_page: 100,
+      },
+    );
+
+    return data.map(branch => branch.name);
+  } catch (error) {
+    console.error(`Error fetching branches for ${owner}/${repo}:`, error);
+    throw error;
+  }
+}
+
+export async function getRepositoryById(
+  repoId: number,
+): Promise<GitHubRepository | null> {
+  "use cache";
+  cacheTag(`repository:${repoId}`);
+
+  try {
+    const { data } = await octokit.request("GET /user/repos", {
+      per_page: 100,
+    });
+
+    const repository = data.find(repo => repo.id === repoId);
+    return repository || null;
+  } catch (error) {
+    console.error(`Error fetching repository ${repoId}:`, error);
+    return null;
+  }
+}
