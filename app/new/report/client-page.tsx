@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, GitCommit, Calendar, GitBranch } from "lucide-react";
+import { ArrowLeft, GitCommit, Calendar, GitBranch, FileText, Users, TrendingUp } from "lucide-react";
+import { useState } from "react";
 
 interface ReportClientPageProps {
   commits: any[];
@@ -10,6 +11,8 @@ interface ReportClientPageProps {
   startDate: string;
   endDate: string;
   branch: string;
+  technicalReport: string;
+  executiveSummary: string;
 }
 
 export default function ReportClientPage({ 
@@ -17,11 +20,27 @@ export default function ReportClientPage({
   repository, 
   startDate, 
   endDate, 
-  branch 
+  branch,
+  technicalReport,
+  executiveSummary
 }: ReportClientPageProps) {
+  const [activeTab, setActiveTab] = useState<'summary' | 'technical'>('summary');
   
   const handleBack = () => {
     window.history.back();
+  };
+
+  const renderMarkdown = (content: string) => {
+    // Simple markdown rendering for MVP
+    return content
+      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mb-4">$1</h1>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mb-3">$1</h2>')
+      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-medium mb-2">$1</h3>')
+      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+      .replace(/\*(.*)\*/gim, '<em>$1</em>')
+      .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/\n\n/gim, '</p><p class="mb-4">')
+      .replace(/\n/gim, '<br/>');
   };
 
   if (!repository) {
@@ -95,60 +114,56 @@ export default function ReportClientPage({
             </div>
 
             <div className="pt-6 border-t">
-              <div className="mb-4">
-                <h3 className="text-lg font-medium mb-4">Commits ({commits.length})</h3>
-              </div>
-              
-              <div className="space-y-4">
-                {commits.length === 0 ? (
-                  <div className="text-center py-8">
-                    <GitCommit className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">No commits found in this date range</p>
+              {/* Tab Navigation */}
+              <div className="flex space-x-1 mb-6 border-b">
+                <button
+                  onClick={() => setActiveTab('summary')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'summary'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Executive Summary
                   </div>
-                ) : (
-                  commits.map((commit: any, index: number) => (
-                    <Card key={commit.sha || index} className="border-l-4 border-blue-500">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="shrink-0">
-                            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                              <GitCommit className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <p className="font-medium text-sm">{commit.commit?.author?.name || 'Unknown'}</p>
-                              <span className="text-muted-foreground text-xs">
-                                {new Date(commit.commit?.author?.date || commit.commit?.committer?.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                            
-                            <h4 className="font-medium text-sm mb-2 text-blue-600">
-                              {commit.commit?.message?.split('\n')[0] || 'No commit message'}
-                            </h4>
-                            
-                            {commit.commit?.message?.split('\n').length > 1 && (
-                              <p className="text-muted-foreground text-xs mt-1">
-                                {commit.commit?.message?.split('\n').slice(1).join('\n')}
-                              </p>
-                            )}
-                            
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
-                              <div className="flex items-center gap-1">
-                                <GitCommit className="h-3 w-3" />
-                                <span>{commit.sha?.substring(0, 7)}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                <span>{new Date(commit.commit?.author?.date || commit.commit?.committer?.date).toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                </button>
+                <button
+                  onClick={() => setActiveTab('technical')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'technical'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Technical Report
+                  </div>
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="min-h-[400px]">
+                {activeTab === 'summary' && (
+                  <div className="prose prose-sm max-w-none">
+                    <div 
+                      dangerouslySetInnerHTML={{ 
+                        __html: `<p class="mb-4">${renderMarkdown(executiveSummary)}</p>` 
+                      }} 
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'technical' && (
+                  <div className="prose prose-sm max-w-none">
+                    <div 
+                      dangerouslySetInnerHTML={{ 
+                        __html: `<p class="mb-4">${renderMarkdown(technicalReport)}</p>` 
+                      }} 
+                    />
+                  </div>
                 )}
               </div>
             </div>
