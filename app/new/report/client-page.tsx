@@ -2,36 +2,45 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, GitCommit, Calendar, GitBranch, FileText, Users, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, GitCommit, Calendar, GitBranch, Copy } from "lucide-react";
+import { GitHubRepository } from "@/app/actions/github";
+import { toast } from "sonner";
 
+// TODO: Update types
 interface ReportClientPageProps {
   commits: any[];
-  repository: any;
+  repository: GitHubRepository;
   startDate: string;
   endDate: string;
   branch: string;
-  technicalReport: string;
-  executiveSummary: string;
+  report: string;
+  reportId?: string;
 }
 
+
 export default function ReportClientPage({ 
-  commits, 
   repository, 
   startDate, 
   endDate, 
   branch,
-  technicalReport,
-  executiveSummary
+  report,
 }: ReportClientPageProps) {
-  const [activeTab, setActiveTab] = useState<'summary' | 'technical'>('summary');
   
   const handleBack = () => {
     window.history.back();
   };
 
+  const handleCopyMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      toast.success('Report copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy report:', err);
+      toast.error('Failed to copy report');
+    }
+  };
+
   const renderMarkdown = (content: string) => {
-    // Simple markdown rendering for MVP
     return content
       .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mb-4">$1</h1>')
       .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mb-3">$1</h2>')
@@ -73,7 +82,7 @@ export default function ReportClientPage({
           </Button>
 
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-semibold mb-2">Commit Report</h1>
+            <h1 className="text-2xl font-semibold mb-2">Business Report</h1>
             <p className="text-muted-foreground text-sm">
               Report for {repository.name} on {branch} branch
             </p>
@@ -82,7 +91,18 @@ export default function ReportClientPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Report Details</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Report Details</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyMarkdown}
+                className="flex items-center gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Copy Markdown
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -114,57 +134,14 @@ export default function ReportClientPage({
             </div>
 
             <div className="pt-6 border-t">
-              {/* Tab Navigation */}
-              <div className="flex space-x-1 mb-6 border-b">
-                <button
-                  onClick={() => setActiveTab('summary')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'summary'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Executive Summary
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('technical')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'technical'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Technical Report
-                  </div>
-                </button>
-              </div>
-
-              {/* Tab Content */}
               <div className="min-h-[400px]">
-                {activeTab === 'summary' && (
-                  <div className="prose prose-sm max-w-none">
-                    <div 
-                      dangerouslySetInnerHTML={{ 
-                        __html: `<p class="mb-4">${renderMarkdown(executiveSummary)}</p>` 
-                      }} 
-                    />
-                  </div>
-                )}
-
-                {activeTab === 'technical' && (
-                  <div className="prose prose-sm max-w-none">
-                    <div 
-                      dangerouslySetInnerHTML={{ 
-                        __html: `<p class="mb-4">${renderMarkdown(technicalReport)}</p>` 
-                      }} 
-                    />
-                  </div>
-                )}
+                <div className="prose prose-sm max-w-none">
+                  <div 
+                    dangerouslySetInnerHTML={{ 
+                      __html: `<p class="mb-4">${renderMarkdown(report)}</p>` 
+                    }} 
+                  />
+                </div>
               </div>
             </div>
           </CardContent>

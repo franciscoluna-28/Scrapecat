@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useFormStore } from "@/store/form";
@@ -11,7 +11,9 @@ interface CreateReportClientPageProps {
   repositories: GitHubRepository[];
 }
 
-export default function CreateReportClientPage({ repositories }: CreateReportClientPageProps) {
+export default function CreateReportClientPage({
+  repositories,
+}: CreateReportClientPageProps) {
   const router = useRouter();
   const { setSelectedRepository } = useFormStore();
 
@@ -25,31 +27,34 @@ export default function CreateReportClientPage({ repositories }: CreateReportCli
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold mb-2">Create Report</h1>
-          <p className="text-muted-foreground text-sm">Choose a repository to generate a commit report</p>
+          <p className="text-muted-foreground text-sm">
+            Choose a repository to generate a commit report
+          </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>
-              <span className="flex items-center gap-2">
-                Select Repository
-              </span>
+              <span className="flex items-center gap-2">Select Repository</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {repositories.length === 0 ? (
               <div className="text-center py-12">
                 <GitBranch className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">No repositories found</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  No repositories found
+                </h3>
                 <p className="text-muted-foreground">
-                  Ensure your GITHUB_TOKEN has access to your repositories and is properly configured.
+                  Ensure your GITHUB_TOKEN has access to your repositories and
+                  is properly configured.
                 </p>
               </div>
             ) : (
               <div className="space-y-2">
                 {repositories.map((repo) => (
-                  <RepositoryCard 
-                    key={repo.id} 
+                  <RepositoryCard
+                    key={repo.id}
                     repository={repo}
                     onSelect={() => handleRepositorySelect(repo)}
                   />
@@ -63,15 +68,15 @@ export default function CreateReportClientPage({ repositories }: CreateReportCli
   );
 }
 
-function RepositoryCard({ 
-  repository, 
-  onSelect 
-}: { 
+function RepositoryCard({
+  repository,
+  onSelect,
+}: {
   repository: GitHubRepository;
   onSelect: () => void;
 }) {
   return (
-    <Card 
+    <Card
       className="hover:bg-accent/50 transition-colors cursor-pointer hover:border-primary/20"
       onClick={onSelect}
     >
@@ -79,18 +84,18 @@ function RepositoryCard({
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold truncate">
-                {repository.name}
-              </h3>
+              <h3 className="font-semibold truncate">{repository.name}</h3>
               {repository.private && (
-                <Badge variant="secondary" className="text-xs">{repository.private ? "Private" : "Public"}</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {repository.private ? "Private" : "Public"}
+                </Badge>
               )}
             </div>
-            
+
             <p className="text-sm text-muted-foreground mb-2 truncate">
               {repository.description || "No description available"}
             </p>
-            
+
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Star className="h-3 w-3" />
@@ -98,11 +103,18 @@ function RepositoryCard({
               </div>
               <div className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                <span>Updated {repository.updated_at ? new Date(repository.updated_at).toLocaleDateString() : "Unknown"}</span>
+                <span>
+                  Updated{" "}
+                  {repository.updated_at
+                    ? new Date(repository.updated_at).toLocaleDateString(
+                        "en-US",
+                      )
+                    : "Unknown"}
+                </span>
               </div>
             </div>
           </div>
-          
+
           <ChevronRight className="h-5 w-5 text-muted-foreground ml-4 shrink-0" />
         </div>
       </CardContent>

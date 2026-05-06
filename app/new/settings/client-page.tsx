@@ -13,69 +13,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFormStore } from "@/store/form";
-import { GitHubRepository } from "../../actions/github";
-import { GitBranch, ArrowLeft } from "lucide-react";
-
-interface FormErrors {
-  startDate?: string;
-  endDate?: string;
-}
+import { GitHubRepository, GitHubCommit } from "../../actions/github";
+import { GitBranch, ArrowLeft, Book, Loader2 } from "lucide-react";
+import { processCommitsForAiReport } from "@/lib/utils";
 
 interface SettingsClientPageProps {
-  repositories: GitHubRepository[];
   initialBranches: string[];
   initialRepository: GitHubRepository | null;
+  initialCommits: GitHubCommit[];
 }
 
+// TODO: Update types and remove unused props
 export default function SettingsClientPage({
-  repositories,
   initialBranches,
   initialRepository,
+  initialCommits,
 }: SettingsClientPageProps) {
   const router = useRouter();
   const {
     selectedRepository,
     selectedBranch,
     branches,
-    setDateRange,
+    startDate,
+    endDate,
+    isLoading,
     setSelectedRepository,
     setSelectedBranch,
     setBranches,
+    setDateRange,
+    setIsLoading,
   } = useFormStore();
 
-  const [formStartDate, setFormStartDate] = useState("");
-  const [formEndDate, setFormEndDate] = useState("");
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-
-  useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    setFormEndDate(today);
-  }, []);
-
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-
-    if (!formStartDate) {
-      errors.startDate = "Start date is required";
-    }
-
-    if (formEndDate && formStartDate) {
-      const start = new Date(formStartDate);
-      const end = new Date(formEndDate);
-      if (end < start) {
-        errors.endDate = "End date must be after or equal to start date";
-      }
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  useEffect(() => {
-    if (formStartDate || formEndDate) {
-      setDateRange(formStartDate, formEndDate);
-    }
-  }, [formStartDate, formEndDate, setDateRange]);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (initialRepository) {
@@ -100,7 +69,33 @@ export default function SettingsClientPage({
     setSelectedBranch,
   ]);
 
-  const handleGenerateReport = () => {
+  useEffect(() => {
+    if (!endDate) {
+      const today = new Date().toISOString().split("T")[0];
+      setDateRange(startDate, today);
+    }
+  }, [startDate, endDate, setDateRange]);
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!startDate) {
+      errors.startDate = "Start date is required";
+    }
+
+    if (endDate && startDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (end < start) {
+        errors.endDate = "End date must be after or equal to start date";
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleGenerateReport = async () => {
     if (!validateForm()) {
       return;
     }
@@ -110,17 +105,75 @@ export default function SettingsClientPage({
       return;
     }
 
-    const finalEndDate = formEndDate || new Date().toISOString().split("T")[0];
-    console.log("Generating report with data:", {
-      repository: selectedRepository.name,
-      startDate: formStartDate,
-      endDate: finalEndDate,
-      branch: selectedBranch,
-    });
+    setIsLoading(true);
 
-    // Navigate to report page with githubId
-    if (selectedRepository) {
-      router.push(`/new/report?githubId=${selectedRepository.id}`);
+    try {
+      const finalEndDate = endDate || new Date().toISOString().split("T")[0];
+      console.log("Generating report with data:", {
+        repository: selectedRepository.name,
+        startDate,
+        endDate: finalEndDate,
+        branch: selectedBranch,
+      });
+
+      try {
+        const commitsResponse = await fetch(
+          `/api/commits?owner=${selectedRepository.owner.login}&repo=${selectedRepository.name}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`
+        );
+        
+        if (!commitsResponse.ok) {
+          throw new Error('Failed to fetch commits');
+        }
+        
+        const { commits } = await commitsResponse.json() as { commits: GitHubCommit[] };
+
+        console.log("Sending report request with data:", {
+          repository: selectedRepository.name,
+          branch: selectedBranch,
+          startDate,
+          endDate: finalEndDate,
+          commitsCount: commits.length,
+          commits: commits.slice(0, 3).map(c => ({ author: c.commit.author?.name, message: c.commit.message.split('\n')[0] }))
+        });
+
+        // Generate business report
+        const response = await fetch("/api/generate-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data: {
+              repository: selectedRepository.name,
+              branch: selectedBranch,
+              startDate,
+              endDate: finalEndDate,
+              commits: processCommitsForAiReport(commits),
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("API response not ok:", errorText);
+          throw new Error(`Failed to generate report: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log("Report generation successful:", data);
+
+        if (selectedRepository) {
+          router.push(
+            `/new/report?reportId=${data.reportId}`,
+          );
+        }
+      } catch (error) {
+        console.error("Report generation error:", error);
+        throw new Error(`Failed to generate report: ${error.message}`);
+      }
+    } catch (error) {
+      console.error("Error generating report:", error);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -197,14 +250,15 @@ export default function SettingsClientPage({
                   <input
                     type="date"
                     id="startDate"
-                    value={formStartDate}
+                    value={startDate}
                     onChange={(e) => {
-                      setFormStartDate(e.target.value);
+                      setDateRange(e.target.value, endDate);
                       if (formErrors.startDate) {
-                        setFormErrors((prev) => ({
-                          ...prev,
-                          startDate: undefined,
-                        }));
+                        setFormErrors((prev: Record<string, string>) => {
+                          const newErrors = { ...prev };
+                          delete newErrors.startDate;
+                          return newErrors;
+                        });
                       }
                     }}
                     className={`w-full p-2 border rounded-md bg-background mt-2 ${
@@ -228,14 +282,15 @@ export default function SettingsClientPage({
                   <input
                     type="date"
                     id="endDate"
-                    value={formEndDate}
+                    value={endDate}
                     onChange={(e) => {
-                      setFormEndDate(e.target.value);
+                      setDateRange(startDate, e.target.value);
                       if (formErrors.endDate) {
-                        setFormErrors((prev) => ({
-                          ...prev,
-                          endDate: undefined,
-                        }));
+                        setFormErrors((prev: Record<string, string>) => {
+                          const newErrors = { ...prev };
+                          delete newErrors.endDate;
+                          return newErrors;
+                        });
                       }
                     }}
                     className={`w-full p-2 border rounded-md bg-background mt-2 ${
@@ -270,11 +325,21 @@ export default function SettingsClientPage({
             <div className="pt-4 mx-auto w-fit">
               <Button
                 onClick={handleGenerateReport}
-                disabled={!formStartDate || !selectedBranch}
+                disabled={!startDate || !selectedBranch || isLoading}
                 className="max-w-72"
                 size="lg"
               >
-                Generate Report
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating Report...
+                  </>
+                ) : (
+                  <>
+                    <Book className="mr-2" />
+                    Generate Report
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>

@@ -6,6 +6,9 @@ import { Endpoints } from "@octokit/types";
 export type GitHubRepository =
   Endpoints["GET /user/repos"]["response"]["data"][number];
 
+export type GitHubCommit =
+  Endpoints["GET /repos/{owner}/{repo}/commits"]["response"]["data"][number];
+
 type GetAllRepositoriesParameters = Endpoints["GET /user/repos"]["parameters"];
 
 export async function getAllRepositories(
@@ -28,20 +31,40 @@ export async function getRepositoryCommits(
   owner: string,
   repo: string,
   limit: number = 30,
-) {
+  startDate?: string,
+  endDate?: string,
+): Promise<GitHubCommit[]> {
   "use cache";
-  cacheTag(`commits:${owner}:${repo}`);
+  cacheTag(`commits:${owner}:${repo}:${startDate || 'all'}:${endDate || 'all'}`);
 
   try {
+    const requestParams: {
+      owner: string;
+      repo: string;
+      per_page: number;
+      sort: string;
+      direction: string;
+      since?: string;
+      until?: string;
+    } = {
+      owner,
+      repo,
+      per_page: limit,
+      sort: "created",
+      direction: "desc",
+    };
+
+    // Add date range if provided
+    if (startDate) {
+      requestParams.since = startDate;
+    }
+    if (endDate) {
+      requestParams.until = endDate;
+    }
+
     const { data } = await octokit.request(
       "GET /repos/{owner}/{repo}/commits",
-      {
-        owner,
-        repo,
-        per_page: limit,
-        sort: "created",
-        direction: "desc",
-      },
+      requestParams,
     );
 
     return data;

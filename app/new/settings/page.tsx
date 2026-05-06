@@ -1,17 +1,20 @@
 import { Suspense } from "react";
-import { getRepositoryById, getRepositoryBranches } from "../../actions/github";
+import { getRepositoryById, getRepositoryBranches, getRepositoryCommits, GitHubCommit } from "../../actions/github";
 import SettingsClientPage from "./client-page";
 import SettingsLoading from "./loading";
 
 interface SettingsPageProps {
-  searchParams: Promise<{ githubId?: string }>;
+  searchParams: Promise<{ githubId?: string; branch?: string }>;
 }
 
-async function SettingsContent({ searchParams }: { searchParams: Promise<{ githubId?: string }> }) {
-  const { githubId } = await searchParams;
-  
+async function SettingsContent({ searchParams }: { searchParams: Promise<{ githubId?: string; branch?: string; startDate?: string; endDate?: string }> }) {
+  const { githubId, branch, startDate, endDate } = await searchParams;
+  const MAX_COMMITS = 50;
+  const FALLBACK_BRANCHES = ['main', 'dev'];
+
   let branches: string[] = [];
   let selectedRepository = null;
+  let commits: GitHubCommit[] = [];
 
   if (githubId) {
     const repoId = parseInt(githubId, 10);
@@ -21,18 +24,28 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<{ githu
     if (selectedRepository) {
       try {
         branches = await getRepositoryBranches(selectedRepository.owner.login, selectedRepository.name);
+        
+        if (branch) {
+          commits = await getRepositoryCommits(
+            selectedRepository.owner.login, 
+            selectedRepository.name, 
+            MAX_COMMITS,
+            startDate,
+            endDate
+          );
+        }
       } catch (error) {
-        console.error('Failed to fetch branches in settings page:', error);
-        branches = ['main', 'dev'];
+        console.error('Failed to fetch branches/commits in settings page:', error);
+        branches = FALLBACK_BRANCHES;
       }
     }
   }
 
   return (
     <SettingsClientPage 
-      repositories={selectedRepository ? [selectedRepository] : []} 
       initialBranches={branches}
       initialRepository={selectedRepository}
+      initialCommits={commits}
     />
   );
 }

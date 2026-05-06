@@ -1,64 +1,70 @@
-import { getRepositoryById, getRepositoryCommits } from "../../actions/github";
-import { generateCommitReport, generateExecutiveSummary } from "../../actions/ai";
+import { getReportById, ReportData } from "../../actions/reports";
 import ReportClientPage from "./client-page";
+
 interface ReportPageProps {
-  searchParams: Promise<{ githubId?: string }>;
+  searchParams: Promise<{ 
+    reportId?: string;
+  }>;
 }
 
-// TODO: Fix error handling and validation to ensure githubId is valid and repository exists
+// TODO: Update types
 export default async function ReportPage({ searchParams }: ReportPageProps) {
-  const { githubId } = await searchParams;
+  const { reportId } = await searchParams;
 
-  let commits = [];
-  let selectedRepository = null;
-  let startDate = '';
-  let endDate = '';
-  let selectedBranch = '';
+  if (!reportId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium mb-2">Invalid Report Link</h3>
+            <p className="text-muted-foreground mb-4">
+              Please generate a report from settings page first.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  let report: ReportData | null;
 
   try {
-    const repoId = parseInt(githubId || '0', 10);
-    
-    selectedRepository = await getRepositoryById(repoId);
-    
+    // Fetch report from database
+    report = await getReportById(reportId);
 
-    commits = await getRepositoryCommits(selectedRepository?.owner.login || '', selectedRepository?.name || '', 50);
-    
-    startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    endDate = new Date().toISOString().split('T')[0];
-    selectedBranch = 'main';
-    
-    // Generate AI reports
-    const reportData = {
-      repository: selectedRepository?.name || '',
-      branch: selectedBranch,
-      startDate,
-      endDate,
-      commits: commits.map(commit => ({
-        sha: commit.sha || '',
-        message: commit.commit?.message || 'No message',
-        author: commit.commit?.author?.name || 'Unknown',
-        date: commit.commit?.author?.date || new Date().toISOString(),
-        url: commit.html_url || ''
-      }))
-    };
-
-    const technicalReport = await generateCommitReport(reportData);
-    const executiveSummary = await generateExecutiveSummary(reportData);
-    
-    return (
-      <ReportClientPage 
-        commits={commits}
-        repository={selectedRepository}
-        startDate={startDate}
-        endDate={endDate}
-        branch={selectedBranch}
-        technicalReport={technicalReport}
-        executiveSummary={executiveSummary}
-      />
-    );
+    if (!report) {
+      throw new Error('Failed to fetch report');
+    }
     
   } catch (error) {
-    console.error('Failed to fetch repository or commits:', error);
-    // TODO: Handle error properly with error boundaries
+    console.error('Failed to fetch report:', error);
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium mb-2">Error Loading Report</h3>
+            <p className="text-muted-foreground mb-4">
+              Unable to load the report. Please try again.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
+
+  return (
+    <ReportClientPage 
+      commits={[]}
+      repository={{
+        id: report.githubProjectId,
+        name: report.githubRepositoryName,
+        fullName: report.githubRepositoryName,
+      }}
+      startDate={report.startDate}
+      endDate={report.endDate}
+      branch={report.branch}
+      report={report.editableMarkdown}
+      reportId={reportId}
+    />
+  );
 }
