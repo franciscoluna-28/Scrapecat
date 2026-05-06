@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { projects } from '@/lib/db/schema';
 
 export async function createProject(repository: { id: number; name: string; full_name: string }) {
   const newProject = {
