@@ -233,8 +233,8 @@ export function SettingsForm({
         {startDate && (
           <Card className="border-none shadow-none">
             <CardContent className="flex items-center gap-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary border">
-                <GitCommit className="h-4 w-4 text-primary-foreground" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
+                <GitCommit className="h-4 w-4 text-muted-foreground" />
               </div>
 
               <div className="flex flex-col gap-2 overflow-hidden">

@@ -10,6 +10,10 @@ export async function GET(
   try {
     const { id } = await params;
 
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
     const report = await db.query.reports.findFirst({
       where: eq(reports.id, id),
     });
