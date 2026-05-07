@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useEffect, useState, useCallback, useRef } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -13,27 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/src/components/ui/select";
-import { GitHubRepository, GitHubCommit } from "@/src/shared/types";
+import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
-
-// TODO: Replace with SWR cache for better performance
-// TODO: Split components into smaller, more manageable pieces
-// Simple cache for commit data
-const commitCache = new Map<
-  string,
-  { count: number; commits: GitHubCommit[] }
->();
-
-type CommitState =
-  | { type: "idle" }
-  | { type: "debouncing" }
-  | { type: "loading" }
-  | { type: "success"; count: number; commits: GitHubCommit[] }
-  | { type: "error" };
+import { useCommits } from "@/src/features/reports/services/api";
 
 type Props = {
   repository: GitHubRepository;
@@ -52,8 +38,18 @@ export function SettingsForm({
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [commitState, setCommitState] = useState<CommitState>({ type: "idle" });
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const {
+    commits,
+    count: commitCount,
+    isFetching,
+    hasError,
+  } = useCommits(
+    repository.owner.login,
+    repository.name,
+    startDate,
+    endDate,
+  );
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -65,72 +61,8 @@ export function SettingsForm({
     router.push(`/new/settings?${params.toString()}`);
   };
 
-  const getCacheKey = useCallback(
-    (start: string, end: string | undefined) =>
-      `${repository.owner.login}/${repository.name}:${start}-${end || "today"}`,
-    [repository.owner.login, repository.name],
-  );
-
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    if (!startDate) {
-      queueMicrotask(() => setCommitState({ type: "idle" }));
-      return;
-    }
-
-    const cacheKey = getCacheKey(startDate, endDate);
-    const cached = commitCache.get(cacheKey);
-    if (cached !== undefined) {
-      queueMicrotask(() =>
-        setCommitState({
-          type: "success",
-          count: cached.count,
-          commits: cached.commits,
-        }),
-      );
-      return;
-    }
-
-    queueMicrotask(() => setCommitState({ type: "debouncing" }));
-
-    debounceRef.current = setTimeout(() => {
-      setCommitState({ type: "loading" });
-
-      const fetchCommitData = async () => {
-        try {
-          const d = new Date();
-          const finalEndDate =
-            endDate ||
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-          const res = await fetch(
-            `/api/commits?owner=${repository.owner.login}&repo=${repository.name}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`,
-          );
-
-          if (!res.ok) throw new Error("Failed to fetch");
-
-          const { commits } = (await res.json()) as { commits: GitHubCommit[] };
-          const count = commits.length;
-          commitCache.set(cacheKey, { count, commits });
-          setCommitState({ type: "success", count, commits });
-        } catch {
-          setCommitState({ type: "error" });
-        }
-      };
-
-      fetchCommitData();
-    }, 500);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [startDate, endDate, getCacheKey, repository]);
-
   const handleGenerate = async () => {
-    if (!startDate || commitState.type !== "success") return;
+    if (!startDate || commits.length === 0) return;
 
     startTransition(async () => {
       const d = new Date();
@@ -147,7 +79,7 @@ export function SettingsForm({
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
-            commits: processCommitsForAiReport(commitState.commits),
+            commits: processCommitsForAiReport(commits),
           },
         }),
       });
@@ -161,6 +93,12 @@ export function SettingsForm({
       router.push(`/new/report?reportId=${reportId}`);
     });
   };
+
+  /**
+   * Determines if the form is ready for report generation.
+   * Requires: date selected, not loading, no errors, and at least 1 commit.
+   */
+  const canGenerate = !isFetching && !hasError && startDate && commitCount > 0;
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
@@ -240,34 +178,29 @@ export function SettingsForm({
               <div className="flex flex-col gap-2 overflow-hidden">
                 <Label>Sync Status</Label>
                 <div className="flex items-center gap-2">
-                  {commitState.type === "debouncing" ||
-                  commitState.type === "loading" ? (
+                  {isFetching ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                       <Skeleton className="h-4 w-32 bg-muted" />
                     </div>
-                  ) : commitState.type === "success" ? (
+                  ) : hasError ? (
+                    <span className="text-sm text-muted-foreground">
+                      Verification failed. Check connection.
+                    </span>
+                  ) : (
                     <div className="flex items-center gap-2">
-                      {commitState.count === 0 ? (
+                      {commitCount === 0 ? (
                         <span className="text-sm text-muted-foreground">
                           No commits found for this period
                         </span>
                       ) : (
                         <span className="text-sm text-muted-foreground">
-                          {commitState.count}{" "}
-                          {commitState.count === 1 ? "commit" : "commits"} found
+                          {commitCount}{" "}
+                          {commitCount === 1 ? "commit" : "commits"} found
                           for this period
                         </span>
                       )}
                     </div>
-                  ) : commitState.type === "error" ? (
-                    <span className="text-sm text-muted-foreground">
-                      Verification failed. Check connection.
-                    </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground/60 italic">
-                      Awaiting timeframe selection...
-                    </span>
                   )}
                 </div>
               </div>
@@ -278,12 +211,7 @@ export function SettingsForm({
         <div className="pt-4">
           <Button
             onClick={handleGenerate}
-            disabled={
-              !startDate ||
-              isPending ||
-              commitState.type !== "success" ||
-              (commitState.type === "success" && commitState.count === 0)
-            }
+            disabled={!startDate || isPending || !canGenerate}
             size="lg"
             className="w-full"
           >
