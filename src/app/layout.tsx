@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Commits AI",
-  description: "Track and analyze commits across your GitHub repositories",
+  title: "Fabric",
+  description: "Fabric Reports - Create reports for your stakeholders using your GitHub commits",
 };
 
 export default function RootLayout({
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", poppins.variable)}
+      className={cn("h-full", "dark", "antialiased", geistSans.variable, geistMono.variable, "font-sans", poppins.variable)}
     >
       <body className="min-h-full flex flex-col">
         {children}
