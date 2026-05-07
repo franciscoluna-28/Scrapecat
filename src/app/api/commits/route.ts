@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
     const commits = await getRepositoryCommits({
       owner,
       repo,
-      limit,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      per_page: limit,
+      since: startDate || undefined,
+      until: endDate || undefined,
     });
 
     return NextResponse.json({ commits });

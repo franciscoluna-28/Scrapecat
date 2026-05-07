@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const count = await getRepositoryCommitCount(
+    const count = await getRepositoryCommitCount({
       owner,
       repo,
-      startDate || undefined,
-      endDate || undefined
-    );
+      since: startDate || undefined,
+      until: endDate || undefined,
+    });
 
     return NextResponse.json({ count });
   } catch (error) {

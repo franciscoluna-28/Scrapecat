@@ -2,12 +2,14 @@ import { octokit } from "@/src/shared/lib/octokit";
 import { Endpoints } from "@octokit/types";
 import { GitHubCommit, GitHubRepository } from "../types";
 
+// It's better to use provider (Octokit, OAS 3.0) types instead of hardcoding parameters
 type GetAllRepositoriesParameters = Endpoints["GET /user/repos"]["parameters"];
+type GetRepositoryCommitsParameters =
+  Endpoints["GET /repos/{owner}/{repo}/commits"]["parameters"];
 
 export async function getAllRepositories(
   config: GetAllRepositoriesParameters = {},
 ): Promise<GitHubRepository[]> {
-
   const { data } = await octokit.request("GET /user/repos", {
     type: config.type || "public",
     sort: config.sort || "updated",
@@ -17,14 +19,6 @@ export async function getAllRepositories(
 
   return data;
 }
-
-type GetRepositoryCommitsParameters = {
-  owner: string;
-  repo: string;
-  limit?: number;
-  startDate?: string;
-  endDate?: string;
-};
 
 export async function getRepositoryCommits(
   params: GetRepositoryCommitsParameters,
@@ -41,16 +35,16 @@ export async function getRepositoryCommits(
     } = {
       owner: params.owner,
       repo: params.repo,
-      per_page: params.limit || 30,
+      per_page: params.per_page || 30,
       sort: "created",
       direction: "desc",
     };
 
-    if (params.startDate) {
-      requestParams.since = params.startDate;
+    if (params.since) {
+      requestParams.since = params.since;
     }
-    if (params.endDate) {
-      requestParams.until = params.endDate;
+    if (params.until) {
+      requestParams.until = params.until;
     }
 
     const { data } = await octokit.request(
@@ -60,7 +54,10 @@ export async function getRepositoryCommits(
 
     return data;
   } catch (error) {
-    console.error(`Error fetching commits for ${params.owner}/${params.repo}:`, error);
+    console.error(
+      `Error fetching commits for ${params.owner}/${params.repo}:`,
+      error,
+    );
     throw error;
   }
 }
@@ -79,7 +76,7 @@ export async function getRepositoryBranches(
       },
     );
 
-    return data.map(branch => branch.name);
+    return data.map((branch) => branch.name);
   } catch (error) {
     console.error(`Error fetching branches for ${owner}/${repo}:`, error);
     throw error;
@@ -94,7 +91,7 @@ export async function getRepositoryById(
       per_page: 100,
     });
 
-    const repository = data.find(repo => repo.id === repoId);
+    const repository = data.find((repo) => repo.id === repoId);
     return repository || null;
   } catch (error) {
     console.error(`Error fetching repository ${repoId}:`, error);
@@ -102,48 +99,52 @@ export async function getRepositoryById(
   }
 }
 
+type GetRepositoryCommitCountParameters = {
+  owner: string;
+  repo: string;
+  since?: string;
+  until?: string;
+};
+
 /**
  * Get the total count of commits for a repository within a date range
  * Uses GitHub's search API for efficient counting
  * Created to improve the report creation settings performance
  */
-export async function getRepositoryCommitCount(
-  owner: string,
-  repo: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<number> {
+export async function getRepositoryCommitCount({
+  owner,
+  repo,
+  since,
+  until,
+}: GetRepositoryCommitCountParameters): Promise<number> {
   try {
-    // Build search query for date range
-    const dateQuery = startDate && endDate
-      ? `committer-date:${startDate}..${endDate}`
-      : startDate
-        ? `committer-date:>=${startDate}`
-        : "";
+    const dateQuery =
+      since && until
+        ? `committer-date:${since}..${until}`
+        : since
+          ? `committer-date:>=${since}`
+          : "";
 
     const query = dateQuery
       ? `repo:${owner}/${repo} ${dateQuery}`
       : `repo:${owner}/${repo}`;
 
-    const { data } = await octokit.request(
-      "GET /search/commits",
-      {
-        q: query,
-        per_page: 1, // 1 commit because we only need total_count
-      },
-    );
+    const { data } = await octokit.request("GET /search/commits", {
+      q: query,
+      per_page: 1, // 1 commit because we only need total_count
+    });
 
     return data.total_count;
   } catch (error) {
     console.error(`Error fetching commit count for ${owner}/${repo}:`, error);
-    // Fallback: fetch actual commits and count
     try {
+      // Fallback to getRepositoryCommits if search API fails
       const commits = await getRepositoryCommits({
         owner,
         repo,
-        limit: 100,
-        startDate,
-        endDate,
+        per_page: 100,
+        since,
+        until,
       });
       return commits.length;
     } catch {
