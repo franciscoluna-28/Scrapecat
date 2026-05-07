@@ -1,3 +1,6 @@
+"use client";
+
+import Link from "next/link";
 import { Badge } from "@/src/components/ui/badge";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitHubRepository } from "@/src/shared/types";
@@ -5,13 +8,13 @@ import { Clock, ChevronRight } from "lucide-react";
 
 type Props = {
   repository: GitHubRepository;
-  onSelect: () => void;
+  onSelect?: () => void;
 };
 
 export function RepositoryCard({ repository, onSelect }: Props) {
-  return (
+  const card = (
     <Card
-      className="hover:bg-muted/80 bg-muted/40 transition-colors cursor-pointer ring-0! "
+      className="hover:bg-muted/80 bg-muted/40 transition-colors cursor-pointer ring-0!"
       onClick={onSelect}
     >
       <CardContent className="p-4">
@@ -47,5 +50,15 @@ export function RepositoryCard({ repository, onSelect }: Props) {
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (onSelect) {
+    return card;
+  }
+
+  return (
+    <Link href={`/new/settings?githubId=${repository.id}`} className="block">
+      {card}
+    </Link>
   );
 }

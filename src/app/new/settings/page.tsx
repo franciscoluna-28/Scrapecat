@@ -1,59 +1,61 @@
-import { Suspense } from "react";
-import { getRepositoryById, getRepositoryBranches, getRepositoryCommits, GitHubCommit } from "../../../shared/services/github";
-import SettingsClientPage from "./client-page";
-import SettingsLoading from "./loading";
+import { notFound } from "next/navigation";
+import {
+  getRepositoryById,
+  getRepositoryBranches,
+} from "../../../shared/services/github";
+import { ApplicationLayout } from "@/src/components/global/ApplicationLayout";
+import { PageTitle } from "@/src/components/global/PageTitle";
+import { SectionLayout } from "@/src/components/global/SectionLayout";
+import { SettingsForm } from "../../../features/reports/components/SettingsForm";
+import { RepositoryInfoCard } from "../../../features/reports/components/RepositoryInfoCard/index";
 
-interface SettingsPageProps {
-  searchParams: Promise<{ githubId?: string; branch?: string }>;
+interface PageProps {
+  searchParams: Promise<{
+    githubId?: string;
+    branch?: string;
+    startDate?: string;
+    endDate?: string;
+  }>;
 }
 
-async function SettingsContent({ searchParams }: { searchParams: Promise<{ githubId?: string; branch?: string; startDate?: string; endDate?: string }> }) {
+export default async function Page({ searchParams }: PageProps) {
   const { githubId, branch, startDate, endDate } = await searchParams;
-  const MAX_COMMITS = 50;
-  const FALLBACK_BRANCHES = ['main', 'dev'];
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-  let branches: string[] = [];
-  let selectedRepository = null;
-  let commits: GitHubCommit[] = [];
-
-  if (githubId) {
-    const repoId = parseInt(githubId, 10);
-    
-    selectedRepository = await getRepositoryById(repoId);
-    
-    if (selectedRepository) {
-      try {
-        branches = await getRepositoryBranches(selectedRepository.owner.login, selectedRepository.name);
-        
-        if (branch) {
-          commits = await getRepositoryCommits(
-            selectedRepository.owner.login, 
-            selectedRepository.name, 
-            MAX_COMMITS,
-            startDate,
-            endDate
-          );
-        }
-      } catch (error) {
-        console.error('Failed to fetch branches/commits in settings page:', error);
-        branches = FALLBACK_BRANCHES;
-      }
-    }
+  if (!githubId) {
+    notFound();
   }
 
-  return (
-    <SettingsClientPage 
-      initialBranches={branches}
-      initialRepository={selectedRepository}
-      initialCommits={commits}
-    />
-  );
-}
+  const repoId = parseInt(githubId, 10);
+  const repository = await getRepositoryById(repoId);
 
-export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+  if (!repository) {
+    notFound();
+  }
+
+  const branches = await getRepositoryBranches(
+    repository.owner.login,
+    repository.name,
+  ).catch(() => ["main", "master"]);
+
   return (
-    <Suspense fallback={<SettingsLoading />}>
-      <SettingsContent searchParams={searchParams} />
-    </Suspense>
+    <ApplicationLayout>
+      <PageTitle
+        title="Configure Report"
+        hasBack
+      >
+        <RepositoryInfoCard repository={repository} />
+      </PageTitle>
+      <SectionLayout>
+        <SettingsForm
+          repository={repository}
+          branches={branches}
+          selectedBranch={branch || branches[0] || "main"}
+          startDate={startDate || today}
+          endDate={endDate}
+        />
+      </SectionLayout>
+    </ApplicationLayout>
   );
 }

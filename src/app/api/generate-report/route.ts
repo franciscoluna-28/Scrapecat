@@ -1,8 +1,10 @@
+import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { reports } from "@/src/drizzle/schema";
 import { nanoid } from "nanoid";
 import { reportInputSchema } from "@/src/features/reports/schemas";
 import { db } from "@/src/drizzle/client";
+import { APP_CONFIG } from "@/src/shared/data/app";
 
 export async function POST(req: Request) {
   try {
@@ -11,8 +13,18 @@ export async function POST(req: Request) {
 
     const validatedData = reportInputSchema.parse(data);
 
+    if (validatedData.commits.length === 0) {
+      return NextResponse.json(
+        { error: "Cannot generate report: no commits found in the selected date range" },
+        { status: 400 }
+      );
+    }
+
     if (!process.env.GROQ_API_KEY) {
-      throw new Error("Missing GROQ_API_KEY in '/api/generate-report'");
+      return NextResponse.json(
+        { error: "Missing GROQ_API_KEY in '/api/generate-report'" },
+        { status: 500 }
+      );
     }
 
     const groq = new Groq({
@@ -23,8 +35,7 @@ export async function POST(req: Request) {
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
-    // 50 commits max to avoid token limit in report generation
-    const limitedCommits = sortedCommits.slice(0, 50);
+    const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
     const systemPrompt =
       "You are a business analyst creating executive summaries based on actual commit data. Be factual and grounded only in the provided information. Avoid speculation or making up details not present in the data.";
@@ -110,6 +121,9 @@ Use simple language. Be conservative and factual. Keep under 250 words.`;
       });
     }
 
-    return new Response("Failed to generate report", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate report" },
+      { status: 500 }
+    );
   }
 }

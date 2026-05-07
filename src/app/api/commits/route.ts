@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRepositoryCommits } from "@/src/shared/services/github";
+import { APP_CONFIG } from "@/src/shared/data/app";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const owner = searchParams.get("owner");
     const repo = searchParams.get("repo");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const limit = parseInt(searchParams.get("limit") || `"${APP_CONFIG.commits.MAX_LIMIT}"`);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
@@ -17,7 +18,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const commits = await getRepositoryCommits(owner, repo, limit, startDate || undefined, endDate || undefined);
+    const commits = await getRepositoryCommits({
+      owner,
+      repo,
+      limit,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
 
     return NextResponse.json({ commits });
   } catch (error) {
