@@ -6,11 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export type AiProcessedCommit = {
+export type ProcessedCommit = {
   sha: string;
   message: string;
   author: string;
-  url: string;
+  url?: string;
   date: string;
 };
 
@@ -20,7 +20,7 @@ export type AiProcessedCommit = {
  */
 export const processCommitsForAiReport = (
   commits: GitHubCommit[],
-): AiProcessedCommit[] => {
+): ProcessedCommit[] => {
   return commits.map((commit) => ({
     sha: commit.sha, // Include SHA as required by API schema
     message: commit.commit.message, // Full commit message for better context

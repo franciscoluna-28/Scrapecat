@@ -15,6 +15,13 @@
       "when": 1778030955241,
       "tag": "0001_fantastic_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1778210730260,
+      "tag": "0002_harsh_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

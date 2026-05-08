@@ -26,6 +26,8 @@ export async function getReportById(
       updatedAt: report.updatedAt,
       githubProjectId: report.githubProjectId,
       githubRepositoryName: report.githubRepositoryName,
+      sourceCommits: report.sourceCommits || [],
+      sourceCommitsUpdatedAt: report.sourceCommitsUpdatedAt || null,
     };
   } catch (error) {
     console.error("Error fetching report:", error);

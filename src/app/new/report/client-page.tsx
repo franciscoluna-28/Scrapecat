@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import {
@@ -9,12 +10,16 @@ import {
   GitBranch,
   Copy,
   FileText,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
-import { GitHubCommit, GitHubRepositoryClientPage } from "@/src/shared/types";
+import { GitHubRepositoryClientPage } from "@/src/shared/types";
+import { ProcessedCommit } from "@/src/shared/lib/utils";
+import { Label } from "@/src/components/ui/label";
+import { Badge } from "@/src/components/ui/badge";
 
 type Props = {
-  commits: GitHubCommit[];
+  commits: ProcessedCommit[];
   repository: GitHubRepositoryClientPage;
   startDate: string;
   endDate: string;
@@ -39,6 +44,7 @@ export default function ReportClientPage({
       toast.success("Report copied to clipboard!");
     } catch (err) {
       toast.error("Failed to copy report");
+      console.error(err);
     }
   };
 
@@ -98,86 +104,106 @@ export default function ReportClientPage({
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Configuration
           </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/new">
+              <Plus className="h-4 w-4 mr-2" />
+              New Report
+            </Link>
+          </Button>
         </div>
-        <div className="space-y-2 mb-8 text-center md:text-left">
-          <h1 className="text-3xl font-bold tracking-tight">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">
             Intelligence Report
           </h1>
-          <p className="text-muted-foreground max-w-2xl">
-            Automated technical audit for{" "}
-            <span className="text-foreground font-medium underline underline-offset-4">
-              {repository.name}
-            </span>
-            .
+          <p className="text-muted-foreground">
+            Automated technical audit generated on{" "}
+            {new Date().toLocaleDateString()}
           </p>
         </div>
 
-        <Card className="border-none shadow-none ring-1 ring-border/50 bg-muted/40!">
-          <CardHeader className="pb-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-md bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="font-semibold">Analysis Metadata</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Generated on {new Date().toLocaleDateString()}
-                  </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <Card className="overflow-hidden">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="bg-primary/10 p-2.5 rounded-lg shrink-0">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <Label className="text-xs text-muted-foreground">
+                  Repository
+                </Label>
+                <p className="text-sm font-medium truncate leading-tight mt-1">
+                  {repository.name}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="bg-primary/10 p-2.5 rounded-lg shrink-0">
+                <Calendar className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex flex-col">
+                <Label className="text-xs text-muted-foreground">
+                  Analysis Period
+                </Label>
+                <p className="text-sm font-medium leading-tight mt-1">
+                  {startDate}{" "}
+                  <span className="text-muted-foreground mx-1">—</span>{" "}
+                  {endDate || "Now"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden sm:col-span-2 lg:col-span-1">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="bg-primary/10 p-2.5 rounded-lg shrink-0">
+                <GitBranch className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex flex-col items-start">
+                <Label className="text-xs text-muted-foreground">
+                  Active Branch
+                </Label>
+                <div className="mt-1">
+                  <Badge
+                    variant="secondary"
+                    className="font-mono text-xs px-2 py-0"
+                  >
+                    {branch}
+                  </Badge>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyMarkdown}
-                className="font-bold h-9 px-4"
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Markdown
-              </Button>
+        <Card className="border-none shadow-none ring-1 ring-border/50 bg-muted/40">
+          <CardHeader className="pb-4 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-muted p-2 rounded-md">
+                <GitCommit className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Analysis Results</h2>
+                <p className="text-xs text-muted-foreground">
+                  {commits.length} commits audited
+                </p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyMarkdown}
+              className="font-bold h-9 px-4"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy Markdown
+            </Button>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4 px-2 rounded-lg bg-background/50 border border-border/40">
-              <div className="flex items-start gap-3">
-                <GitBranch className="h-4 w-4 mt-1 text-primary" />
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Branch Context
-                  </p>
-                  <p className="text-sm font-mono font-medium">{branch}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Calendar className="h-4 w-4 mt-1 text-primary" />
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Analysis Period
-                  </p>
-                  <p className="text-sm font-medium">
-                    {startDate} — {endDate || "Now"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <GitCommit className="h-4 w-4 mt-1 text-primary" />
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Source Strength
-                  </p>
-                  <p className="text-sm font-medium">
-                    {commits.length} commits audited
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Markdown Report Body */}
-            <div className="pt-4 min-h-[500px]">
+            <div className="min-h-[500px]">
               <div className="bg-background/50 rounded-xl p-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <article className="prose prose-neutral dark:prose-invert max-w-none">
                   <div

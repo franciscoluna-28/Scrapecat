@@ -15,18 +15,22 @@ export async function POST(req: Request) {
 
     if (validatedData.commits.length === 0) {
       return NextResponse.json(
-        { error: "Cannot generate report: no commits found in the selected date range" },
-        { status: 400 }
+        {
+          error:
+            "Cannot generate report: no commits found in the selected date range",
+        },
+        { status: 400 },
       );
     }
 
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
         { error: "Missing GROQ_API_KEY in '/api/generate-report'" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
+    // Change the provider if needed
     const groq = new Groq({
       apiKey: process.env.GROQ_API_KEY,
     });
@@ -38,27 +42,37 @@ export async function POST(req: Request) {
     const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
     const systemPrompt =
-      "You are a business analyst creating executive summaries based on actual commit data. Be factual and grounded only in the provided information. Avoid speculation or making up details not present in the data.";
+      "You are a Senior Product Manager working with non-technical stakeholders. Your task is to transform technical git commits into a high-level Product Update. Group related technical tasks into functional categories (e.g., Infrastructure, User Experience, Data Reliability). Use professional, outcome-oriented language. Remove individual names and focus on the 'System' or 'Platform' achievements.";
 
-    const prompt = `Repository: ${validatedData.repository}
-Branch: ${validatedData.branch}
-Date Range: ${validatedData.startDate} to ${validatedData.endDate}
-Total Commits Analyzed: ${limitedCommits.length}
+    const prompt = `
+Context: Technical activity log for ${validatedData.repository} (${validatedData.branch}) from ${validatedData.startDate} to ${validatedData.endDate}.
 
-Recent commit activity (FACTUAL DATA ONLY):
-${limitedCommits
-  .map((commit) => `- ${commit.author}: ${commit.message}`)
-  .join("\n")}
+Raw Activity Data:
+${limitedCommits.map((commit) => `- ${commit.message}`).join("\n")} 
 
-IMPORTANT: Base your summary ONLY on the commit messages and activity shown above. Do not invent features, metrics, or achievements not evident in the data.
+Task: Synthesize this data into a "Product Update" style report. 
 
-Create a factual executive summary with:
-1. Business impact (2-3 sentences) - based on actual commit patterns
-2. Key achievements (3-4 bullet points) - only what's visible in commits
-3. Productivity overview (2-3 sentences) - based on commit frequency and authors
-4. Strategic insights (2-3 bullet points) - grounded in actual development activity
+Guidelines:
+1. DO NOT mention developer names or commit counts.
+2. GROUP small technical changes into 3-4 high-level functional categories (e.g., "Feature Development", "Infrastructure & Performance", "UI Refinement", "Data Layer").
+3. TRANSLATE technical actions into product value (e.g., instead of "added SWR", use "Implemented reactive data fetching for improved UI snappiness").
+4. BE CONCISE. Use bullet points that start with a strong verb.
+5. Prioritize features and fix commits.
 
-Use simple language. Be conservative and factual. Keep under 250 words.`;
+Constraints:
+- Constraint: Avoid mentioning technical details like libraries or frameworks, focus on the business logic and user impact.
+- Constraint: Use 'Engineering Updates' style. Avoid flowery adjectives like 'groundbreaking' or 'revolutionary'. Stick to neutral, high-leverage verbs (Optimized, Scaled, Standardized, Integrated).
+- Constraint: Maximum 300 words if there are more than 5 commits.
+- Constraint: Maximum 4 categories.
+- Constraint: Use markdown format.
+- Constraint: If the commits are less than 5, maximum 200 words and 2 categories.
+
+Structure:
+- Title: Product Update - [Project Name]
+- 3-4 Categorized Sections (with 2-4 bullet points each)
+- Summary of Strategic Direction (1-3 sentences)
+- Match the changes according to the commits and their dates. For example, if we did not have changes in a category, do not include it.
+`;
 
     const result = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -72,8 +86,8 @@ Use simple language. Be conservative and factual. Keep under 250 words.`;
           content: prompt,
         },
       ],
-      temperature: 0.2, // The lower the temperature, the less the AI will hallucinate. We cannot afford hallucinations working with commits.
-      max_tokens: 400, // 400 tokens is enough for MVP stage.
+      temperature: 0.1, // The lower the temperature, the less the AI will hallucinate. We cannot afford hallucinations working with commits.
+      max_tokens: 500,
     });
 
     const generatedReport = result.choices[0]?.message?.content || "";
@@ -93,6 +107,8 @@ Use simple language. Be conservative and factual. Keep under 250 words.`;
       branch: validatedData.branch,
       createdAt: now,
       updatedAt: now,
+      sourceCommitsUpdatedAt: now,
+      sourceCommits: validatedData.commits
     });
 
     return new Response(
@@ -123,7 +139,7 @@ Use simple language. Be conservative and factual. Keep under 250 words.`;
 
     return NextResponse.json(
       { error: "Failed to generate report" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

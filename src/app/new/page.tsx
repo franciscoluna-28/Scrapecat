@@ -29,7 +29,7 @@ export default function Page() {
       <ApplicationLayout>
         <PageTitle title="Select Repository">
           <Button variant="outline" onClick={() => setModalOpen(true)}>
-            <Settings className="mr-2" /> GitHub Settings
+            <Settings className="mr-2" /> Settings
           </Button>
         </PageTitle>
         <SectionLayout>

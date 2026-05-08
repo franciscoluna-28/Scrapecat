@@ -3,7 +3,7 @@ import { getReportById } from "../../../features/reports/server/reports";
 import ReportClientPage from "./client-page";
 
 interface ReportPageProps {
-  searchParams: Promise<{ 
+  searchParams: Promise<{
     reportId?: string;
   }>;
 }
@@ -34,7 +34,6 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     if (!report) {
       throw new Error("Failed to fetch report");
     }
-    
   } catch (error) {
     console.error("Failed to fetch report:", error);
     return (
@@ -52,8 +51,8 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
   }
 
   return (
-    <ReportClientPage 
-      commits={[]}
+    <ReportClientPage
+      commits={report.sourceCommits || []}
       repository={{
         id: report.githubProjectId,
         name: report.githubRepositoryName,
