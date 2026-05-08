@@ -7,6 +7,14 @@ import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Label } from "@/src/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/src/components/ui/dialog";
+import { ScrollArea } from "@/src/components/ui/scroll-area";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,6 +37,73 @@ type Props = {
   endDate?: string;
 };
 
+type CommitPreviewProps = {
+  commits: Array<{
+    sha: string;
+    commit: {
+      message: string;
+      author?: {
+        name?: string;
+        date?: string;
+      } | null;
+    };
+    html_url?: string;
+  }>;
+  commitCount: number;
+};
+
+function CommitsPreview({ commits, commitCount }: CommitPreviewProps) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground hover:text-foreground"
+        >
+          <GitCommit className="h-4 w-4 mr-2" />
+          Preview commits
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl max-h-[80vh] p-0">
+        <DialogHeader className="p-6 pb-4 border-b">
+          <DialogTitle>Source Commits</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {commitCount} commits will be included in the report
+          </p>
+        </DialogHeader>
+        <ScrollArea className="h-[60vh]">
+          <div className="p-6 space-y-3">
+            {commits.map((commit, index) => (
+              <div
+                key={commit.sha || index}
+                className="p-4 rounded-lg bg-muted border border-border/50"
+              >
+                <p className="text-xs font-mono text-muted-foreground mb-2">
+                  {commit.sha.slice(0, 7)}
+                </p>
+                <p className="text-sm leading-relaxed mb-3">
+                  {commit.commit.message}
+                </p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{commit.commit.author?.name || "Unknown"}</span>
+                  <span>
+                    {commit.commit.author?.date
+                      ? new Date(commit.commit.author.date).toLocaleDateString(
+                          "en-US",
+                        )
+                      : "Unknown"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function SettingsForm({
   repository,
   branches,
@@ -44,12 +119,7 @@ export function SettingsForm({
     count: commitCount,
     isFetching,
     hasError,
-  } = useCommits(
-    repository.owner.login,
-    repository.name,
-    startDate,
-    endDate,
-  );
+  } = useCommits(repository.owner.login, repository.name, startDate, endDate);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -169,43 +239,60 @@ export function SettingsForm({
         </div>
 
         {startDate && (
-          <Card className="border-none shadow-none">
-            <CardContent className="flex items-center gap-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
-                <GitCommit className="h-4 w-4 text-muted-foreground" />
-              </div>
+          <>
+            <Card className="border-none shadow-none">
+              <CardContent className="flex items-center gap-6">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
+                  <GitCommit className="h-4 w-4 text-muted-foreground" />
+                </div>
 
-              <div className="flex flex-col gap-2 overflow-hidden">
-                <Label>Sync Status</Label>
-                <div className="flex items-center gap-2">
-                  {isFetching ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                      <Skeleton className="h-4 w-32 bg-muted" />
-                    </div>
-                  ) : hasError ? (
-                    <span className="text-sm text-muted-foreground">
-                      Verification failed. Check connection.
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      {commitCount === 0 ? (
-                        <span className="text-sm text-muted-foreground">
-                          No commits found for this period
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          {commitCount}{" "}
-                          {commitCount === 1 ? "commit" : "commits"} found
-                          for this period
-                        </span>
+                <div className="flex flex-col gap-2 overflow-hidden">
+                  <div className="flex flex-col gap-1 w-full">
+                    <div className="flex items-center justify-between w-full gap-4">
+                      <Label className="text-sm font-semibold whitespace-nowrap">
+                        Sync Status
+                      </Label>
+
+                      {!isFetching && !hasError && commitCount > 0 && (
+                        <div className="shrink-0">
+                          <CommitsPreview
+                            commits={commits}
+                            commitCount={commitCount}
+                          />
+                        </div>
                       )}
                     </div>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isFetching ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                        <Skeleton className="h-4 w-32 bg-muted" />
+                      </div>
+                    ) : hasError ? (
+                      <span className="text-sm text-muted-foreground">
+                        Verification failed. Check connection.
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {commitCount === 0 ? (
+                          <span className="text-sm text-muted-foreground">
+                            No commits found for this period
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {commitCount}{" "}
+                            {commitCount === 1 ? "commit" : "commits"} found for
+                            this period
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </>
         )}
 
         <div className="pt-4">

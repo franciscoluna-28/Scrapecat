@@ -41,9 +41,12 @@ export async function POST(req: Request) {
 
     const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
+    // Modify according to your needs
     const systemPrompt =
       "You are a Senior Product Manager working with non-technical stakeholders. Your task is to transform technical git commits into a high-level Product Update. Group related technical tasks into functional categories (e.g., Infrastructure, User Experience, Data Reliability). Use professional, outcome-oriented language. Remove individual names and focus on the 'System' or 'Platform' achievements.";
 
+    // Feel free to modify this prompt to better fit your needs. I built it for my Product Manager to understand what's been done in the last week.
+    // Future use cases: technical, engineering, marketing, operations, etc.
     const prompt = `
 Context: Technical activity log for ${validatedData.repository} (${validatedData.branch}) from ${validatedData.startDate} to ${validatedData.endDate}.
 
@@ -58,6 +61,7 @@ Guidelines:
 3. TRANSLATE technical actions into product value (e.g., instead of "added SWR", use "Implemented reactive data fetching for improved UI snappiness").
 4. BE CONCISE. Use bullet points that start with a strong verb.
 5. Prioritize features and fix commits.
+6. ABSOLUTELY NO SEPARATORS: Do not use horizontal rules (---, ***), dividers, or any visual separator elements.
 
 Constraints:
 - Constraint: Avoid mentioning technical details like libraries or frameworks, focus on the business logic and user impact.
@@ -69,8 +73,8 @@ Constraints:
 
 Structure:
 - Title: Product Update - [Project Name]
-- 3-4 Categorized Sections (with 2-4 bullet points each)
-- Summary of Strategic Direction (1-3 sentences)
+- 3-4 Categorized Sections (with 2-4 bullet points each) 
+- Summary of Strategic Direction as a H3 tag (1-3 sentences)
 - Match the changes according to the commits and their dates. For example, if we did not have changes in a category, do not include it.
 `;
 
