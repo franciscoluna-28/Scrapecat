@@ -67,9 +67,17 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 Initialize the engine and start the development server:
 
 ```Bash
-npm install
+# Install dependencies
+pnpm install
 
-npm run dev
+# Generate database migration. Fabric uses SQLite as default database.
+pnpm run db:generate
+
+# Push schema to database. Needed to store reports and repository data.
+pnpm run db:push
+
+# Start the development server
+pnpm run dev
 ```
 
 The application will be live at http://localhost:3000. Connect your first repository and start generating reports that make sense to humans.
