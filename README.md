@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## 🐈 Fabric - GitHub Commits to Reports
+
+Fabric is a high-performance data intelligence engine designed to transform raw GitHub repository activity into high-value executive reports. Engineered for Founding Engineers, small startups, and consultants who demand total visibility without the friction of manual tracking.
+
+Built for lean teams tired of micromanagement and non-technical stakeholders who struggle to interpret Git activity. We translate code into clarity.
+
+## Tech Stack
+- Backend & Client: Next.js 16.
+- Data Source: Native GitHub REST via `Octokit`.
+- Intelligence: Groq API implementation utilizing Llama-3.1-8b-instant for low-latency, high-context report synthesis.
+
+## Core Features
+- **Deep Repository Sync:** Real-time extraction of commit metadata, going far beyond simple line counts to capture the intent of the work.
+- **Executive Insights:** Automated synthesis of technical activity into business-centric summaries focused on feature delivery and velocity.
+- **Guided Onboarding:** A streamlined, multi-step interface engineered to reduce cognitive load.
+- **The Transparency Engine:** Generates high-fidelity Markdown reports that balance technical depth with executive readability.
+- **Report Persistence:** A centralized dashboard to visualize, manage, and export historical reporting data.
+
+## Future Roadmap
+- **Multi-VCS Ecosystem:** Expanding support to GitLab, BitBucket, and self-hosted instances.
+- Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
+- **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
+- **Local Development with Docker:** Create a Dockerized environment to facilitate onboarding and app setup.
+
+_The MVP focuses on core report generation and GitHub integration. Refinements and additional integrations will follow._
+
+
+## Note for Early Adopters
+Fabric is currently in active development. The primary goal of the MVP is to provide immediate value through GitHub insights. If you encounter any "rough edges", remember: we prioritize speed and transparency over perfection. 
+
+**Ship fast, refactor as you scale.**
 
 ## Getting Started
+To deploy the Fabric MVP, you need to configure the two primary data streams: the GitHub Control Plane and the Intelligence Layer.
 
-First, run the development server:
+### 1. GitHub API Configuration
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Fabric requires a Personal Access Token (PAT) to securely fetch repository metadata and commit history.
+
+- 1.  Navigate to [GitHub Settings](https://github.com/settings) > Developer Settings > Personal Access Tokens.
+- 2.  For the MVP, ensure the repo (Full control of private repositories) and read:org scopes are enabled.
+- 3. Fabric treats your data as read-only. We analyze the metadata to build reports without ever modifying your source code, following the principle of least privilege (POLP).
+
+### 2. Groq Intelligence Layer
+
+We utilize Groq’s LPU Inference Engine for low latency report generation. However, you can use any provider you wish. Feel free to skip this step if you're willing to configure a local LLM and change that in the code.
+
+- 1. Access: Obtain your API key from the [Groq Console](https://console.groq.com/home)
+- 2. Model: Fabric is pre-configured to use `Llama-3.1-8b-instant`, balancing high-context reasoning with near-instant execution.
+
+## Environment Setup
+
+Create a .env.local file in the root of your project and populate it with your credentials:
+
+```Bash
+# GitHub Infrastructure
+GITHUB_TOKEN=your_personal_access_token
+
+# LLM Intelligence
+GROQ_API_KEY=your_groq_api_key
+
+# App Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local Deployment
+Initialize the engine and start the development server:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```Bash
+npm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+npm run dev
+```
 
-## Learn More
+The application will be live at http://localhost:3000. Connect your first repository and start generating reports that make sense to humans.
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Contributing
+Fabric is currently in its founding stage. We welcome contributions from engineers who understand that documentation is as important as code.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Bug Reports:** Open an issue with a clear reproduction script and environment details.
+- **Feature Requests:** Focused on scalability, reporting accuracy, and developer autonomy.
+- **Architecture:** We prioritize modularity and low-latency execution.
 
-## Deploy on Vercel
+## License
+This project is licensed under the MIT License. It is designed to be open, transparent, and resilient—just like the reports it generates.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Security & Support
+If you discover a security vulnerability, please open a private issue or contact the maintainer directly. Fabric follows the Principle of Least Privilege (POLP): we fetch data to empower developers, not to expose them.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+Fabric | Built for the builders.
+_Engineered by Francisco Luna_
