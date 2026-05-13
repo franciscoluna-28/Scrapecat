@@ -1,11 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Label } from "@/src/components/ui/label";
+import { Textarea } from "@/src/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ import {
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
+import { APP_CONFIG } from "@/src/shared/data/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
@@ -113,6 +115,7 @@ export function SettingsForm({
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [customInstructions, setCustomInstructions] = useState("");
 
   const {
     commits,
@@ -150,6 +153,7 @@ export function SettingsForm({
             startDate,
             endDate: finalEndDate,
             commits: processCommitsForAiReport(commits),
+            customInstructions,
           },
         }),
       });
@@ -236,6 +240,22 @@ export function SettingsForm({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="customInstructions" className="text-base font-medium">
+              Custom AI Instructions
+            </Label>
+            <Textarea
+              id="customInstructions"
+              placeholder="e.g., Focus on infrastructure, Highlight security changes"
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+              className="min-h-[80px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Add specific instructions to guide the AI report generation
+            </p>
+          </div>
         </div>
 
         {startDate && (
@@ -295,7 +315,7 @@ export function SettingsForm({
           </>
         )}
 
-        <div className="pt-4">
+        <div className="pt-4 space-y-2">
           <Button
             onClick={handleGenerate}
             disabled={!startDate || isPending || !canGenerate}
@@ -314,6 +334,9 @@ export function SettingsForm({
               </>
             )}
           </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report
+          </p>
         </div>
       </CardContent>
     </Card>
