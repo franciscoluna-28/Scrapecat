@@ -22,12 +22,14 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeft,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
 import { ProcessedCommit } from "@/src/shared/lib/utils";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
+import { format, parseISO } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import { Components } from "react-markdown";
 
@@ -180,7 +182,12 @@ export default function ReportClientPage({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Period</Label>
-              <p className="text-sm">{startDate} — {endDate || "Now"}</p>
+              <div className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <p className="text-sm">
+                  {format(parseISO(startDate), "MMM d, yyyy")} — {endDate ? format(parseISO(endDate), "MMM d, yyyy") : "Present"}
+                </p>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Commits</Label>
