@@ -20,4 +20,5 @@ export const reportInputSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   commits: z.array(commitsInputSchema),
+  customInstructions: z.string().optional(),
 });

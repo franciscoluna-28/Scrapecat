@@ -1,47 +1,51 @@
-import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
-import { reports } from "@/src/drizzle/schema";
-import { nanoid } from "nanoid";
-import { reportInputSchema } from "@/src/features/reports/schemas";
+import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/src/drizzle/client";
+import { reports } from "@/src/drizzle/schema";
+import Groq from "groq-sdk";
 import { APP_CONFIG } from "@/src/shared/data/app";
 
-export async function POST(req: Request) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
-    const body = await req.json();
-    const { data } = body;
+    const { id } = await params;
+    const { reply } = await request.json();
 
-    const validatedData = reportInputSchema.parse(data);
-
-    if (validatedData.commits.length === 0) {
+    if (!reply || typeof reply !== "string" || reply.trim().length === 0) {
       return NextResponse.json(
-        {
-          error:
-            "Cannot generate report: no commits found in the selected date range",
-        },
+        { error: "reply is required" },
         { status: 400 },
       );
     }
 
+    const report = await db.query.reports.findFirst({
+      where: eq(reports.id, id),
+    });
+
+    if (!report) {
+      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    }
+
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
-        { error: "Missing GROQ_API_KEY in '/api/generate-report'" },
+        { error: "Missing GROQ_API_KEY" },
         { status: 500 },
       );
     }
 
-    // Change the provider if needed
     const groq = new Groq({
       apiKey: process.env.GROQ_API_KEY,
     });
 
-    const sortedCommits = [...validatedData.commits].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    const sortedCommits = [...(report.sourceCommits || [])].sort(
+      (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
-    const customInstructions = validatedData.customInstructions?.trim();
+    const customInstructions = report.customInstructions?.trim();
 
     const languageInstruction = customInstructions
       ? `IMPORTANT: Detect the language of the user's instructions below and write the entire report in that same language. For Spanish, use natural phrasing like "se ha implementado", "se ha optimizado", "se ha creado" (avoid direct translations of English verbs).`
@@ -52,11 +56,11 @@ export async function POST(req: Request) {
       customInstructions ? `\nUser Specifications:\n${customInstructions}\n\nDuring your analysis, carefully consider these specifications. They represent the user's priorities and should guide how you categorize and frame the updates.` : "",
     ].filter(Boolean).join("\n");
 
-    const prompt = `
-Context: Technical activity log for ${validatedData.repository} (${validatedData.branch}) from ${validatedData.startDate} to ${validatedData.endDate}.
+    const originalPrompt = `
+Context: Technical activity log for ${report.githubRepositoryName} (${report.branch}) from ${report.startDate} to ${report.endDate}.
 
 Raw Activity Data:
-${limitedCommits.map((commit) => `- ${commit.message}`).join("\n")} 
+${limitedCommits.map((commit: any) => `- ${commit.message}`).join("\n")} 
 
 Task: Synthesize this data into a "Product Update" style report.
 
@@ -96,58 +100,45 @@ Structure:
 - Match the changes according to the commits and their dates. For example, if we did not have changes in a category, do not include it.
 `;
 
+    const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: originalPrompt },
+    ];
+
+    if (report.originalMarkdown) {
+      messages.push({ role: "assistant", content: report.originalMarkdown });
+    }
+
+    messages.push({
+      role: "user",
+      content: `Refine the report based on this feedback:\n${reply}\n\nFirst reason inside <thinking> tags, then output ONLY the updated markdown report.`,
+    });
+
     const result = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      messages,
       temperature: 0.1,
       max_tokens: 1024,
     });
 
     const rawContent = result.choices[0]?.message?.content || "";
 
-    // Strip <thinking> tags used for Chain of Thought reasoning
-    const generatedReport = rawContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
+    const updatedMarkdown = rawContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
 
-    // Save report to database
-    const reportId = nanoid();
-    const now = new Date();
+    await db
+      .update(reports)
+      .set({
+        editableMarkdown: updatedMarkdown,
+        updatedAt: new Date(),
+      })
+      .where(eq(reports.id, id))
+      .returning();
 
-    await db.insert(reports).values({
-      id: reportId,
-      githubProjectId: parseInt(validatedData.repository) || 0,
-      githubRepositoryName: validatedData.repository,
-      originalMarkdown: generatedReport,
-      editableMarkdown: generatedReport,
-      startDate: validatedData.startDate,
-      endDate: validatedData.endDate,
-      branch: validatedData.branch,
-      createdAt: now,
-      updatedAt: now,
-      sourceCommitsUpdatedAt: now,
-      sourceCommits: validatedData.commits,
-      customInstructions: customInstructions || null,
+    return NextResponse.json({
+      report: updatedMarkdown,
     });
-
-    return new Response(
-      JSON.stringify({
-        reportId,
-        report: generatedReport,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      },
-    );
   } catch (error: unknown) {
-    console.error("Error generating report:", error);
+    console.error("Error replying to report:", error);
 
     if (
       error &&
@@ -155,16 +146,14 @@ Structure:
       "status" in error &&
       (error as { status?: number }).status === 429
     ) {
-      const fallbackReport =
-        "# Executive Summary\n\n## Business Impact\nUnable to generate summary due to API rate limits. Please try again later.\n\n## Key Achievements\nReport generation temporarily unavailable.\n\n## Productivity Overview\nRate limit reached. Consider upgrading API plan for higher limits.\n\n## Strategic Insights\n- Wait a few minutes before retrying\n- Consider reducing data size for faster processing";
-
-      return new Response(JSON.stringify({ report: fallbackReport }), {
-        headers: { "Content-Type": "application/json" },
-      });
+      return NextResponse.json(
+        { error: "Rate limit reached. Please try again later." },
+        { status: 429 },
+      );
     }
 
     return NextResponse.json(
-      { error: "Failed to generate report" },
+      { error: "Failed to process reply" },
       { status: 500 },
     );
   }

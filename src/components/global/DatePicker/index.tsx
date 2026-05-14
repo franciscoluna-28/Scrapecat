@@ -48,6 +48,19 @@ export function DatePicker({
             }}
             disabled={disabled}
           />
+          <div className="border-t p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => {
+                onSelect(new Date());
+                setOpen(false);
+              }}
+            >
+              Today
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </div>

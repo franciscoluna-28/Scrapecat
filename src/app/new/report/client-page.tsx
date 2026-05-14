@@ -1,20 +1,35 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
+import { Textarea } from "@/src/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/src/components/ui/dialog";
+import { CopyButton } from "@/src/components/ui/copy-button";
 import {
   ArrowLeft,
   GitCommit,
-  Copy,
   Plus,
+  WandSparkles,
+  Loader2,
+  PanelLeftClose,
+  PanelLeft,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
 import { ProcessedCommit } from "@/src/shared/lib/utils";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
+import { format, parseISO } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import { Components } from "react-markdown";
 
@@ -76,17 +91,41 @@ export default function ReportClientPage({
   endDate,
   branch,
   report,
+  reportId,
 }: Props) {
+  const [isReplying, startReplyTransition] = useTransition();
+  const [replyText, setReplyText] = useState("");
+  const [currentReport, setCurrentReport] = useState(report);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [refineOpen, setRefineOpen] = useState(false);
+
   const handleBack = () => window.history.back();
 
-  const handleCopyMarkdown = async () => {
-    try {
-      await navigator.clipboard.writeText(report);
-      toast.success("Report copied to clipboard!");
-    } catch (err) {
-      toast.error("Failed to copy report");
-      console.error(err);
-    }
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !reportId) return;
+
+    startReplyTransition(async () => {
+      try {
+        const res = await fetch(`/api/reports/${reportId}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reply: replyText }),
+        });
+
+        if (!res.ok) {
+          toast.error("Failed to refine report");
+          return;
+        }
+
+        const data = await res.json();
+        setCurrentReport(data.report);
+        setReplyText("");
+        setRefineOpen(false);
+        toast.success("Report refined successfully");
+      } catch {
+        toast.error("Failed to refine report");
+      }
+    });
   };
 
 
@@ -108,52 +147,57 @@ export default function ReportClientPage({
   return (
     <div className="min-h-screen bg-background">
       <div className="flex h-screen overflow-hidden">
-        <div className="w-80 shrink-0 border-r bg-muted/30 flex flex-col">
-          <div className="p-4 border-b flex items-center justify-between">
+        <div
+          className={`${
+            sidebarOpen ? "w-80" : "w-0"
+          } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
+        >
+          <div className="p-4 border-b flex items-center justify-between min-w-0">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleBack}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground shrink-0"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="shrink-0">
               <Link href="/new">
                 <Plus className="h-4 w-4 mr-1" /> New Report
               </Link>
             </Button>
           </div>
 
-          <div className="p-4 space-y-3 border-b">
-            <div className="space-y-1">
+          <div className="p-4 space-y-4 border-b min-w-0">
+            <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Repository</Label>
               <p className="text-sm font-semibold truncate">{repository.name}</p>
             </div>
-            <div className="space-y-1">
-              <Badge variant="secondary" className="font-mono text-xs">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Branch</Label>
+              <Badge className="text-xs border-primary/30 bg-primary/10 text-primary">
                 {branch}
               </Badge>
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-
-                <Label className="text-xs text-muted-foreground">Period</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Period</Label>
+              <div className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <p className="text-sm">
+                  {format(parseISO(startDate), "MMM d, yyyy")} — {endDate ? format(parseISO(endDate), "MMM d, yyyy") : "Present"}
+                </p>
               </div>
-              <p className="text-sm pl-5">
-                {startDate} — {endDate || "Now"}
-              </p>
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">Commits</Label>
-              </div>
-              <p className="text-sm font-medium">{commits.length} audited</p>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Commits</Label>
+              <Badge variant="secondary" className="text-xs">
+                {commits.length} audited
+              </Badge>
             </div>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-w-0">
             <ScrollArea className="h-full">
               <div className="p-4">
                 <h3 className="text-xs font-semibold text-muted-foreground mb-3">
@@ -163,17 +207,19 @@ export default function ReportClientPage({
                   {commits.map((commit, index) => (
                     <Card key={commit.sha || index} className="overflow-hidden">
                       <CardContent className="p-3">
-                        <p className="text-xs font-mono text-muted-foreground mb-1">
-                          {commit.sha.slice(0, 7)}
-                        </p>
-                        <p className="text-xs line-clamp-2 leading-relaxed">
-                          {commit.message}
-                        </p>
-                        <div className="flex items-center justify-between mt-2 pt-2">
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex items-start gap-2 mb-1.5">
+                          <GitCommit className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs line-clamp-2 leading-relaxed">
+                              {commit.message}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pl-5">
+                          <span className="text-xs text-muted-foreground truncate">
                             {commit.author}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
                             {commit.date}
                           </span>
                         </div>
@@ -188,31 +234,79 @@ export default function ReportClientPage({
 
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">
-                Intelligence Report
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Generated on {new Date().toLocaleDateString()}
-              </p>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                {sidebarOpen ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeft className="h-4 w-4" />
+                )}
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight">
+                  Intelligence Report
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Generated on {new Date().toLocaleDateString()}
+                </p>
+              </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyMarkdown}
-              className="font-bold"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy Markdown
-            </Button>
+            <div className="flex items-center gap-2">
+              {reportId && (
+                <Dialog open={refineOpen} onOpenChange={setRefineOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <WandSparkles className="h-4 w-4 mr-2" />
+                      Refine
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Refine Report</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Send follow-up instructions to refine the generated
+                        report.
+                      </p>
+                      <Textarea
+                        placeholder="e.g., Make it more technical, add more detail to infrastructure changes..."
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        className="min-h-[120px] text-sm"
+                      />
+                      <Button
+                        onClick={handleSendReply}
+                        disabled={isReplying || !replyText.trim()}
+                        size="default"
+                        className="w-full"
+                      >
+                        {isReplying ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <WandSparkles className="h-4 w-4 mr-2" />
+                        )}
+                        Refine
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+              <CopyButton text={currentReport} />
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto space-y-6">
               <div className="bg-background/50 rounded-xl p-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <div className="max-w-none select-text space-y-4">
                   <ReactMarkdown components={markdownComponents}>
-                    {report}
+                    {currentReport}
                   </ReactMarkdown>
                 </div>
               </div>

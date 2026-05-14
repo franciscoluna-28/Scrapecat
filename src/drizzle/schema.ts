@@ -22,4 +22,5 @@ export const reports = sqliteTable("reports", {
   }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  customInstructions: text("custom_instructions"),
 });
