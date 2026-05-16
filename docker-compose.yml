@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: .
+      target: runner
+      args:
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+        GROQ_API_KEY: ${GROQ_API_KEY}
+    ports:
+      - "3000:3000"
+    volumes:
+      - app-data:/app/data
+    env_file:
+      - .env
+    profiles:
+      - prod
+
+  app-dev:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - .env
+
+volumes:
+  app-data:
