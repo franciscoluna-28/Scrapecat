@@ -34,7 +34,7 @@ yarn-error.log*
 .env.local
 .env.production
 .env.development
-
+.env
 
 # vercel
 .vercel
@@ -47,3 +47,5 @@ next-env.d.ts
 *.db
 *.sqlite
 *.sqlite3
+data/
+

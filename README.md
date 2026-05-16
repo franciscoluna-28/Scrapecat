@@ -20,7 +20,7 @@ Built for lean teams tired of micromanagement and non-technical stakeholders who
 - **Multi-VCS Ecosystem:** Expanding support to GitLab, BitBucket, and self-hosted instances.
 - Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
 - **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
-- **Local Development with Docker:** Create a Dockerized environment to facilitate onboarding and app setup.
+
 
 _The MVP focuses on core report generation and GitHub integration. Refinements and additional integrations will follow._
 
@@ -82,6 +82,51 @@ pnpm run dev
 
 The application will be live at http://localhost:3000. Connect your first repository and start generating reports that make sense to humans.
 
+## Docker Setup
+
+### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+
+### Environment
+
+Create a `.env` file from the example:
+
+```Bash
+cp .env.example .env
+```
+
+Edit `.env` with your credentials:
+
+```Bash
+GITHUB_TOKEN=your_personal_access_token
+GROQ_API_KEY=your_groq_api_key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+DATABASE_URL=file:data/dev.db
+```
+
+The compose file reads `GITHUB_TOKEN` and `GROQ_API_KEY` from `.env` as build args so they're available during the Next.js build step. All vars are also passed at runtime.
+
+### Development (hot reload)
+
+```Bash
+docker compose up --build
+```
+
+Mounts source directly — changes reflected immediately via Next.js HMR at http://localhost:3000.
+
+### Production
+
+```Bash
+docker compose --profile prod up --build
+```
+
+Multi-stage build with optimized image. SQLite data is persisted in a Docker volume.
+
+### Stop
+
+```Bash
+docker compose down
+```
 
 ## Contributing
 Fabric is currently in its founding stage. We welcome contributions from engineers who understand that documentation is as important as code.

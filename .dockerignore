@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.gitattributes
+.env
+.env.local
+.env.production
+.env.development
+data
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
