@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Card, CardContent } from "@/src/components/ui/card";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
@@ -14,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/src/components/ui/dialog";
 import { CopyButton } from "@/src/components/ui/copy-button";
+import { CommitCard } from "@/src/components/global/CommitCard";
 import {
   ArrowLeft,
   GitCommit,
@@ -199,34 +199,11 @@ export default function ReportClientPage({
 
           <div className="flex-1 overflow-hidden min-w-0">
             <ScrollArea className="h-full">
-              <div className="p-4">
-                <h3 className="text-xs font-semibold text-muted-foreground mb-3">
+              <div className="p-6">
+                <h3 className="text-xs font-semibold text-muted-foreground mb-4">
                   Source Commits
                 </h3>
-                <div className="space-y-2">
-                  {commits.map((commit, index) => (
-                    <Card key={commit.sha || index} className="overflow-hidden">
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-2 mb-1.5">
-                          <GitCommit className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs line-clamp-2 leading-relaxed">
-                              {commit.message}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pl-5">
-                          <span className="text-xs text-muted-foreground truncate">
-                            {commit.author}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
-                            {commit.date}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <CommitCard commits={commits} />
               </div>
             </ScrollArea>
           </div>
@@ -278,7 +255,7 @@ export default function ReportClientPage({
                         placeholder="e.g., Make it more technical, add more detail to infrastructure changes..."
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        className="min-h-[120px] text-sm"
+                        className="min-h-30 text-sm"
                       />
                       <Button
                         onClick={handleSendReply}

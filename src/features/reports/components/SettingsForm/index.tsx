@@ -29,6 +29,7 @@ import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { CommitCard } from "@/src/components/global/CommitCard";
 import { useCommits } from "@/src/features/reports/services/api";
 
 type Props = {
@@ -61,10 +62,11 @@ function CommitsPreview({ commits, commitCount }: CommitPreviewProps) {
         <Button
           variant="ghost"
           size="sm"
-          className="w-full text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground px-0"
         >
           <GitCommit className="h-4 w-4 mr-2" />
-          Preview commits
+          {commitCount} {commitCount === 1 ? "commit" : "commits"} found for
+          this period
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[80vh] p-0">
@@ -75,30 +77,18 @@ function CommitsPreview({ commits, commitCount }: CommitPreviewProps) {
           </p>
         </DialogHeader>
         <ScrollArea className="h-[60vh]">
-          <div className="p-6 space-y-3">
-            {commits.map((commit, index) => (
-              <div
-                key={commit.sha || index}
-                className="p-4 rounded-lg bg-muted border border-border/50"
-              >
-                <p className="text-xs font-mono text-muted-foreground mb-2">
-                  {commit.sha.slice(0, 7)}
-                </p>
-                <p className="text-sm leading-relaxed mb-3">
-                  {commit.commit.message}
-                </p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{commit.commit.author?.name || "Unknown"}</span>
-                  <span>
-                    {commit.commit.author?.date
-                      ? new Date(commit.commit.author.date).toLocaleDateString(
-                          "en-US",
-                        )
-                      : "Unknown"}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="p-6">
+            <CommitCard
+              commits={commits.map((c) => ({
+                sha: c.sha,
+                message: c.commit.message,
+                author: c.commit.author?.name || "Unknown",
+                date: c.commit.author?.date
+                  ? new Date(c.commit.author.date).toLocaleDateString("en-US")
+                  : "Unknown",
+                url: c.html_url,
+              }))}
+            />
           </div>
         </ScrollArea>
       </DialogContent>
@@ -268,20 +258,9 @@ export function SettingsForm({
 
                 <div className="flex flex-col gap-2 overflow-hidden">
                   <div className="flex flex-col gap-1 w-full">
-                    <div className="flex items-center justify-between w-full gap-4">
-                      <Label className="text-sm font-semibold whitespace-nowrap">
-                        Sync Status
-                      </Label>
-
-                      {!isFetching && !hasError && commitCount > 0 && (
-                        <div className="shrink-0">
-                          <CommitsPreview
-                            commits={commits}
-                            commitCount={commitCount}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <Label className="text-sm font-semibold whitespace-nowrap">
+                      Sync Status
+                    </Label>
                   </div>
                   <div className="flex items-center gap-2">
                     {isFetching ? (
@@ -300,11 +279,10 @@ export function SettingsForm({
                             No commits found for this period
                           </span>
                         ) : (
-                          <span className="text-sm text-muted-foreground">
-                            {commitCount}{" "}
-                            {commitCount === 1 ? "commit" : "commits"} found for
-                            this period
-                          </span>
+                          <CommitsPreview
+                            commits={commits}
+                            commitCount={commitCount}
+                          />
                         )}
                       </div>
                     )}
