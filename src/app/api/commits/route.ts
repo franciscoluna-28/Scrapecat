@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRepositoryCommits } from "@/src/shared/services/github";
-import { APP_CONFIG } from "@/src/shared/data/app";
+import { APP_CONFIG } from "@/src/shared/constants/app";
 
 export async function GET(request: NextRequest) {
   try {
