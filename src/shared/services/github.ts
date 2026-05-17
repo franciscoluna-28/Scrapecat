@@ -30,6 +30,7 @@ export async function getRepositoryCommits(
       per_page: number;
       sort: string;
       direction: string;
+      sha?: string;
       since?: string;
       until?: string;
     } = {
@@ -40,6 +41,9 @@ export async function getRepositoryCommits(
       direction: "desc",
     };
 
+    if (params.sha) {
+      requestParams.sha = params.sha;
+    }
     if (params.since) {
       requestParams.since = params.since;
     }

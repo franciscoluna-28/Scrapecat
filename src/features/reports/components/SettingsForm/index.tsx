@@ -112,7 +112,13 @@ export function SettingsForm({
     count: commitCount,
     isFetching,
     hasError,
-  } = useCommits(repository.owner.login, repository.name, startDate, endDate);
+  } = useCommits({
+    owner: repository.owner.login,
+    repo: repository.name,
+    startDate,
+    endDate,
+    branch: selectedBranch,
+  });
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -232,7 +238,10 @@ export function SettingsForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="customInstructions" className="text-base font-medium">
+            <Label
+              htmlFor="customInstructions"
+              className="text-base font-medium"
+            >
               Custom AI Instructions
             </Label>
             <Textarea
@@ -313,7 +322,8 @@ export function SettingsForm({
             )}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report
+            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for
+            the report
           </p>
         </div>
       </CardContent>

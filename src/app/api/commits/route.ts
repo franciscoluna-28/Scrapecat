@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || `"${APP_CONFIG.commits.MAX_LIMIT}"`);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const branch = searchParams.get("branch");
 
     if (!owner || !repo) {
       return NextResponse.json(
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       owner,
       repo,
       per_page: limit,
+      sha: branch || undefined,
       since: startDate || undefined,
       until: endDate || undefined,
     });
