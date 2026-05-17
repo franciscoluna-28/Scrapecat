@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRepositoryCommits } from "@/src/shared/services/github";
-import { APP_CONFIG } from "@/src/shared/data/app";
+import { APP_CONFIG } from "@/src/shared/constants/app";
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || `"${APP_CONFIG.commits.MAX_LIMIT}"`);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const branch = searchParams.get("branch");
 
     if (!owner || !repo) {
       return NextResponse.json(
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       owner,
       repo,
       per_page: limit,
+      sha: branch || undefined,
       since: startDate || undefined,
       until: endDate || undefined,
     });

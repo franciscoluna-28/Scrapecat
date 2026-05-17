@@ -3,8 +3,6 @@
 import useSWR from "swr";
 import { format } from "date-fns";
 import { GitHubCommit, GitHubRepository } from "@/src/shared/types";
-import { fetcher } from "@/src/shared/lib/fetch";
-import { SWRCONFIG } from "@/src/shared/data/app";
 
 /**
  * Builds the API URL for fetching commits.
@@ -13,6 +11,7 @@ import { SWRCONFIG } from "@/src/shared/data/app";
  * @param repo - Repository name
  * @param startDate - Start date in YYYY-MM-DD format (required)
  * @param endDate - End date in YYYY-MM-DD format (defaults to today)
+ * @param branch - Branch name to filter commits
  * @returns The API URL string, or null if startDate is not provided
  */
 export function getCommitsUrl(
@@ -20,13 +19,18 @@ export function getCommitsUrl(
   repo: string,
   startDate?: string,
   endDate?: string,
+  branch?: string,
 ): string | null {
   if (!startDate) return null;
 
   const today = format(new Date(), "yyyy-MM-dd");
   const finalEndDate = endDate || today;
 
-  return `/api/commits?owner=${owner}&repo=${repo}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`;
+  let url = `/api/commits?owner=${owner}&repo=${repo}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`;
+  if (branch) {
+    url += `&branch=${encodeURIComponent(branch)}`;
+  }
+  return url;
 }
 
 type UseCommitsReturn = {
@@ -47,6 +51,7 @@ type UseCommitsReturn = {
  * @param repo - Repository name
  * @param startDate - Start date in YYYY-MM-DD format
  * @param endDate - Optional end date in YYYY-MM-DD format
+ * @param branch - Optional branch name to filter commits
  * @returns Object containing commits data and loading states
  *
  * @example
@@ -59,19 +64,27 @@ type UseCommitsReturn = {
  * );
  * ```
  */
-export function useCommits(
-  owner: string,
-  repo: string,
-  startDate?: string,
-  endDate?: string,
+export function useCommits({
+  owner,
+  repo,
+  startDate,
+  endDate,
+  branch,
+}: {
+  owner: string;
+  repo: string;
+  startDate?: string;
+  endDate?: string;
+  branch?: string;
+}
 ): UseCommitsReturn {
 
   // The key is the URL, in case the URL changes, the request will be made again. Otherwise, it will use the cached data.
-  const url = getCommitsUrl(owner, repo, startDate, endDate);
+  const url = getCommitsUrl(owner, repo, startDate, endDate, branch);
 
   const { data, error, isLoading, isValidating } = useSWR<{
     commits: GitHubCommit[];
-  }>(url, fetcher, SWRCONFIG);
+  }>(url);
 
   const commits = data?.commits ?? [];
 
@@ -146,8 +159,6 @@ export function useRepositories(
 
   const { data, error, isLoading, isValidating } = useSWR<GitHubRepository[]>(
     url,
-    fetcher,
-    SWRCONFIG,
   );
 
   const repositories = data ?? [];
