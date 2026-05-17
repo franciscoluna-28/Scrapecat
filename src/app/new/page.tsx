@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { ApplicationLayout } from "@/src/components/global/ApplicationLayout";
@@ -17,9 +18,12 @@ import { GitHubRepository } from "@/src/shared/types";
 import { ReportCard } from "@/src/features/reports/components/ReportCard";
 
 export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeView = searchParams.get('view') === 'reports' ? 'reports' : 'repositories';
+
   const { repositoryType, perPage, sort, direction } = useGitHubSettingsStore();
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'repositories' | 'reports'>('repositories');
 
   const { repositories, isFetching: isFetchingRepos, hasError: hasReposError } = useRepositories({
     type: repositoryType,
@@ -42,7 +46,7 @@ export default function Page() {
           <div className="flex gap-2 mb-6">
             <Button
               variant={activeView === 'repositories' ? 'default' : 'outline'}
-              onClick={() => setActiveView('repositories')}
+              onClick={() => router.replace('/new?view=repositories')}
               className="flex-1"
             >
               <GitBranch className="mr-2 h-4 w-4" />
@@ -50,7 +54,7 @@ export default function Page() {
             </Button>
             <Button
               variant={activeView === 'reports' ? 'default' : 'outline'}
-              onClick={() => setActiveView('reports')}
+              onClick={() => router.replace('/new?view=reports')}
               className="flex-1"
             >
               <FileText className="mr-2 h-4 w-4" />

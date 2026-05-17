@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/src/shared/lib/utils";
 import { Toaster } from "@/src/components/ui/sonner";
+import SWRConfigProvider from "../shared/providers/SWRConfig";
 
 const poppins = Poppins({subsets:['latin'],variable:'--font-sans',weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']});
 
@@ -32,8 +33,10 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", poppins.variable)}
     >
       <body className="min-h-full flex flex-col">
+        <SWRConfigProvider>
         {children}
         <Toaster richColors />
+        </SWRConfigProvider>
       </body>
     </html>
   );

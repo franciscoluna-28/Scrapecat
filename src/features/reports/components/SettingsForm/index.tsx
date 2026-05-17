@@ -25,7 +25,7 @@ import {
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
-import { APP_CONFIG } from "@/src/shared/data/app";
+import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
@@ -250,7 +250,7 @@ export function SettingsForm({
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-[80px]"
+              className="min-h-20"
             />
             <p className="text-xs text-muted-foreground">
               Add specific instructions to guide the AI report generation

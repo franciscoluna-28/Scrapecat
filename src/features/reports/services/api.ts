@@ -3,8 +3,6 @@
 import useSWR from "swr";
 import { format } from "date-fns";
 import { GitHubCommit, GitHubRepository } from "@/src/shared/types";
-import { fetcher } from "@/src/shared/lib/fetch";
-import { SWRCONFIG } from "@/src/shared/data/app";
 
 /**
  * Builds the API URL for fetching commits.
@@ -71,7 +69,7 @@ export function useCommits(
 
   const { data, error, isLoading, isValidating } = useSWR<{
     commits: GitHubCommit[];
-  }>(url, fetcher, SWRCONFIG);
+  }>(url);
 
   const commits = data?.commits ?? [];
 
@@ -146,8 +144,6 @@ export function useRepositories(
 
   const { data, error, isLoading, isValidating } = useSWR<GitHubRepository[]>(
     url,
-    fetcher,
-    SWRCONFIG,
   );
 
   const repositories = data ?? [];
