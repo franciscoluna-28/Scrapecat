@@ -16,6 +16,7 @@ export const commitsInputSchema = z.object({
  */
 export const reportInputSchema = z.object({
   repository: z.string(),
+  githubOwner: z.string(),
   branch: z.string(),
   startDate: z.string(),
   endDate: z.string(),

@@ -145,6 +145,7 @@ export function SettingsForm({
         body: JSON.stringify({
           data: {
             repository: repository.name,
+            githubOwner: repository.owner.login,
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
