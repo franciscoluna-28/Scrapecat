@@ -95,18 +95,16 @@ export async function POST(req: Request) {
     }
 
     const assets = await uploadImagesToR2(images, reportId, validatedData.githubOwner, validatedData.repository);
-    const reportWithMedia = assets.length > 0
-      ? `${generatedReport}\n\n## Media\n\n${assets.map((a) => `![](${a.r2Url})`).join("\n\n")}`
-      : generatedReport;
 
-    // Save to DB
+    // Save to DB — AI markdown is stored WITHOUT images.
+    // Images are stored separately in imageAssets and rendered on the frontend.
     const now = new Date();
     await db.insert(reports).values({
       id: reportId,
       githubProjectId: parseInt(validatedData.repository) || 0,
       githubRepositoryName: validatedData.repository,
-      originalMarkdown: reportWithMedia,
-      editableMarkdown: reportWithMedia,
+      originalMarkdown: generatedReport,
+      editableMarkdown: generatedReport,
       startDate: validatedData.startDate,
       endDate: validatedData.endDate,
       branch: validatedData.branch,
@@ -119,7 +117,7 @@ export async function POST(req: Request) {
     });
 
     return new Response(
-      JSON.stringify({ reportId, report: reportWithMedia }),
+      JSON.stringify({ reportId, report: generatedReport }),
       { headers: { "Content-Type": "application/json" } },
     );
   } catch (error: unknown) {

@@ -8,7 +8,7 @@ export function buildSystemPrompt(customInstructions?: string | null): string {
 
 export function getLanguageInstruction(customInstructions?: string | null): string {
   return customInstructions?.trim()
-    ? `IMPORTANT: Detect the language of the user's instructions below and write the entire report in that same language. For Spanish, use natural phrasing like "se ha implementado", "se ha optimizado", "se ha creado" (avoid direct translations of English verbs).`
+    ? `IMPORTANT: Detect the language of the user's instructions below and write the entire report in that same language.`
     : "Write the report in English.";
 }
 
@@ -44,27 +44,33 @@ export function buildReportPrompt(params: ReportPromptParams): string {
     "",
     "After closing the thinking tag, output ONLY the final markdown report with no additional commentary.",
     "",
-    "Guidelines:",
-    "1. DO NOT mention developer names or commit counts.",
-    '2. GROUP small technical changes into 3-4 high-level functional categories (e.g., "Feature Development", "Infrastructure & Performance", "UI Refinement", "Data Layer").',
-    '3. TRANSLATE technical actions into product value (e.g., instead of "added SWR", use "Implemented reactive data fetching for improved UI snappiness").',
-    "4. BE CONCISE. Use bullet points that start with a strong verb.",
-    "5. Prioritize features and fix commits.",
-    "6. ABSOLUTELY NO SEPARATORS: Do not use horizontal rules (---, ***), dividers, or any visual separator elements.",
-    "",
-    "Constraints:",
-    "- Constraint: Avoid mentioning technical details like libraries or frameworks, focus on the business logic and user impact.",
-    "- Constraint: Use 'Engineering Updates' style. Avoid flowery adjectives like 'groundbreaking' or 'revolutionary'. Stick to neutral, high-leverage verbs (Optimized, Scaled, Standardized, Integrated).",
-    "- Constraint: Maximum 300 words if there are more than 5 commits.",
-    "- Constraint: Maximum 4 categories.",
-    "- Constraint: Use markdown format.",
-    "- Constraint: If the commits are less than 5, maximum 200 words and 2 categories.",
-    "",
-    "Structure:",
-    "- Title: Product Update - [Project Name]",
-    "- 3-4 Categorized Sections (with 2-4 bullet points each)",
-    "- Summary of Strategic Direction as a H3 tag (1-3 sentences)",
-    "- Match the changes according to the commits and their dates. For example, if we did not have changes in a category, do not include it.",
+     "Guidelines:",
+     "1. DO NOT mention developer names or commit counts.",
+     '2. GROUP small technical changes into 3-4 high-level functional categories (e.g., "Feature Development", "Infrastructure & Performance", "UI Refinement", "Data Layer").',
+     '3. TRANSLATE technical actions into product value (e.g., instead of "added SWR", use "Implemented reactive data fetching for improved UI snappiness").',
+     "4. BE CONCISE. Use bullet points that start with a strong verb.",
+     "5. Prioritize features and fix commits.",
+     "6. ABSOLUTELY NO SEPARATORS: Do not use horizontal rules (---, ***), dividers, or any visual separator elements.",
+     "",
+     "Formatting:",
+     "- Use markdown format.",
+     "- Each bullet point is a separate line starting with '- '.",
+     "- Bullet points must NOT be inlined on the same line. Each bullet is its own line.",
+     "- Put an empty line between each bullet point.",
+     "- NEVER use '•', '*', '+', or any other bullet symbol. ONLY '- ' at the start of the line.",
+     "",
+     "Constraints:",
+     "- Constraint: Avoid mentioning technical details like libraries or frameworks, focus on the business logic and user impact.",
+     "- Constraint: Use 'Engineering Updates' style. Avoid flowery adjectives like 'groundbreaking' or 'revolutionary'. Stick to neutral, high-leverage verbs (Optimized, Scaled, Standardized, Integrated).",
+     "- Constraint: Maximum 300 words if there are more than 5 commits.",
+     "- Constraint: Maximum 4 categories.",
+     "- Constraint: If the commits are less than 5, maximum 200 words and 2 categories.",
+     "",
+     "Structure:",
+     "- Title: Product Update - [Project Name]",
+     "- 3-4 Categorized H2 sections (## Category Name). Within each section, 2-4 bullet points using markdown list syntax, one per line.",
+     "- Summary of Strategic Direction as a H3 tag (### Strategic Direction, 1-3 sentences).",
+     "- Match the changes according to the commits and their dates. For example, if we did not have changes in a category, do not include it.",
   ].join("\n");
 }
 

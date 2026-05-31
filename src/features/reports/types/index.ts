@@ -1,4 +1,5 @@
 import { ProcessedCommit } from "@/src/shared/lib/utils";
+import type { ImageAsset } from "@/src/drizzle/schema";
 
 /**
  * Report data output type to work with in the application
@@ -17,6 +18,7 @@ export type ReportDataOutput = {
   githubRepositoryName: string;
   sourceCommits: ProcessedCommit[];
   sourceCommitsUpdatedAt: Date | null;
+  imageAssets: ImageAsset[];
 };
 
 
