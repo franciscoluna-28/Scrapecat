@@ -232,7 +232,7 @@ export default function ReportClientPage({
                   Intelligence Report
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Generated on {new Date().toLocaleDateString()}
+                  Generated on {new Date().toLocaleDateString("en-US")}
                 </p>
               </div>
             </div>
@@ -290,6 +290,7 @@ export default function ReportClientPage({
                   </ReactMarkdown>
                   {imageAssets && imageAssets.length > 0 && (
                     <div className="mt-8 pt-8 border-t space-y-4">
+                      <h2 className="text-lg font-semibold text-foreground/90">Media</h2>
                       {imageAssets.map((asset, i) => (
                         <img
                           key={i}
