@@ -176,18 +176,18 @@ export function SettingsForm({
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
-      <CardContent className="p-8 space-y-8">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Report Configuration</h3>
-          <p className="text-sm text-muted-foreground">
+      <CardContent className="p-5 space-y-4">
+        <div className="space-y-0.5">
+          <h3 className="text-base font-semibold">Report Configuration</h3>
+          <p className="text-xs text-muted-foreground">
             Configure your date range and branch to generate a comprehensive
             report.
           </p>
         </div>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
               <DatePicker
                 label={
                   <>
@@ -205,7 +205,7 @@ export function SettingsForm({
               />
             </div>
 
-            <div className="space-y-2">
+            <div>
               <DatePicker
                 label="End Date (optional)"
                 date={endDate ? parseISO(endDate) : undefined}
@@ -218,16 +218,18 @@ export function SettingsForm({
                 }
               />
             </div>
+          </div>
 
-            <div>
-              <Label htmlFor="branch" className="text-base font-medium ">
+          <div className="border-t pt-3">
+            <div className="max-w-xs">
+              <Label htmlFor="branch" className="text-sm font-medium">
                 Branch
               </Label>
               <Select
                 value={selectedBranch}
                 onValueChange={(v) => updateParam("branch", v)}
               >
-                <SelectTrigger className="mt-2">
+                <SelectTrigger className="mt-1.5">
                   <SelectValue placeholder="Select a branch" />
                 </SelectTrigger>
                 <SelectContent>
@@ -241,10 +243,10 @@ export function SettingsForm({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label
               htmlFor="customInstructions"
-              className="text-base font-medium"
+              className="text-sm font-medium"
             >
               Custom AI Instructions
             </Label>
@@ -253,7 +255,7 @@ export function SettingsForm({
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-20"
+              className="min-h-[80px]"
             />
             <p className="text-xs text-muted-foreground">
               Add specific instructions to guide the AI report generation
@@ -264,17 +266,15 @@ export function SettingsForm({
         {startDate && (
           <>
             <Card className="border-none shadow-none">
-              <CardContent className="flex items-center gap-6">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
+              <CardContent className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted border">
                   <GitCommit className="h-4 w-4 text-muted-foreground" />
                 </div>
 
-                <div className="flex flex-col gap-2 overflow-hidden">
-                  <div className="flex flex-col gap-1 w-full">
-                    <Label className="text-sm font-semibold whitespace-nowrap">
-                      Sync Status
-                    </Label>
-                  </div>
+                <div className="flex flex-col overflow-hidden">
+                  <Label className="text-sm font-semibold whitespace-nowrap">
+                    Sync Status
+                  </Label>
                   <div className="flex items-center gap-2">
                     {isFetching ? (
                       <div className="flex items-center gap-2">
@@ -306,14 +306,14 @@ export function SettingsForm({
           </>
         )}
 
-        <div className="flex items-start gap-3 rounded-lg border p-4">
+        <div className="flex items-start gap-3 rounded-lg border px-4 py-3">
           <Checkbox
             id="quickMode"
             checked={quickMode}
             onCheckedChange={(v) => setQuickMode(v === true)}
             className="mt-0.5"
           />
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <Label
               htmlFor="quickMode"
               className="text-sm font-medium leading-none cursor-pointer"
@@ -326,11 +326,11 @@ export function SettingsForm({
           </div>
         </div>
 
-        <div className="pt-4 space-y-2">
+        <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
             disabled={!startDate || isPending || !canGenerate}
-            size="lg"
+            size="default"
             className="w-full"
           >
             {isPending ? (
