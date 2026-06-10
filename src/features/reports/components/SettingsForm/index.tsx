@@ -255,7 +255,7 @@ export function SettingsForm({
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-[80px]"
+              className="min-h-20"
             />
             <p className="text-xs text-muted-foreground">
               Add specific instructions to guide the AI report generation
