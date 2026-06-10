@@ -48,6 +48,21 @@ We utilize Groq’s LPU Inference Engine for low latency report generation. Howe
 - 1. Access: Obtain your API key from the [Groq Console](https://console.groq.com/home)
 - 2. Model: Fabric is pre-configured to use `Llama-3.1-8b-instant`, balancing high-context reasoning with near-instant execution.
 
+### 3. Cloudflare R2 (Image Hosting)
+
+Fabric extracts screenshots from PR descriptions and re-hosts them on Cloudflare R2 (S3-compatible). This is a **hard requirement** — without R2, images from PR bodies would link directly to `github.com/user-attachments/`, which:
+
+- **Breaks for unauthenticated viewers** — GitHub blocks image loads for users not logged in, so stakeholders would see broken images.
+- **Hits GitHub hotlinking limits** — shared reports would quickly exhaust GitHub's rate limits on image serving.
+- **Leaks your origin** — stakeholders see `github.com` URLs, raising unnecessary questions about tooling.
+
+By re-hosting on R2, images are publicly accessible via your own domain, work for anyone with the report link, and are fully under your control.
+
+**Required R2 resources:**
+- An R2 bucket (name configurable via `R2_BUCKET_NAME`)
+- An S3-compatible API token (access key + secret)
+- A custom domain or the public R2.dev URL for serving images
+
 ## Environment Setup
 
 Create a .env.local file in the root of your project and populate it with your credentials:
@@ -61,6 +76,14 @@ GROQ_API_KEY=your_groq_api_key
 
 # App Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Cloudflare R2 — host PR screenshots on your own infra
+# so shared reports work for stakeholders without GitHub auth
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret
+R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+R2_BUCKET_NAME=reports
+R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
 ```
 
 ## Local Deployment
@@ -102,9 +125,14 @@ GITHUB_TOKEN=your_personal_access_token
 GROQ_API_KEY=your_groq_api_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 DATABASE_URL=file:data/dev.db
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret
+R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+R2_BUCKET_NAME=reports
+R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
 ```
 
-The compose file reads `GITHUB_TOKEN` and `GROQ_API_KEY` from `.env` as build args so they're available during the Next.js build step. All vars are also passed at runtime.
+The compose file reads `GITHUB_TOKEN` and `GROQ_API_KEY` from `.env` as build args so they're available during the Next.js build step. All vars (including R2) are also passed at runtime via `env_file`.
 
 ### Development (hot reload)
 

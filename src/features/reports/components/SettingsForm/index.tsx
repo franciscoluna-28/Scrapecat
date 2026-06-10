@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
+import { Checkbox } from "@/src/components/ui/checkbox";
 import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
 import {
@@ -106,6 +107,7 @@ export function SettingsForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
+  const [quickMode, setQuickMode] = useState(false);
 
   const {
     commits,
@@ -151,6 +153,7 @@ export function SettingsForm({
             endDate: finalEndDate,
             commits: processCommitsForAiReport(commits),
             customInstructions,
+            quickMode,
           },
         }),
       });
@@ -173,18 +176,18 @@ export function SettingsForm({
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
-      <CardContent className="p-8 space-y-8">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Report Configuration</h3>
-          <p className="text-sm text-muted-foreground">
+      <CardContent className="p-6 space-y-5">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold">Report Configuration</h3>
+          <p className="text-xs text-muted-foreground">
             Configure your date range and branch to generate a comprehensive
             report.
           </p>
         </div>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <DatePicker
                 label={
                   <>
@@ -202,7 +205,7 @@ export function SettingsForm({
               />
             </div>
 
-            <div className="space-y-2">
+            <div>
               <DatePicker
                 label="End Date (optional)"
                 date={endDate ? parseISO(endDate) : undefined}
@@ -217,15 +220,15 @@ export function SettingsForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="branch" className="text-base font-medium">
-              Select Branch
+          <div>
+            <Label htmlFor="branch" className="text-sm font-medium">
+              Branch
             </Label>
             <Select
               value={selectedBranch}
               onValueChange={(v) => updateParam("branch", v)}
             >
-              <SelectTrigger className="h-11">
+              <SelectTrigger className="mt-2">
                 <SelectValue placeholder="Select a branch" />
               </SelectTrigger>
               <SelectContent>
@@ -238,10 +241,10 @@ export function SettingsForm({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label
               htmlFor="customInstructions"
-              className="text-base font-medium"
+              className="text-sm font-medium"
             >
               Custom AI Instructions
             </Label>
@@ -250,7 +253,7 @@ export function SettingsForm({
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-20"
+              className="min-h-[80px]"
             />
             <p className="text-xs text-muted-foreground">
               Add specific instructions to guide the AI report generation
@@ -261,7 +264,7 @@ export function SettingsForm({
         {startDate && (
           <>
             <Card className="border-none shadow-none">
-              <CardContent className="flex items-center gap-6">
+              <CardContent className="flex items-center gap-4">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
                   <GitCommit className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -303,11 +306,31 @@ export function SettingsForm({
           </>
         )}
 
-        <div className="pt-4 space-y-2">
+        <div className="flex items-start gap-3 rounded-lg border px-4 py-3">
+          <Checkbox
+            id="quickMode"
+            checked={quickMode}
+            onCheckedChange={(v) => setQuickMode(v === true)}
+            className="mt-0.5"
+          />
+          <div className="space-y-0.5">
+            <Label
+              htmlFor="quickMode"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Quick mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Skip PR descriptions and screenshots for faster generation
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2 space-y-2">
           <Button
             onClick={handleGenerate}
             disabled={!startDate || isPending || !canGenerate}
-            size="lg"
+            size="default"
             className="w-full"
           >
             {isPending ? (
@@ -323,8 +346,9 @@ export function SettingsForm({
             )}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for
-            the report
+            {quickMode
+              ? `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed (PR data & images skipped)`
+              : `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
           </p>
         </div>
       </CardContent>
