@@ -35,26 +35,29 @@ export async function POST(req: Request) {
 
     const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
-    // Fetch PR bodies + PR numbers for each commit
-    const prCache = new Map<string, { body: string | null; number: number }>();
-    await Promise.allSettled(
-      limitedCommits.map(async (commit) => {
-        if (prCache.has(commit.sha)) return;
-        const pr = await getPullRequestForCommit(
-          validatedData.githubOwner,
-          validatedData.repository,
-          commit.sha,
-        );
-        prCache.set(commit.sha, { body: pr?.body ?? null, number: pr?.number ?? 0 });
-      }),
-    );
+    let enrichedCommits: Array<typeof limitedCommits[number] & { prBody: string | null; prNumber: number }>;
 
-    const enrichedCommits = limitedCommits.map((c) => {
-      const p = prCache.get(c.sha);
-      if (p) console.log(`[Report] ${c.sha.slice(0, 7)} → PR #${p.number}`);
-      else console.log(`[Report] ${c.sha.slice(0, 7)} → no PR found`);
-      return { ...c, prBody: p?.body ?? null, prNumber: p?.number ?? 0 };
-    });
+    if (validatedData.quickMode) {
+      enrichedCommits = limitedCommits.map((c) => ({ ...c, prBody: null, prNumber: 0 }));
+    } else {
+      const prCache = new Map<string, { body: string | null; number: number }>();
+      await Promise.allSettled(
+        limitedCommits.map(async (commit) => {
+          if (prCache.has(commit.sha)) return;
+          const pr = await getPullRequestForCommit(
+            validatedData.githubOwner,
+            validatedData.repository,
+            commit.sha,
+          );
+          prCache.set(commit.sha, { body: pr?.body ?? null, number: pr?.number ?? 0 });
+        }),
+      );
+
+      enrichedCommits = limitedCommits.map((c) => {
+        const p = prCache.get(c.sha);
+        return { ...c, prBody: p?.body ?? null, prNumber: p?.number ?? 0 };
+      });
+    }
 
     const customInstructions = validatedData.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
@@ -84,17 +87,21 @@ export async function POST(req: Request) {
 
     // Upload images from PR bodies to R2
     const reportId = nanoid();
-    const images: { url: string; commitSha: string; commitMessage: string; prNumber: number }[] = [];
+    let assets: Awaited<ReturnType<typeof uploadImagesToR2>> = [];
 
-    for (const commit of enrichedCommits) {
-      if (!commit.prBody) continue;
-      const extracted = extractImagesFromPrBody(commit.prBody, commit.sha, commit.message);
-      for (const img of extracted) {
-        images.push({ url: img.url, commitSha: img.commitSha, commitMessage: img.commitMessage, prNumber: commit.prNumber });
+    if (!validatedData.quickMode) {
+      const images: { url: string; commitSha: string; commitMessage: string; prNumber: number }[] = [];
+
+      for (const commit of enrichedCommits) {
+        if (!commit.prBody) continue;
+        const extracted = extractImagesFromPrBody(commit.prBody, commit.sha, commit.message);
+        for (const img of extracted) {
+          images.push({ url: img.url, commitSha: img.commitSha, commitMessage: img.commitMessage, prNumber: commit.prNumber });
+        }
       }
-    }
 
-    const assets = await uploadImagesToR2(images, reportId, validatedData.githubOwner, validatedData.repository);
+      assets = await uploadImagesToR2(images, reportId, validatedData.githubOwner, validatedData.repository);
+    }
 
     // Save to DB — AI markdown is stored WITHOUT images.
     // Images are stored separately in imageAssets and rendered on the frontend.

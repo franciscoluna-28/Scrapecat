@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
+import { Checkbox } from "@/src/components/ui/checkbox";
 import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
 import {
@@ -106,6 +107,7 @@ export function SettingsForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
+  const [quickMode, setQuickMode] = useState(false);
 
   const {
     commits,
@@ -151,6 +153,7 @@ export function SettingsForm({
             endDate: finalEndDate,
             commits: processCommitsForAiReport(commits),
             customInstructions,
+            quickMode,
           },
         }),
       });
@@ -183,7 +186,7 @@ export function SettingsForm({
         </div>
 
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <DatePicker
                 label={
@@ -215,27 +218,27 @@ export function SettingsForm({
                 }
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="branch" className="text-base font-medium">
-              Select Branch
-            </Label>
-            <Select
-              value={selectedBranch}
-              onValueChange={(v) => updateParam("branch", v)}
-            >
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div>
+              <Label htmlFor="branch" className="text-base font-medium ">
+                Branch
+              </Label>
+              <Select
+                value={selectedBranch}
+                onValueChange={(v) => updateParam("branch", v)}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -303,6 +306,26 @@ export function SettingsForm({
           </>
         )}
 
+        <div className="flex items-start gap-3 rounded-lg border p-4">
+          <Checkbox
+            id="quickMode"
+            checked={quickMode}
+            onCheckedChange={(v) => setQuickMode(v === true)}
+            className="mt-0.5"
+          />
+          <div className="space-y-1">
+            <Label
+              htmlFor="quickMode"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Quick mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Skip PR descriptions and screenshots for faster generation
+            </p>
+          </div>
+        </div>
+
         <div className="pt-4 space-y-2">
           <Button
             onClick={handleGenerate}
@@ -323,8 +346,9 @@ export function SettingsForm({
             )}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for
-            the report
+            {quickMode
+              ? `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed (PR data & images skipped)`
+              : `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
           </p>
         </div>
       </CardContent>

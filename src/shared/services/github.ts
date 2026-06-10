@@ -2,10 +2,6 @@ import { octokit } from "@/src/shared/lib/octokit";
 import { Endpoints } from "@octokit/types";
 import { GitHubCommit, GitHubRepository } from "../types";
 
-// Add types needed for getPullRequestForCommit
-type GetCommitPullRequestParameters =
-  Endpoints["GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls"]["parameters"];
-
 // It's better to use provider (Octokit, OAS 3.0) types instead of hardcoding parameters
 type GetAllRepositoriesParameters = Endpoints["GET /user/repos"]["parameters"];
 type GetRepositoryCommitsParameters =
@@ -161,31 +157,24 @@ export async function getRepositoryCommitCount({
   }
 }
 
+/**
+ * Fetches the associated PR for a commit using the commits/pulls endpoint.
+ * Avoids the Search API (30 req/min limit) — uses the standard rate limit (5000/hr).
+ * For merge commits and PR head commits this reliably returns the associated PR.
+ */
 export async function getPullRequestForCommit(
   owner: string,
   repo: string,
   commitSha: string,
 ): Promise<{ body: string | null; number: number; html_url: string } | null> {
   try {
-    // Use the search API which is more reliable for finding PRs containing a commit
-    const { data } = await octokit.request("GET /search/issues", {
-      q: `repo:${owner}/${repo}+${commitSha}+type:pr`,
-      per_page: 1,
-    });
-
-    if (!data.items?.length) {
-      // Fallback: try the commits/pulls endpoint
-      const { data: prs } = await octokit.request(
-        "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
-        { owner, repo, commit_sha: commitSha, per_page: 1 },
-      );
-      const pr = prs?.[0];
-      if (!pr) return null;
-      return { body: pr.body ?? null, number: pr.number, html_url: pr.html_url };
-    }
-
-    const item = data.items[0];
-    return { body: item.body ?? null, number: item.number, html_url: item.html_url };
+    const { data: prs } = await octokit.request(
+      "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+      { owner, repo, commit_sha: commitSha, per_page: 1 },
+    );
+    const pr = prs?.[0];
+    if (!pr) return null;
+    return { body: pr.body ?? null, number: pr.number, html_url: pr.html_url };
   } catch (err) {
     console.error(`getPullRequestForCommit error for ${commitSha.slice(0, 7)}:`, err);
     return null;
