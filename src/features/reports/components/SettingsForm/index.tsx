@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { GitHubRepository } from "@/src/shared/types";
-import { Book, Loader2, GitCommit } from "lucide-react";
+import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { CommitCard } from "@/src/components/global/CommitCard";
 import { useCommits } from "@/src/features/reports/services/api";
+import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 
 type Props = {
   repository: GitHubRepository;
@@ -108,6 +109,7 @@ export function SettingsForm({
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
   const [quickMode, setQuickMode] = useState(false);
+  const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
 
   const {
     commits,
@@ -244,12 +246,23 @@ export function SettingsForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label
-              htmlFor="customInstructions"
-              className="text-sm font-medium"
-            >
-              Custom AI Instructions
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="customInstructions"
+                className="text-sm font-medium"
+              >
+                Custom AI Instructions
+              </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPromptPresetsOpen(true)}
+                className="h-7 px-2 text-xs"
+              >
+                <Bookmark className="h-3.5 w-3.5 mr-1" />
+                Presets
+              </Button>
+            </div>
             <Textarea
               id="customInstructions"
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
@@ -261,6 +274,12 @@ export function SettingsForm({
               Add specific instructions to guide the AI report generation
             </p>
           </div>
+          <PromptPresetsModal
+            open={promptPresetsOpen}
+            onOpenChange={setPromptPresetsOpen}
+            currentPrompt={customInstructions}
+            onSelectPrompt={setCustomInstructions}
+          />
         </div>
 
         {startDate && (

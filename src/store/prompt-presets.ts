@@ -1,0 +1,48 @@
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { nanoid } from 'nanoid'
+import { DEFAULT_PRESETS } from '@/src/shared/constants/prompts'
+
+export type PromptPreset = {
+  id: string
+  name: string
+  prompt: string
+}
+
+interface PromptPresetsState {
+  presets: PromptPreset[]
+  addPreset: (name: string, prompt: string) => void
+  deletePreset: (id: string) => void
+}
+
+export const usePromptPresetsStore = create<PromptPresetsState>()(
+  persist(
+    (set) => ({
+      presets: [],
+      addPreset: (name, prompt) =>
+        set((state) => ({
+          presets: [
+            ...state.presets,
+            { id: nanoid(), name, prompt },
+          ],
+        })),
+      deletePreset: (id) =>
+        set((state) => ({
+          presets: state.presets.filter((p) => p.id !== id),
+        })),
+    }),
+    {
+      name: 'prompt-presets',
+      storage: createJSONStorage(() => localStorage),
+      merge: (persisted, initial) => {
+        if (persisted && (persisted as PromptPresetsState).presets.length > 0) {
+          return persisted as PromptPresetsState
+        }
+        return {
+          ...initial,
+          presets: DEFAULT_PRESETS.map((p) => ({ id: nanoid(), ...p })),
+        }
+      },
+    },
+  ),
+)

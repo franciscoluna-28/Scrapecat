@@ -78,6 +78,21 @@ export function buildRefinePrompt(reply: string): string {
   return `Refine the report based on this feedback:\n${reply}\n\nFirst reason inside <thinking> tags, then output ONLY the updated markdown report.`;
 }
 
+export const DEFAULT_PRESETS = [
+  {
+    name: "Executive Summary",
+    prompt: "Summarize for a non-technical executive audience. Focus on business outcomes, user impact, and strategic value. Avoid technical jargon.",
+  },
+  {
+    name: "Marketing",
+    prompt: "Frame as a product marketing update. Highlight user-facing features, metrics, and competitive positioning. Keep it benefit-driven and non-technical.",
+  },
+  {
+    name: "Engineering",
+    prompt: "Write for a technical engineering audience. Focus on architecture decisions, performance improvements, dependencies, and technical debt addressed.",
+  },
+];
+
 export const FALLBACK_REPORT = `# Executive Summary
 
 ## Business Impact
