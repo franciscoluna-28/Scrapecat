@@ -35,8 +35,8 @@ export const usePromptPresetsStore = create<PromptPresetsState>()(
       name: 'prompt-presets',
       storage: createJSONStorage(() => localStorage),
       merge: (persisted, initial) => {
-        if (persisted && (persisted as PromptPresetsState).presets.length > 0) {
-          return persisted as PromptPresetsState
+        if (persisted) {
+          return { ...initial, ...(persisted as Partial<PromptPresetsState>) }
         }
         return {
           ...initial,
