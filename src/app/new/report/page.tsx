@@ -63,6 +63,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       branch={report.branch}
       report={report.editableMarkdown}
       reportId={reportId}
+      imageAssets={report.imageAssets || []}
     />
   );
 }

@@ -33,6 +33,7 @@ export async function GET(
       updatedAt: report.updatedAt,
       githubProjectId: report.githubProjectId,
       githubRepositoryName: report.githubRepositoryName,
+      imageAssets: report.imageAssets || [],
     });
   } catch (error) {
     console.error("Error fetching report:", error);
