@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
 import { ProcessedCommit } from "@/src/shared/lib/utils";
+import type { ImageAsset } from "@/src/drizzle/schema";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -41,6 +42,7 @@ type Props = {
   branch: string;
   report: string;
   reportId?: string;
+  imageAssets?: ImageAsset[];
 };
 
 const markdownComponents: Components = {
@@ -92,6 +94,7 @@ export default function ReportClientPage({
   branch,
   report,
   reportId,
+  imageAssets,
 }: Props) {
   const [isReplying, startReplyTransition] = useTransition();
   const [replyText, setReplyText] = useState("");
@@ -229,7 +232,7 @@ export default function ReportClientPage({
                   Intelligence Report
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Generated on {new Date().toLocaleDateString()}
+                  Generated on {new Date().toLocaleDateString("en-US")}
                 </p>
               </div>
             </div>
@@ -283,8 +286,21 @@ export default function ReportClientPage({
               <div className="bg-background/50 rounded-xl p-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <div className="max-w-none select-text space-y-4">
                   <ReactMarkdown components={markdownComponents}>
-                    {currentReport}
+                    {currentReport.replace(/•\s*/g, "- ")}
                   </ReactMarkdown>
+                  {imageAssets && imageAssets.length > 0 && (
+                    <div className="mt-8 pt-8 border-t space-y-4">
+                      <h2 className="text-lg font-semibold text-foreground/90">Media</h2>
+                      {imageAssets.map((asset, i) => (
+                        <img
+                          key={i}
+                          src={asset.r2Url}
+                          alt={asset.commitMessage || "Screenshot"}
+                          className="rounded-lg border max-w-full"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

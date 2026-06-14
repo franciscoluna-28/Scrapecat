@@ -156,3 +156,27 @@ export async function getRepositoryCommitCount({
     }
   }
 }
+
+/**
+ * Fetches the associated PR for a commit using the commits/pulls endpoint.
+ * Avoids the Search API (30 req/min limit) — uses the standard rate limit (5000/hr).
+ * For merge commits and PR head commits this reliably returns the associated PR.
+ */
+export async function getPullRequestForCommit(
+  owner: string,
+  repo: string,
+  commitSha: string,
+): Promise<{ body: string | null; number: number; html_url: string } | null> {
+  try {
+    const { data: prs } = await octokit.request(
+      "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+      { owner, repo, commit_sha: commitSha, per_page: 1 },
+    );
+    const pr = prs?.[0];
+    if (!pr) return null;
+    return { body: pr.body ?? null, number: pr.number, html_url: pr.html_url };
+  } catch (err) {
+    console.error(`getPullRequestForCommit error for ${commitSha.slice(0, 7)}:`, err);
+    return null;
+  }
+}

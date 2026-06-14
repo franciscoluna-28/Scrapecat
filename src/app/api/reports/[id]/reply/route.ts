@@ -46,6 +46,10 @@ export async function POST(
 
     const limitedCommits = sortedCommits.slice(0, APP_CONFIG.commits.MAX_LIMIT);
 
+    // Strip any embedded ## Media section from the stored markdown before sending to AI.
+    // This handles backward compatibility with reports generated before images were separated.
+    const cleanMarkdown = (report.originalMarkdown || "").replace(/\n*## Media[\s\S]*$/, "").trim();
+
     const customInstructions = report.customInstructions?.trim();
 
     const languageInstruction = getLanguageInstruction(customInstructions);
@@ -65,8 +69,8 @@ export async function POST(
       { role: "user", content: originalPrompt },
     ];
 
-    if (report.originalMarkdown) {
-      messages.push({ role: "assistant", content: report.originalMarkdown });
+    if (cleanMarkdown) {
+      messages.push({ role: "assistant", content: cleanMarkdown });
     }
 
     messages.push({
@@ -83,7 +87,11 @@ export async function POST(
 
     const rawContent = result.choices[0]?.message?.content || "";
 
-    const updatedMarkdown = rawContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
+    // Strip thinking tags AND any media/images the AI might have re-generated
+    const updatedMarkdown = rawContent
+      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+      .replace(/\n*## Media[\s\S]*$/, "")
+      .trim();
 
     await db
       .update(reports)

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
+import { Checkbox } from "@/src/components/ui/checkbox";
 import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
 import {
@@ -23,7 +24,7 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { GitHubRepository } from "@/src/shared/types";
-import { Book, Loader2, GitCommit } from "lucide-react";
+import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { CommitCard } from "@/src/components/global/CommitCard";
 import { useCommits } from "@/src/features/reports/services/api";
+import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 
 type Props = {
   repository: GitHubRepository;
@@ -106,6 +108,8 @@ export function SettingsForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
+  const [quickMode, setQuickMode] = useState(false);
+  const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
 
   const {
     commits,
@@ -145,11 +149,13 @@ export function SettingsForm({
         body: JSON.stringify({
           data: {
             repository: repository.name,
+            githubOwner: repository.owner.login,
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
             commits: processCommitsForAiReport(commits),
             customInstructions,
+            quickMode,
           },
         }),
       });
@@ -172,18 +178,18 @@ export function SettingsForm({
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
-      <CardContent className="p-8 space-y-8">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Report Configuration</h3>
-          <p className="text-sm text-muted-foreground">
+      <CardContent className="p-5 space-y-4">
+        <div className="space-y-0.5">
+          <h3 className="text-base font-semibold">Report Configuration</h3>
+          <p className="text-xs text-muted-foreground">
             Configure your date range and branch to generate a comprehensive
             report.
           </p>
         </div>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
               <DatePicker
                 label={
                   <>
@@ -201,7 +207,7 @@ export function SettingsForm({
               />
             </div>
 
-            <div className="space-y-2">
+            <div>
               <DatePicker
                 label="End Date (optional)"
                 date={endDate ? parseISO(endDate) : undefined}
@@ -216,34 +222,47 @@ export function SettingsForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="branch" className="text-base font-medium">
-              Select Branch
-            </Label>
-            <Select
-              value={selectedBranch}
-              onValueChange={(v) => updateParam("branch", v)}
-            >
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="border-t pt-3">
+            <div className="max-w-xs">
+              <Label htmlFor="branch" className="text-sm font-medium">
+                Branch
+              </Label>
+              <Select
+                value={selectedBranch}
+                onValueChange={(v) => updateParam("branch", v)}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="customInstructions"
-              className="text-base font-medium"
-            >
-              Custom AI Instructions
-            </Label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="customInstructions"
+                className="text-sm font-medium"
+              >
+                Custom AI Instructions
+              </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPromptPresetsOpen(true)}
+                className="h-7 px-2 text-xs"
+              >
+                <Bookmark className="h-3.5 w-3.5 mr-1" />
+                Presets
+              </Button>
+            </div>
             <Textarea
               id="customInstructions"
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
@@ -255,22 +274,26 @@ export function SettingsForm({
               Add specific instructions to guide the AI report generation
             </p>
           </div>
+          <PromptPresetsModal
+            open={promptPresetsOpen}
+            onOpenChange={setPromptPresetsOpen}
+            currentPrompt={customInstructions}
+            onSelectPrompt={setCustomInstructions}
+          />
         </div>
 
         {startDate && (
           <>
             <Card className="border-none shadow-none">
-              <CardContent className="flex items-center gap-6">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted border">
+              <CardContent className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted border">
                   <GitCommit className="h-4 w-4 text-muted-foreground" />
                 </div>
 
-                <div className="flex flex-col gap-2 overflow-hidden">
-                  <div className="flex flex-col gap-1 w-full">
-                    <Label className="text-sm font-semibold whitespace-nowrap">
-                      Sync Status
-                    </Label>
-                  </div>
+                <div className="flex flex-col overflow-hidden">
+                  <Label className="text-sm font-semibold whitespace-nowrap">
+                    Sync Status
+                  </Label>
                   <div className="flex items-center gap-2">
                     {isFetching ? (
                       <div className="flex items-center gap-2">
@@ -302,11 +325,31 @@ export function SettingsForm({
           </>
         )}
 
-        <div className="pt-4 space-y-2">
+        <div className="flex items-start gap-3 rounded-lg border px-4 py-3">
+          <Checkbox
+            id="quickMode"
+            checked={quickMode}
+            onCheckedChange={(v) => setQuickMode(v === true)}
+            className="mt-0.5"
+          />
+          <div className="space-y-0.5">
+            <Label
+              htmlFor="quickMode"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Quick mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Skip PR descriptions and screenshots for faster generation
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
             disabled={!startDate || isPending || !canGenerate}
-            size="lg"
+            size="default"
             className="w-full"
           >
             {isPending ? (
@@ -322,8 +365,9 @@ export function SettingsForm({
             )}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Up to {APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for
-            the report
+            {quickMode
+              ? `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed (PR data & images skipped)`
+              : `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
           </p>
         </div>
       </CardContent>
