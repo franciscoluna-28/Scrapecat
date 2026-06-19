@@ -150,6 +150,7 @@ export function SettingsForm({
           data: {
             repository: repository.name,
             githubOwner: repository.owner.login,
+            githubProjectId: repository.id,
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
