@@ -13,14 +13,19 @@ interface Report {
   updatedAt: string;
 }
 
+interface DistinctProject {
+  id: number;
+  name: string;
+}
+
 interface ReportsResponse {
   reports: Report[];
-  distinctProjects: string[];
+  distinctProjects: DistinctProject[];
 }
 
 type UseReportsReturn = {
   reports: Report[];
-  distinctProjects: string[];
+  distinctProjects: DistinctProject[];
   isLoading: boolean;
   isValidating: boolean;
   isFetching: boolean;
@@ -28,10 +33,10 @@ type UseReportsReturn = {
   hasError: boolean;
 };
 
-export function useReports(projectName?: string): UseReportsReturn {
+export function useReports(projectId?: number): UseReportsReturn {
   const params = new URLSearchParams();
-  if (projectName) {
-    params.set("projectName", projectName);
+  if (projectId !== undefined) {
+    params.set("projectId", String(projectId));
   }
 
   const url = `/api/reports${params.toString() ? `?${params.toString()}` : ""}`;

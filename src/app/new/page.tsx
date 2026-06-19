@@ -39,8 +39,8 @@ export default function Page() {
     per_page: perPage,
   });
 
-  const [selectedProject, setSelectedProject] = useState<string | undefined>(undefined);
-  const { reports, distinctProjects, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(selectedProject);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(undefined);
+  const { reports, distinctProjects, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(selectedProjectId);
 
   return (
     <>
@@ -122,9 +122,9 @@ export default function Page() {
               {distinctProjects.length > 0 && (
                 <div className="flex justify-center mb-4">
                   <Select
-                    value={selectedProject ?? "all"}
+                    value={String(selectedProjectId ?? "all")}
                     onValueChange={(value) =>
-                      setSelectedProject(value === "all" ? undefined : value)
+                      setSelectedProjectId(value === "all" ? undefined : Number(value))
                     }
                   >
                     <SelectTrigger className="w-48">
@@ -133,8 +133,8 @@ export default function Page() {
                     <SelectContent>
                       <SelectItem value="all">All Projects</SelectItem>
                       {distinctProjects.map((project) => (
-                        <SelectItem key={project} value={project}>
-                          {project}
+                        <SelectItem key={project.id} value={String(project.id)}>
+                          {project.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

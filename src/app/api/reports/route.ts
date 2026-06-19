@@ -6,19 +6,23 @@ import { eq } from "drizzle-orm";
 export async function GET(request: NextRequest) {
   try {
     const searchParams = new URL(request.url).searchParams;
-    const projectName = searchParams.get("projectName");
+    const projectIdParam = searchParams.get("projectId");
+    const projectId = projectIdParam ? Number(projectIdParam) : undefined;
 
-    const [projectNames, allReports] = await Promise.all([
+    const [distinctProjects, allReports] = await Promise.all([
       db
-        .select({ name: reports.githubRepositoryName })
+        .select({
+          id: reports.githubProjectId,
+          name: reports.githubRepositoryName,
+        })
         .from(reports)
-        .groupBy(reports.githubRepositoryName)
+        .groupBy(reports.githubProjectId)
         .orderBy(reports.githubRepositoryName),
       db.query.reports.findMany({
-        where: projectName
-          ? eq(reports.githubRepositoryName, projectName)
+        where: projectId
+          ? eq(reports.githubProjectId, projectId)
           : undefined,
-        orderBy: (reports, { desc }) => [desc(reports.updatedAt)],
+        orderBy: (r, { desc }) => [desc(r.updatedAt)],
       }),
     ]);
 
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
         createdAt: report.createdAt,
         updatedAt: report.updatedAt,
       })),
-      distinctProjects: projectNames.map((r) => r.name),
+      distinctProjects,
     });
   } catch (error) {
     console.error("Error fetching reports:", error);
