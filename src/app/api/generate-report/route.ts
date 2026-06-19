@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     const now = new Date();
     await db.insert(reports).values({
       id: reportId,
-      githubProjectId: parseInt(validatedData.repository) || 0,
+      githubProjectId: validatedData.githubProjectId,
       githubRepositoryName: validatedData.repository,
       originalMarkdown: generatedReport,
       editableMarkdown: generatedReport,
