@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import useSWR from "swr";
 
 interface Report {
   id: string;
@@ -11,35 +13,39 @@ interface Report {
   updatedAt: string;
 }
 
-export function useReports() {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [isFetching, setIsFetching] = useState(true);
-  const [hasError, setHasError] = useState(false);
+interface ReportsResponse {
+  reports: Report[];
+  distinctProjects: string[];
+}
 
-  useEffect(() => {
-    async function fetchReports() {
-      try {
-        setIsFetching(true);
-        setHasError(false);
-        
-        const response = await fetch("/api/reports");
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch reports: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        setReports(data);
-      } catch (error) {
-        console.error("Error fetching reports:", error);
-        setHasError(true);
-      } finally {
-        setIsFetching(false);
-      }
-    }
+type UseReportsReturn = {
+  reports: Report[];
+  distinctProjects: string[];
+  isLoading: boolean;
+  isValidating: boolean;
+  isFetching: boolean;
+  error: Error | null;
+  hasError: boolean;
+};
 
-    fetchReports();
-  }, []);
+export function useReports(projectName?: string): UseReportsReturn {
+  const params = new URLSearchParams();
+  if (projectName) {
+    params.set("projectName", projectName);
+  }
 
-  return { reports, isFetching, hasError };
+  const url = `/api/reports${params.toString() ? `?${params.toString()}` : ""}`;
+
+  const { data, error, isLoading, isValidating } =
+    useSWR<ReportsResponse>(url);
+
+  return {
+    reports: data?.reports ?? [],
+    distinctProjects: data?.distinctProjects ?? [],
+    isLoading,
+    isValidating,
+    isFetching: isLoading || isValidating,
+    error: error ?? null,
+    hasError: !!error,
+  };
 }
