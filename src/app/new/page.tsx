@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -24,7 +24,7 @@ import { useReports } from "@/src/features/reports/services/reports-api";
 import { GitHubRepository } from "@/src/shared/types";
 import { ReportCard } from "@/src/features/reports/components/ReportCard";
 
-export default function Page() {
+function PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeView = searchParams.get('view') === 'reports' ? 'reports' : 'repositories';
@@ -188,5 +188,13 @@ export default function Page() {
 
       <GitHubSettingsModal open={modalOpen} onOpenChange={setModalOpen} />
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <PageContent />
+    </Suspense>
   );
 }

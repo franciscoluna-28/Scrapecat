@@ -35,6 +35,9 @@ importers:
       '@octokit/types':
         specifier: ^16.0.0
         version: 16.0.0
+      '@openrouter/sdk':
+        specifier: ^0.13.66
+        version: 0.13.66
       ai:
         specifier: ^6.0.175
         version: 6.0.175(zod@4.4.3)
@@ -1437,6 +1440,9 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
+  '@openrouter/sdk@0.13.66':
+    resolution: {integrity: sha512-RgZ0Zw/zMHepd1yKhYniXqBlgV6YFV68YAL0Jnf2Q4NZ8/+PKh6631IQtEZHMNcVpnKi/MxpImFXhFY5K7Vnwg==}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -6681,6 +6687,10 @@ snapshots:
       outvariant: 1.4.3
 
   '@open-draft/until@2.1.0': {}
+
+  '@openrouter/sdk@0.13.66':
+    dependencies:
+      zod: 4.4.3
 
   '@opentelemetry/api@1.9.0': {}
 
