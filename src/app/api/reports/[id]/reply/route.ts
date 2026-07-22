@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/src/drizzle/client";
 import { reports } from "@/src/drizzle/schema";
-import Groq from "groq-sdk";
+import { OpenRouter } from "@openrouter/sdk";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "@/src/shared/constants/prompts";
 
@@ -29,15 +29,15 @@ export async function POST(
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
-        { error: "Missing GROQ_API_KEY" },
+        { error: "Missing OPENROUTER_API_KEY" },
         { status: 500 },
       );
     }
 
-    const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+    const openRouter = new OpenRouter({
+      apiKey: process.env.OPENROUTER_API_KEY,
     });
 
     const sortedCommits = [...(report.sourceCommits || [])].sort(
@@ -78,18 +78,24 @@ export async function POST(
       content: buildRefinePrompt(reply),
     });
 
-    const result = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages,
-      temperature: 0.1,
-      max_tokens: 1024,
+    const result = await openRouter.chat.send({
+      chatRequest: {
+        model: "google/gemma-4-26b-a4b-it:free",
+        messages,
+        temperature: 0.1,
+        maxTokens: 1024,
+      },
     });
 
-    const rawContent = result.choices[0]?.message?.content || "";
+    const rawContent =
+      (typeof (result as any).choices?.[0]?.message?.content === "string"
+        ? (result as any).choices[0].message.content
+        : "") || "";
 
     // Strip thinking tags AND any media/images the AI might have re-generated
     const updatedMarkdown = rawContent
       .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+      .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
       .replace(/\n*## Media[\s\S]*$/, "")
       .trim();
 

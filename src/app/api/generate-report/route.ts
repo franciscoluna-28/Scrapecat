@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { OpenRouter } from "@openrouter/sdk";
 import { reports } from "@/src/drizzle/schema";
 import { nanoid } from "nanoid";
 import { reportInputSchema } from "@/src/features/reports/schemas";
@@ -23,11 +23,11 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.GROQ_API_KEY) {
-      return NextResponse.json({ error: "Missing GROQ_API_KEY" }, { status: 500 });
+    if (!process.env.OPENROUTER_API_KEY) {
+      return NextResponse.json({ error: "Missing OPENROUTER_API_KEY" }, { status: 500 });
     }
 
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const openRouter = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
     const sortedCommits = [...validatedData.commits].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -72,18 +72,26 @@ export async function POST(req: Request) {
       languageInstruction,
     });
 
-    const result = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.1,
-      max_tokens: 1024,
+    const result = await openRouter.chat.send({
+      chatRequest: {
+        model: "google/gemma-4-26b-a4b-it:free",
+        messages: [
+          { role: "system" as const, content: systemPrompt },
+          { role: "user" as const, content: prompt },
+        ],
+        temperature: 0.1,
+        maxTokens: 1024,
+      },
     });
 
-    const rawContent = result.choices[0]?.message?.content || "";
-    const generatedReport = rawContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
+    const rawContent =
+      (typeof (result as any).choices?.[0]?.message?.content === "string"
+        ? (result as any).choices[0].message.content
+        : "") || "";
+    const generatedReport = rawContent
+      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+      .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
+      .trim();
 
     // Upload images from PR bodies to R2
     const reportId = nanoid();

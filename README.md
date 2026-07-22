@@ -7,7 +7,7 @@ Built for lean teams tired of micromanagement and non-technical stakeholders who
 ## Tech Stack
 - Backend & Client: Next.js 16.
 - Data Source: Native GitHub REST via `Octokit`.
-- Intelligence: Groq API implementation utilizing Llama-3.1-8b-instant for low-latency, high-context report synthesis.
+- Intelligence: OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis.
 
 ## Core Features
 - **Deep Repository Sync:** Real-time extraction of commit metadata, going far beyond simple line counts to capture the intent of the work.
@@ -41,12 +41,12 @@ Fabric requires a Personal Access Token (PAT) to securely fetch repository metad
 - 2.  For the MVP, ensure the repo (Full control of private repositories) and read:org scopes are enabled.
 - 3. Fabric treats your data as read-only. We analyze the metadata to build reports without ever modifying your source code, following the principle of least privilege (POLP).
 
-### 2. Groq Intelligence Layer
+### 2. OpenRouter Intelligence Layer
 
-We utilize Groq’s LPU Inference Engine for low latency report generation. However, you can use any provider you wish. Feel free to skip this step if you're willing to configure a local LLM and change that in the code.
+We utilize OpenRouter's API to access free LLM models for report generation. No paid plan required — the free tier of `google/gemma-4-26b-a4b-it:free` works out of the box.
 
-- 1. Access: Obtain your API key from the [Groq Console](https://console.groq.com/home)
-- 2. Model: Fabric is pre-configured to use `Llama-3.1-8b-instant`, balancing high-context reasoning with near-instant execution.
+- 1. Sign up at [OpenRouter](https://openrouter.ai/keys) and create a free API key.
+- 2. Model: Fabric uses `google/gemma-4-26b-a4b-it:free` by default — zero cost, no rate limiting for light usage.
 
 ### 3. Cloudflare R2 (Image Hosting)
 
@@ -71,8 +71,8 @@ Create a .env.local file in the root of your project and populate it with your c
 # GitHub Infrastructure
 GITHUB_TOKEN=your_personal_access_token
 
-# LLM Intelligence
-GROQ_API_KEY=your_groq_api_key
+# LLM Intelligence (get a free key at https://openrouter.ai/keys)
+OPENROUTER_API_KEY=your_openrouter_api_key
 
 # App Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -122,7 +122,7 @@ Edit `.env` with your credentials:
 
 ```Bash
 GITHUB_TOKEN=your_personal_access_token
-GROQ_API_KEY=your_groq_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 DATABASE_URL=file:data/dev.db
 R2_ACCESS_KEY_ID=your_r2_access_key
@@ -132,7 +132,7 @@ R2_BUCKET_NAME=reports
 R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
 ```
 
-The compose file reads `GITHUB_TOKEN` and `GROQ_API_KEY` from `.env` as build args so they're available during the Next.js build step. All vars (including R2) are also passed at runtime via `env_file`.
+The compose file reads `GITHUB_TOKEN` from `.env` as a build arg so it's available during the Next.js build step. All vars (including OpenRouter) are also passed at runtime via `env_file`.
 
 ### Development (hot reload)
 
