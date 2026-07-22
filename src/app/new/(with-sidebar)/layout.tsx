@@ -58,7 +58,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {NAV_ITEMS.map((item) => (
-                  <SidebarMenuItem key={item.id}>
+                  <SidebarMenuItem className="py-1" key={item.id}>
                     <SidebarMenuButton
                       isActive={activeView === item.id}
                       onClick={() => router.push(`/new?view=${item.id}`)}
@@ -77,8 +77,8 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
       <SidebarInset className="flex flex-col">
         <header className="flex h-12 items-center gap-2 border-b px-4 bg-background/50">
           <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="h-4" />
-          <h1 className="text-sm font-mono font-bold tracking-tight uppercase">
+        
+          <h1 className="text-sm hidden">
             {NAV_ITEMS.find((i) => i.id === activeView)?.label || "Fabric"}
           </h1>
         </header>
