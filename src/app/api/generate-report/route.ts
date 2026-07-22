@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { OpenRouter } from "@openrouter/sdk";
 import { reports } from "@/src/drizzle/schema";
 import { nanoid } from "nanoid";
 import { reportInputSchema } from "@/src/features/reports/schemas";
@@ -9,6 +8,7 @@ import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_
 import { getPullRequestForCommit } from "@/src/shared/services/github";
 import { extractImagesFromPrBody } from "@/src/shared/lib/utils";
 import { uploadImagesToR2 } from "@/src/shared/lib/r2";
+import { callAI, cleanResponse } from "@/src/shared/services/ai";
 
 export async function POST(req: Request) {
   try {
@@ -22,12 +22,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json({ error: "Missing OPENROUTER_API_KEY" }, { status: 500 });
-    }
-
-    const openRouter = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
     const sortedCommits = [...validatedData.commits].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -72,26 +66,15 @@ export async function POST(req: Request) {
       languageInstruction,
     });
 
-    const result = await openRouter.chat.send({
-      chatRequest: {
-        model: "google/gemma-4-26b-a4b-it:free",
-        messages: [
-          { role: "system" as const, content: systemPrompt },
-          { role: "user" as const, content: prompt },
-        ],
-        temperature: 0.1,
-        maxTokens: 1024,
-      },
+    const { content: rawContent } = await callAI({
+      model: validatedData.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
     });
 
-    const rawContent =
-      (typeof (result as any).choices?.[0]?.message?.content === "string"
-        ? (result as any).choices[0].message.content
-        : "") || "";
-    const generatedReport = rawContent
-      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-      .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
-      .trim();
+    const generatedReport = cleanResponse(rawContent);
 
     // Upload images from PR bodies to R2
     const reportId = nanoid();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useTransition, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -13,11 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/src/components/ui/select";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/src/components/ui/combobox";
 import { Label } from "@/src/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { useDemoClientReportsStore } from "@/src/store/demo-client-reports";
+import { useAISettingsStore } from "@/src/store/ai-settings";
+import { useModels } from "@/src/shared/services/ai-models";
 
 type Props = {
   owner: string;
@@ -44,7 +54,13 @@ export function DemoForm({
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(defaultEndDate || "");
   const [customInstructions, setCustomInstructions] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const addReport = useDemoClientReportsStore((s) => s.addReport);
+  const selectedModel = useAISettingsStore((s) => s.selectedModel);
+  const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
+  const { models: availableModels, isLoading: modelsLoading } = useModels();
+  const modelMap = Object.fromEntries(availableModels.map((m) => [m.id, m]));
 
   const handleGenerate = async () => {
     if (!startDate) return;
@@ -95,6 +111,7 @@ export function DemoForm({
             commits: processedCommits,
             customInstructions,
             quickMode: true,
+            model: selectedModel,
           },
         }),
       });
@@ -185,6 +202,38 @@ export function DemoForm({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <div className="max-w-xs">
+              <Label htmlFor="model" className="text-sm font-medium">
+                AI Model
+              </Label>
+              <div className="mt-1.5">
+                <Combobox
+                  items={availableModels.map((m) => m.id)}
+                  itemToStringValue={(id) => modelMap[id]?.name || id}
+                  value={selectedModel}
+                  onValueChange={(v) => setSelectedModel(v || "google/gemma-4-26b-a4b-it:free")}
+                  disabled={modelsLoading || disabled || !mounted}
+                >
+                  <ComboboxInput
+                    placeholder={modelsLoading ? "Loading models..." : "Search models..."}
+                    showClear={mounted}
+                  />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No models found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(modelId) => (
+                        <ComboboxItem key={modelId} value={modelId}>
+                          {modelMap[modelId]?.name} {modelMap[modelId]?.free ? "(Free)" : ""}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useTransition, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -23,6 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/src/components/ui/select";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
@@ -33,6 +41,8 @@ import { Skeleton } from "@/src/components/ui/skeleton";
 import { CommitCard } from "@/src/components/global/CommitCard";
 import { useCommits } from "@/src/features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
+import { useAISettingsStore } from "@/src/store/ai-settings";
+import { useModels } from "@/src/shared/services/ai-models";
 
 type Props = {
   repository: GitHubRepository;
@@ -109,7 +119,13 @@ export function SettingsForm({
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
   const [quickMode, setQuickMode] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
+  const selectedModel = useAISettingsStore((s) => s.selectedModel);
+  const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
+  const { models: availableModels, isLoading: modelsLoading } = useModels();
+  const modelMap = Object.fromEntries(availableModels.map((m) => [m.id, m]));
 
   const {
     commits,
@@ -157,6 +173,7 @@ export function SettingsForm({
             commits: processCommitsForAiReport(commits),
             customInstructions,
             quickMode,
+            model: selectedModel,
           },
         }),
       });
@@ -243,6 +260,38 @@ export function SettingsForm({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <div className="max-w-xs">
+              <Label htmlFor="model" className="text-sm font-medium">
+                AI Model
+              </Label>
+              <div className="mt-1.5">
+                <Combobox
+                  items={availableModels.map((m) => m.id)}
+                  itemToStringValue={(id) => modelMap[id]?.name || id}
+                  value={selectedModel}
+                  onValueChange={(v) => setSelectedModel(v || "google/gemma-4-26b-a4b-it:free")}
+                  disabled={modelsLoading || !mounted}
+                >
+                  <ComboboxInput
+                    placeholder={modelsLoading ? "Loading models..." : "Search models..."}
+                    showClear={mounted}
+                  />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No models found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(modelId) => (
+                        <ComboboxItem key={modelId} value={modelId}>
+                          {modelMap[modelId]?.name} {modelMap[modelId]?.free ? "(Free)" : ""}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
             </div>
           </div>
 
