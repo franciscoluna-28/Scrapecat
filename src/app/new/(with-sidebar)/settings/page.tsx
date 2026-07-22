@@ -2,12 +2,10 @@ import { notFound } from "next/navigation";
 import {
   getRepositoryById,
   getRepositoryBranches,
-} from "../../../shared/services/github";
-import { ApplicationLayout } from "@/src/components/global/ApplicationLayout";
-import { PageTitle } from "@/src/components/global/PageTitle";
+} from "@/src/shared/services/github";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
-import { SettingsForm } from "../../../features/reports/components/SettingsForm";
-import { RepositoryInfoCard } from "../../../features/reports/components/RepositoryInfoCard/index";
+import { SettingsForm } from "@/src/features/reports/components/SettingsForm";
+import { RepositoryInfoCard } from "@/src/features/reports/components/RepositoryInfoCard";
 
 interface PageProps {
   searchParams: Promise<{
@@ -40,22 +38,17 @@ export default async function Page({ searchParams }: PageProps) {
   ).catch(() => ["main", "master"]);
 
   return (
-    <ApplicationLayout>
-      <PageTitle
-        title="Configure Report"
-        hasBack
-      >
+    <SectionLayout>
+      <div className="mb-6 flex justify-center">
         <RepositoryInfoCard repository={repository} />
-      </PageTitle>
-      <SectionLayout>
-        <SettingsForm
-          repository={repository}
-          branches={branches}
-          selectedBranch={branch || branches[0] || "main"}
-          startDate={startDate || today}
-          endDate={endDate}
-        />
-      </SectionLayout>
-    </ApplicationLayout>
+      </div>
+      <SettingsForm
+        repository={repository}
+        branches={branches}
+        selectedBranch={branch || branches[0] || "main"}
+        startDate={startDate || today}
+        endDate={endDate}
+      />
+    </SectionLayout>
   );
 }

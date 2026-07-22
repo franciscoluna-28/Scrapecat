@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { OpenRouter } from "@openrouter/sdk";
 import { nanoid } from "nanoid";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import {
@@ -7,6 +6,7 @@ import {
   FALLBACK_REPORT,
 } from "@/src/shared/constants/prompts";
 import { createReport } from "@/src/store/demo-reports-store";
+import { callAI, cleanResponse } from "@/src/shared/services/ai";
 
 const reportInputSchema = {
   parse: (data: any) => data,
@@ -27,19 +27,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing OPENROUTER_API_KEY" },
-        { status: 500 },
-      );
-    }
-
-    const openRouter = new OpenRouter({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      httpReferer: "https://github.com/anthropics/fabric",
-      appTitle: "Fabric Demo",
-    });
 
     const sortedCommits = [...validatedData.commits].sort(
       (a: any, b: any) =>
@@ -70,26 +57,15 @@ export async function POST(req: Request) {
       `- End with a "### Strategic Direction" section (1-3 sentences)`,
     ].join("\n");
 
-    const result = await openRouter.chat.send({
-      chatRequest: {
-        model: "google/gemma-4-26b-a4b-it:free",
-        messages: [
-          { role: "system" as const, content: systemPrompt },
-          { role: "user" as const, content: prompt },
-        ],
-        temperature: 0.1,
-        maxTokens: 1024,
-      },
+    const { content: rawContent } = await callAI({
+      model: validatedData.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
     });
 
-    const rawContent =
-      (typeof (result as any).choices?.[0]?.message?.content === "string"
-        ? (result as any).choices[0].message.content
-        : "") || "";
-    const generatedReport = rawContent
-      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-      .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
-      .trim();
+    const generatedReport = cleanResponse(rawContent);
 
     const reportId = nanoid();
 

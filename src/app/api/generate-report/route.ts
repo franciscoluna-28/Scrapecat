@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
 import { reports } from "@/src/drizzle/schema";
 import { nanoid } from "nanoid";
 import { reportInputSchema } from "@/src/features/reports/schemas";
@@ -9,6 +8,7 @@ import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_
 import { getPullRequestForCommit } from "@/src/shared/services/github";
 import { extractImagesFromPrBody } from "@/src/shared/lib/utils";
 import { uploadImagesToR2 } from "@/src/shared/lib/r2";
+import { callAI, cleanResponse } from "@/src/shared/services/ai";
 
 export async function POST(req: Request) {
   try {
@@ -22,12 +22,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
-    if (!process.env.GROQ_API_KEY) {
-      return NextResponse.json({ error: "Missing GROQ_API_KEY" }, { status: 500 });
-    }
-
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     const sortedCommits = [...validatedData.commits].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -72,18 +66,15 @@ export async function POST(req: Request) {
       languageInstruction,
     });
 
-    const result = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+    const { content: rawContent } = await callAI({
+      model: validatedData.model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
-      temperature: 0.1,
-      max_tokens: 1024,
     });
 
-    const rawContent = result.choices[0]?.message?.content || "";
-    const generatedReport = rawContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
+    const generatedReport = cleanResponse(rawContent);
 
     // Upload images from PR bodies to R2
     const reportId = nanoid();

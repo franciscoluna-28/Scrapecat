@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OpenRouter } from "@openrouter/sdk";
 import { getReport, updateReport } from "@/src/store/demo-reports-store";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { buildSystemPrompt } from "@/src/shared/constants/prompts";
+import { callAI, cleanResponse } from "@/src/shared/services/ai";
 
 export async function POST(
   request: NextRequest,
@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { reply } = await request.json();
+    const { reply, model } = await request.json();
 
     if (!reply || typeof reply !== "string" || reply.trim().length === 0) {
       return NextResponse.json(
@@ -24,19 +24,6 @@ export async function POST(
     if (!report) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
-
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing OPENROUTER_API_KEY" },
-        { status: 500 },
-      );
-    }
-
-    const openRouter = new OpenRouter({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      httpReferer: "https://github.com/anthropics/fabric",
-      appTitle: "Fabric Demo",
-    });
 
     const sortedCommits = [...(report.sourceCommits || [])].sort(
       (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -84,23 +71,13 @@ export async function POST(
       content: `Refine the report based on this feedback:\n${reply}\n\nOutput ONLY the updated markdown report with no additional commentary.`,
     });
 
-    const result = await openRouter.chat.send({
-      chatRequest: {
-        model: "google/gemma-4-26b-a4b-it:free",
-        messages,
-        temperature: 0.1,
-        maxTokens: 1024,
-      },
+    const { content: rawContent } = await callAI({
+      model: model || undefined,
+      messages,
     });
 
-    const rawContent =
-      (typeof (result as any).choices?.[0]?.message?.content === "string"
-        ? (result as any).choices[0].message.content
-        : "") || "";
-    const updatedMarkdown = rawContent
-      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+    const updatedMarkdown = cleanResponse(rawContent)
       .replace(/\n*## Media[\s\S]*$/, "")
-      .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
       .trim();
 
     updateReport(id, { editableMarkdown: updatedMarkdown });

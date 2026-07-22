@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/src/drizzle/client";
 import { reports } from "@/src/drizzle/schema";
-import Groq from "groq-sdk";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "@/src/shared/constants/prompts";
+import { callAI, cleanResponse } from "@/src/shared/services/ai";
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +12,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { reply } = await request.json();
+    const { reply, model } = await request.json();
 
     if (!reply || typeof reply !== "string" || reply.trim().length === 0) {
       return NextResponse.json(
@@ -28,17 +28,6 @@ export async function POST(
     if (!report) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
-
-    if (!process.env.GROQ_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing GROQ_API_KEY" },
-        { status: 500 },
-      );
-    }
-
-    const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
 
     const sortedCommits = [...(report.sourceCommits || [])].sort(
       (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -78,18 +67,12 @@ export async function POST(
       content: buildRefinePrompt(reply),
     });
 
-    const result = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+    const { content: rawContent } = await callAI({
+      model: model || undefined,
       messages,
-      temperature: 0.1,
-      max_tokens: 1024,
     });
 
-    const rawContent = result.choices[0]?.message?.content || "";
-
-    // Strip thinking tags AND any media/images the AI might have re-generated
-    const updatedMarkdown = rawContent
-      .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+    const updatedMarkdown = cleanResponse(rawContent)
       .replace(/\n*## Media[\s\S]*$/, "")
       .trim();
 

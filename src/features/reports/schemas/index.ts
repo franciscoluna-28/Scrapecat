@@ -24,4 +24,5 @@ export const reportInputSchema = z.object({
   commits: z.array(commitsInputSchema),
   customInstructions: z.string().optional(),
   quickMode: z.boolean().optional(),
+  model: z.string().optional(),
 });
