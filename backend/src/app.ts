@@ -8,11 +8,37 @@ import { health } from "./routes/health";
 import { listCommits, countCommits } from "./routes/commits";
 import { listRepositories } from "./routes/repositories";
 import { listBranches } from "./routes/branches";
-import { verifyConnection } from "./routes/verify";
-import { listModels } from "./routes/ai-models";
-import { generateReport } from "./routes/generate-report";
+import { checkVerification } from "./routes/verification";
+import { listModels } from "./routes/models";
+import { createReport } from "./routes/generate-report";
 import { listReports, getReport, updateReport } from "./routes/reports";
 import { replyToReport } from "./routes/reply";
+
+import {
+  ErrorResponse,
+  HealthResponse,
+  CommitsQuery,
+  CommitsResponse,
+  CommitsCountQuery,
+  CommitsCountResponse,
+  RepositoriesQuery,
+  RepositoriesResponse,
+  BranchesQuery,
+  BranchesResponse,
+  VerificationOkResponse,
+  ModelsResponse,
+  ReportInputBody,
+  ReportCreatedResponse,
+  ReportFallbackResponse,
+  ReportsListQuery,
+  ReportsListResponse,
+  ReportIdParams,
+  ReportGetResponse,
+  ReportUpdateBody,
+  ReportUpdateResponse,
+  ReportReplyBody,
+  ReportReplyResponse,
+} from "./schemas/json";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -33,23 +59,112 @@ export async function buildApp() {
     routePrefix: "/docs",
   });
 
-  app.get("/health", health);
+  app.get("/api/health", {
+    schema: {
+      description: "Health check endpoint",
+      tags: ["health"],
+      response: { 200: HealthResponse },
+    },
+  }, health);
 
-  app.get("/api/commits", listCommits);
-  app.get("/api/commits/count", countCommits);
+  app.get("/api/commits", {
+    schema: {
+      description: "List commits for a repository within an optional date range",
+      tags: ["commits"],
+      querystring: CommitsQuery,
+      response: { 200: CommitsResponse, 400: ErrorResponse },
+    },
+  }, listCommits);
 
-  app.get("/api/repositories", listRepositories);
-  app.get("/api/branches", listBranches);
-  app.get("/api/verify", verifyConnection);
+  app.get("/api/commits/count", {
+    schema: {
+      description: "Count commits for a repository within an optional date range",
+      tags: ["commits"],
+      querystring: CommitsCountQuery,
+      response: { 200: CommitsCountResponse, 400: ErrorResponse },
+    },
+  }, countCommits);
 
-  app.get("/api/ai/models", listModels);
+  app.get("/api/repositories", {
+    schema: {
+      description: "List GitHub repositories for the authenticated user",
+      tags: ["repositories"],
+      querystring: RepositoriesQuery,
+      response: { 200: RepositoriesResponse },
+    },
+  }, listRepositories);
 
-  app.post("/api/generate-report", generateReport);
+  app.get("/api/branches", {
+    schema: {
+      description: "List branches for a repository",
+      tags: ["repositories"],
+      querystring: BranchesQuery,
+      response: { 200: BranchesResponse, 400: ErrorResponse },
+    },
+  }, listBranches);
 
-  app.get("/api/reports", listReports);
-  app.get("/api/reports/:id", getReport);
-  app.put("/api/reports/:id", updateReport);
-  app.post("/api/reports/:id/reply", replyToReport);
+  app.get("/api/verification", {
+    schema: {
+      description: "Verify GitHub token connection status",
+      tags: ["verification"],
+      response: { 200: VerificationOkResponse },
+    },
+  }, checkVerification);
+
+  app.get("/api/models", {
+    schema: {
+      description: "List available AI models from OpenRouter",
+      tags: ["models"],
+      response: { 200: ModelsResponse },
+    },
+  }, listModels);
+
+  app.post("/api/reports", {
+    schema: {
+      description: "Generate a new report from commits",
+      tags: ["reports"],
+      body: ReportInputBody,
+      response: { 201: ReportCreatedResponse, 400: ErrorResponse, 429: ReportFallbackResponse },
+    },
+  }, createReport);
+
+  app.get("/api/reports", {
+    schema: {
+      description: "List all generated reports, optionally filtered by project",
+      tags: ["reports"],
+      querystring: ReportsListQuery,
+      response: { 200: ReportsListResponse },
+    },
+  }, listReports);
+
+  app.get("/api/reports/:id", {
+    schema: {
+      description: "Get a single report by ID",
+      tags: ["reports"],
+      params: ReportIdParams,
+      response: { 200: ReportGetResponse, 404: ErrorResponse },
+    },
+  }, getReport);
+
+  app.put("/api/reports/:id", {
+    schema: {
+      description: "Update a report's editable markdown content",
+      tags: ["reports"],
+      params: ReportIdParams,
+      body: ReportUpdateBody,
+      response: { 200: ReportUpdateResponse, 400: ErrorResponse, 404: ErrorResponse },
+    },
+  }, updateReport);
+
+  app.post("/api/reports/:id/replies", {
+    schema: {
+      description: "Send a follow-up instruction to refine a report",
+      tags: ["reports"],
+      params: ReportIdParams,
+      body: ReportReplyBody,
+      response: { 200: ReportReplyResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse },
+    },
+  }, replyToReport);
 
   return app;
 }

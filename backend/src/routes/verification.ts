@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { octokit } from "../shared/github";
 import { env } from "../config/env";
 
-export async function verifyConnection(
+export async function checkVerification(
   _req: FastifyRequest,
   reply: FastifyReply,
 ) {
