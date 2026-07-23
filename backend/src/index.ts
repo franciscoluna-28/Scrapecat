@@ -1,13 +1,14 @@
-import Fastify from "fastify";
-
-const app = Fastify({ logger: true });
-
-app.get("/health", async () => ({ status: "ok" }));
+import "dotenv/config.js";
+import { buildApp } from "./app";
+import { env } from "./config/env";
 
 async function main() {
+  const app = await buildApp();
+
   try {
-    await app.listen({ port: 4000, host: "0.0.0.0" });
-    console.log("Backend running at http://localhost:4000");
+    await app.listen({ port: env.PORT, host: env.HOST });
+    console.log(`Backend running at http://${env.HOST}:${env.PORT}`);
+    console.log(`API docs at http://localhost:${env.PORT}/docs`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

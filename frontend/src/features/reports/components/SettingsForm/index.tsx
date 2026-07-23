@@ -159,7 +159,8 @@ export function SettingsForm({
         endDate ||
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-      const reportRes = await fetch("/api/generate-report", {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const reportRes = await fetch(`${API_URL}/api/generate-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
