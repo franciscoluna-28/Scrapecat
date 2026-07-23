@@ -1,25 +1,9 @@
 services:
-  # === Production ===
-  app:
-    build:
-      context: .
-      target: runner
-      args:
-        GITHUB_TOKEN: ${GITHUB_TOKEN}
-    ports:
-      - "3000:3000"
-    volumes:
-      - app-data:/app/data
-    env_file:
-      - backend/.env
-    profiles:
-      - prod
-
-  # === Development - Backend (Fastify) ===
   backend-dev:
+    container_name: fabric-backend
     build:
       context: .
-      target: dev
+      dockerfile: backend/Dockerfile.dev
     ports:
       - "4000:4000"
     volumes:
@@ -35,16 +19,13 @@ services:
       - HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000
       - DATABASE_URL=file:./dev.db
-    command: pnpm --filter backend dev
-    profiles:
-      - dev
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
 
-  # === Development - Frontend (Next.js) ===
   frontend-dev:
+    container_name: fabric-ui
     build:
       context: .
-      target: dev
-    entrypoint: []
+      dockerfile: frontend/Dockerfile.dev
     ports:
       - "3000:3000"
     volumes:
@@ -54,11 +35,5 @@ services:
       - /app/.next
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
-    command: pnpm --filter frontend dev
     depends_on:
       - backend-dev
-    profiles:
-      - dev
-
-volumes:
-  app-data:

@@ -5,9 +5,11 @@ Fabric is a high-performance data intelligence engine designed to transform raw 
 Built for lean teams tired of micromanagement and non-technical stakeholders who struggle to interpret Git activity. We translate code into clarity.
 
 ## Tech Stack
-- Backend & Client: Next.js 16.
-- Data Source: Native GitHub REST via `Octokit`.
-- Intelligence: OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis.
+- **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
+- **Frontend:** Next.js 16 (React 19), Tailwind CSS v4, shadcn/ui
+- **Data Source:** Native GitHub REST via `Octokit`
+- **Intelligence:** OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis
+- **Package Manager:** pnpm workspaces
 
 ## Core Features
 - **Deep Repository Sync:** Real-time extraction of commit metadata, going far beyond simple line counts to capture the intent of the work.
@@ -65,26 +67,20 @@ By re-hosting on R2, images are publicly accessible via your own domain, work fo
 
 ## Environment Setup
 
-Create a .env.local file in the root of your project and populate it with your credentials:
+Copy the backend example and fill in your credentials:
 
 ```Bash
-# GitHub Infrastructure
-GITHUB_TOKEN=your_personal_access_token
-
-# LLM Intelligence (get a free key at https://openrouter.ai/keys)
-OPENROUTER_API_KEY=your_openrouter_api_key
-
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Cloudflare R2 — host PR screenshots on your own infra
-# so shared reports work for stakeholders without GitHub auth
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret
-R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
-R2_BUCKET_NAME=reports
-R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
+cp backend/.env.example backend/.env
 ```
+
+Required values in `backend/.env`:
+
+| Variable | Description |
+|---|---|
+| `OPENROUTER_API_KEY` | LLM access — get a free key at [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `GITHUB_TOKEN` | Repository data access — create one at [github.com/settings/tokens](https://github.com/settings/tokens) |
+
+Optional R2 credentials are documented in the example for PR screenshot hosting.
 
 ## Local Deployment
 Initialize the engine and start the development server:
@@ -110,45 +106,17 @@ The application will be live at http://localhost:3000. Connect your first reposi
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
 
-### Environment
-
-Create a `.env` file from the example:
-
-```Bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-
-```Bash
-GITHUB_TOKEN=your_personal_access_token
-OPENROUTER_API_KEY=your_openrouter_api_key
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-DATABASE_URL=file:data/dev.db
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret
-R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
-R2_BUCKET_NAME=reports
-R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
-```
-
-The compose file reads `GITHUB_TOKEN` from `.env` as a build arg so it's available during the Next.js build step. All vars (including OpenRouter) are also passed at runtime via `env_file`.
-
 ### Development (hot reload)
 
 ```Bash
 docker compose up --build
 ```
 
-Mounts source directly — changes reflected immediately via Next.js HMR at http://localhost:3000.
+Two services start:
+- **Backend** (Fastify) at http://localhost:4000 — auto-reloads via `tsx watch`
+- **Frontend** (Next.js) at http://localhost:3000 — HMR via `next dev`
 
-### Production
-
-```Bash
-docker compose --profile prod up --build
-```
-
-Multi-stage build with optimized image. SQLite data is persisted in a Docker volume.
+Source is mounted directly — changes are reflected immediately. Each service uses its own `Dockerfile.dev` for a leaner, focused build.
 
 ### Stop
 
