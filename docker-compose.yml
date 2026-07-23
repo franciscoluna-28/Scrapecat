@@ -1,4 +1,5 @@
 services:
+  # === Production ===
   app:
     build:
       context: .
@@ -10,22 +11,54 @@ services:
     volumes:
       - app-data:/app/data
     env_file:
-      - .env
+      - backend/.env
     profiles:
       - prod
 
-  app-dev:
+  # === Development - Backend (Fastify) ===
+  backend-dev:
     build:
       context: .
       target: dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/backend/node_modules
+      - /app/frontend/node_modules
+      - /app/.next
+    env_file:
+      - backend/.env
+    environment:
+      - PORT=4000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:3000
+      - DATABASE_URL=file:./dev.db
+    command: pnpm --filter backend dev
+    profiles:
+      - dev
+
+  # === Development - Frontend (Next.js) ===
+  frontend-dev:
+    build:
+      context: .
+      target: dev
+    entrypoint: []
     ports:
       - "3000:3000"
     volumes:
       - .:/app
       - /app/node_modules
+      - /app/frontend/node_modules
       - /app/.next
-    env_file:
-      - .env
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    command: pnpm --filter frontend dev
+    depends_on:
+      - backend-dev
+    profiles:
+      - dev
 
 volumes:
   app-data:
