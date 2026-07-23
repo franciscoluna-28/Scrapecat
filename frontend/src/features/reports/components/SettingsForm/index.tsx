@@ -31,7 +31,7 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/src/components/ui/combobox";
-import { GitHubRepository } from "@/src/shared/types";
+import { GitHubRepository, GitHubCommit } from "@/src/shared/types";
 import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
 import { processCommitsForAiReport } from "@/src/shared/lib/utils";
 import { APP_CONFIG } from "@/src/shared/constants/app";
@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { CommitCard } from "@/src/components/global/CommitCard";
+import { apiClient } from "@/src/shared/api/client";
 import { useCommits } from "@/src/features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 import { useAISettingsStore } from "@/src/store/ai-settings";
@@ -159,11 +160,8 @@ export function SettingsForm({
         endDate ||
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const reportRes = await fetch(`${API_URL}/api/generate-report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data, error } = await apiClient.POST("/api/reports", {
+        body: {
           data: {
             repository: repository.name,
             githubOwner: repository.owner.login,
@@ -171,21 +169,20 @@ export function SettingsForm({
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
-            commits: processCommitsForAiReport(commits),
+            commits: processCommitsForAiReport(commits as GitHubCommit[]),
             customInstructions,
             quickMode,
             model: selectedModel,
           },
-        }),
+        },
       });
 
-      if (!reportRes.ok) {
+      if (error || !data) {
         toast.error("Failed to generate report");
         return;
       }
 
-      const { reportId } = await reportRes.json();
-      router.push(`/new/report?reportId=${reportId}`);
+      router.push(`/new/report?reportId=${data.reportId}`);
     });
   };
 
@@ -363,7 +360,7 @@ export function SettingsForm({
                           </span>
                         ) : (
                           <CommitsPreview
-                            commits={commits}
+                            commits={commits as GitHubCommit[]}
                             commitCount={commitCount}
                           />
                         )}

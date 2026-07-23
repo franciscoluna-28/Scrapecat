@@ -2,6 +2,9 @@
 
 import useSWR from "swr";
 import { format } from "date-fns";
+import type { paths } from "@/src/shared/api/types";
+
+type CommitsData = paths["/api/commits"]["get"]["responses"][200]["content"]["application/json"];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -20,16 +23,6 @@ export function getCommitsUrl(
   return url;
 }
 
-type UseCommitsReturn = {
-  commits: any[];
-  count: number;
-  isLoading: boolean;
-  isValidating: boolean;
-  isFetching: boolean;
-  error: Error | null;
-  hasError: boolean;
-};
-
 export function useCommits({
   owner,
   repo,
@@ -42,10 +35,10 @@ export function useCommits({
   startDate?: string;
   endDate?: string;
   branch?: string;
-}): UseCommitsReturn {
+}) {
   const key = getCommitsUrl(owner, repo, startDate, endDate, branch);
 
-  const { data, error, isLoading, isValidating } = useSWR<{ commits: any[] }>(key);
+  const { data, error, isLoading, isValidating } = useSWR<CommitsData>(key);
 
   const commits = data?.commits ?? [];
 
@@ -75,24 +68,17 @@ export function getRepositoriesUrl(filters: {
   return `${API_URL}/api/repositories?${params.toString()}`;
 }
 
-type UseRepositoriesReturn = {
-  repositories: any[];
-  isLoading: boolean;
-  isValidating: boolean;
-  isFetching: boolean;
-  error: Error | null;
-  hasError: boolean;
-};
+type RepositoriesData = paths["/api/repositories"]["get"]["responses"][200]["content"]["application/json"];
 
 export function useRepositories(filters: {
   type: string;
   sort: string;
   direction: string;
   per_page: number;
-}): UseRepositoriesReturn {
+}) {
   const url = getRepositoriesUrl(filters);
 
-  const { data, error, isLoading, isValidating } = useSWR<any[]>(url);
+  const { data, error, isLoading, isValidating } = useSWR<RepositoriesData>(url);
 
   return {
     repositories: data ?? [],

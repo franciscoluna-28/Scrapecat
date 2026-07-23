@@ -25,6 +25,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiClient } from "@/src/shared/api/client";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
 import { ProcessedCommit } from "@/src/shared/lib/utils";
 import type { ImageAsset } from "@/src/drizzle/schema";
@@ -109,19 +110,16 @@ export default function ReportClientPage({
 
     startReplyTransition(async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const res = await fetch(`${API_URL}/api/reports/${reportId}/reply`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reply: replyText }),
+        const { data, error } = await apiClient.POST("/api/reports/{id}/replies", {
+          params: { path: { id: reportId! } },
+          body: { reply: replyText },
         });
 
-        if (!res.ok) {
+        if (error || !data) {
           toast.error("Failed to refine report");
           return;
         }
 
-        const data = await res.json();
         setCurrentReport(data.report);
         setReplyText("");
         setRefineOpen(false);

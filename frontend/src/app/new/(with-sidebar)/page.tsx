@@ -68,7 +68,7 @@ function PageContent() {
                       <p className="text-muted-foreground">Ensure your GITHUB_TOKEN has access to your repositories.</p>
                     </div>
                   ) : (
-                    repositories.map((repo: GitHubRepository) => (
+                    (repositories as GitHubRepository[]).map((repo) => (
                       <RepositoryCard key={repo.id} repository={repo} />
                     ))
                   )}

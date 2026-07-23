@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { SettingsForm } from "@/src/features/reports/components/SettingsForm";
 import { RepositoryInfoCard } from "@/src/features/reports/components/RepositoryInfoCard";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+import { apiClient } from "@/src/shared/api/client";
+import type { GitHubRepository } from "@/src/shared/types";
 
 interface PageProps {
   searchParams: Promise<{
@@ -14,22 +14,20 @@ interface PageProps {
   }>;
 }
 
-async function fetchRepositoryById(repoId: number) {
-  const res = await fetch(`${API_URL}/api/repositories?per_page=100`, {
-    next: { revalidate: 60 },
+async function fetchRepositoryById(repoId: number): Promise<GitHubRepository | null> {
+  const { data, error } = await apiClient.GET("/api/repositories", {
+    params: { query: { per_page: "100" } },
   });
-  if (!res.ok) return null;
-  const repos = await res.json();
-  return repos.find((r: any) => r.id === repoId) || null;
+  if (error || !data) return null;
+  return (data as GitHubRepository[]).find((r) => r.id === repoId) || null;
 }
 
 async function fetchRepositoryBranches(owner: string, repo: string): Promise<string[]> {
   try {
-    const res = await fetch(`${API_URL}/api/branches?owner=${owner}&repo=${repo}`, {
-      next: { revalidate: 60 },
+    const { data, error } = await apiClient.GET("/api/branches", {
+      params: { query: { owner, repo } },
     });
-    if (!res.ok) return ["main", "master"];
-    const data = await res.json();
+    if (error || !data) return ["main", "master"];
     return data.branches || ["main", "master"];
   } catch {
     return ["main", "master"];

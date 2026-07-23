@@ -1,6 +1,10 @@
+import { apiClient } from "@/src/shared/api/client";
+import type { paths } from "@/src/shared/api/types";
+import type { ProcessedCommit } from "@/src/shared/lib/utils";
+import type { ImageAsset } from "@/src/drizzle/schema";
 import ReportClientPage from "./client-page";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+type ReportResponse = paths["/api/reports/{id}"]["get"]["responses"][200]["content"]["application/json"];
 
 interface ReportPageProps {
   searchParams: Promise<{
@@ -8,12 +12,12 @@ interface ReportPageProps {
   }>;
 }
 
-async function fetchReport(reportId: string) {
-  const res = await fetch(`${API_URL}/api/reports/${reportId}`, {
-    next: { revalidate: 0 },
+async function fetchReport(reportId: string): Promise<ReportResponse | null> {
+  const { data, error } = await apiClient.GET("/api/reports/{id}", {
+    params: { path: { id: reportId } },
   });
-  if (!res.ok) return null;
-  return res.json();
+  if (error || !data) return null;
+  return data;
 }
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
@@ -34,7 +38,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     );
   }
 
-  let report: any;
+  let report: ReportResponse | null;
 
   try {
     report = await fetchReport(reportId);
@@ -60,7 +64,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
   return (
     <ReportClientPage
-      commits={report.sourceCommits || []}
+      commits={(report.sourceCommits || []) as ProcessedCommit[]}
       repository={{
         id: report.githubProjectId,
         name: report.githubRepositoryName,
@@ -71,7 +75,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       branch={report.branch}
       report={report.editableMarkdown}
       reportId={reportId}
-      imageAssets={report.imageAssets || []}
+      imageAssets={(report.imageAssets || []) as ImageAsset[]}
     />
   );
 }

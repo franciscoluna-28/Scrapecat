@@ -1,20 +1,13 @@
 "use client";
 
 import useSWR from "swr";
+import type { paths } from "@/src/shared/api/types";
+
+type ReportsListData = paths["/api/reports"]["get"]["responses"][200]["content"]["application/json"];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-type UseReportsReturn = {
-  reports: any[];
-  distinctProjects: { id: number; name: string }[];
-  isLoading: boolean;
-  isValidating: boolean;
-  isFetching: boolean;
-  error: Error | null;
-  hasError: boolean;
-};
-
-export function useReports(projectId?: number): UseReportsReturn {
+export function useReports(projectId?: number) {
   const params = new URLSearchParams();
   if (projectId !== undefined) {
     params.set("projectId", String(projectId));
@@ -22,10 +15,7 @@ export function useReports(projectId?: number): UseReportsReturn {
 
   const url = `${API_URL}/api/reports${params.toString() ? `?${params.toString()}` : ""}`;
 
-  const { data, error, isLoading, isValidating } = useSWR<{
-    reports: any[];
-    distinctProjects: { id: number; name: string }[];
-  }>(url);
+  const { data, error, isLoading, isValidating } = useSWR<ReportsListData>(url);
 
   return {
     reports: data?.reports ?? [],
