@@ -109,7 +109,8 @@ export default function ReportClientPage({
 
     startReplyTransition(async () => {
       try {
-        const res = await fetch(`/api/reports/${reportId}/reply`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+        const res = await fetch(`${API_URL}/api/reports/${reportId}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reply: replyText }),

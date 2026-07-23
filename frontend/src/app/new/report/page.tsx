@@ -1,11 +1,19 @@
-import { ReportDataOutput } from "@/src/features/reports/types";
-import { getReportById } from "../../../features/reports/server/reports";
 import ReportClientPage from "./client-page";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 interface ReportPageProps {
   searchParams: Promise<{
     reportId?: string;
   }>;
+}
+
+async function fetchReport(reportId: string) {
+  const res = await fetch(`${API_URL}/api/reports/${reportId}`, {
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
@@ -26,10 +34,10 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     );
   }
 
-  let report: ReportDataOutput | null;
+  let report: any;
 
   try {
-    report = await getReportById(reportId);
+    report = await fetchReport(reportId);
 
     if (!report) {
       throw new Error("Failed to fetch report");

@@ -2,30 +2,11 @@
 
 import useSWR from "swr";
 
-interface Report {
-  id: string;
-  githubRepositoryName: string;
-  githubProjectId: number;
-  startDate: string;
-  endDate: string;
-  branch: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface DistinctProject {
-  id: number;
-  name: string;
-}
-
-interface ReportsResponse {
-  reports: Report[];
-  distinctProjects: DistinctProject[];
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 type UseReportsReturn = {
-  reports: Report[];
-  distinctProjects: DistinctProject[];
+  reports: any[];
+  distinctProjects: { id: number; name: string }[];
   isLoading: boolean;
   isValidating: boolean;
   isFetching: boolean;
@@ -39,10 +20,12 @@ export function useReports(projectId?: number): UseReportsReturn {
     params.set("projectId", String(projectId));
   }
 
-  const url = `/api/reports${params.toString() ? `?${params.toString()}` : ""}`;
+  const url = `${API_URL}/api/reports${params.toString() ? `?${params.toString()}` : ""}`;
 
-  const { data, error, isLoading, isValidating } =
-    useSWR<ReportsResponse>(url);
+  const { data, error, isLoading, isValidating } = useSWR<{
+    reports: any[];
+    distinctProjects: { id: number; name: string }[];
+  }>(url);
 
   return {
     reports: data?.reports ?? [],
