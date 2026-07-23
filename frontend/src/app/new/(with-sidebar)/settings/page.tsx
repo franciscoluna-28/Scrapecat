@@ -1,72 +1,61 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import { useSearchParams, notFound } from "next/navigation";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { SettingsForm } from "@/src/features/reports/components/SettingsForm";
 import { RepositoryInfoCard } from "@/src/features/reports/components/RepositoryInfoCard";
-import { apiClient } from "@/src/shared/api/client";
+import { useRepositories, useBranches } from "@/src/features/reports/services/api";
 import type { GitHubRepository } from "@/src/shared/types";
 
-interface PageProps {
-  searchParams: Promise<{
-    githubId?: string;
-    branch?: string;
-    startDate?: string;
-    endDate?: string;
-  }>;
-}
+export default function Page() {
+  const searchParams = useSearchParams();
+  const githubId = searchParams.get("githubId");
+  const branch = searchParams.get("branch");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
 
-async function fetchRepositoryById(repoId: number): Promise<GitHubRepository | null> {
-  const { data, error } = await apiClient.GET("/api/v1/repositories", {
-    params: { query: { per_page: "100" } },
-  });
-  if (error || !data) return null;
-  return (data as GitHubRepository[]).find((r) => r.id === repoId) || null;
-}
-
-async function fetchRepositoryBranches(owner: string, repo: string): Promise<string[]> {
-  try {
-    const { data, error } = await apiClient.GET("/api/v1/repositories/{owner}/{repo}/branches", {
-      params: { path: { owner, repo } },
-    });
-    if (error || !data) return ["main", "master"];
-    return data.branches || ["main", "master"];
-  } catch {
-    return ["main", "master"];
-  }
-}
-
-export default async function Page({ searchParams }: PageProps) {
-  const { githubId, branch, startDate, endDate } = await searchParams;
   const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const { repositories, isLoading: reposLoading } = useRepositories({
+    type: "all",
+    sort: "updated",
+    direction: "desc",
+    per_page: 100,
+  });
 
   if (!githubId) {
     notFound();
   }
 
   const repoId = parseInt(githubId, 10);
-  const repository = await fetchRepositoryById(repoId);
+  const repository = (repositories as GitHubRepository[]).find((r) => r.id === repoId) ?? null;
 
-  if (!repository) {
+  const { branches, isLoading: branchesLoading } = useBranches(
+    repository?.owner.login ?? "",
+    repository?.name ?? "",
+  );
+
+  if (!reposLoading && !repository) {
     notFound();
   }
 
-  const branches = await fetchRepositoryBranches(
-    repository.owner.login,
-    repository.name,
-  );
-
   return (
     <SectionLayout>
-      <div className="mb-6 flex justify-center">
-        <RepositoryInfoCard repository={repository} />
-      </div>
-      <SettingsForm
-        repository={repository}
-        branches={branches}
-        selectedBranch={branch || branches[0] || "main"}
-        startDate={startDate || today}
-        endDate={endDate}
-      />
+      {repository && (
+        <>
+          <div className="mb-6 flex justify-center">
+            <RepositoryInfoCard repository={repository} />
+          </div>
+          <SettingsForm
+            repository={repository}
+            branches={branches.length > 0 ? branches : ["main", "master"]}
+            selectedBranch={branch || branches[0] || "main"}
+            startDate={startDate || today}
+            endDate={endDate}
+          />
+        </>
+      )}
     </SectionLayout>
   );
 }

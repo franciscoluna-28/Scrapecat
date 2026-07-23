@@ -1,27 +1,16 @@
-import { apiClient } from "@/src/shared/api/client";
-import type { paths } from "@/src/shared/api/types";
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { useReport } from "@/src/features/reports/services/reports-api";
 import type { ProcessedCommit } from "@/src/shared/lib/utils";
 import type { ImageAsset } from "@/src/drizzle/schema";
 import ReportClientPage from "./client-page";
 
-type ReportResponse = paths["/api/v1/reports/{id}"]["get"]["responses"][200]["content"]["application/json"];
+export default function ReportPage() {
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
 
-interface ReportPageProps {
-  searchParams: Promise<{
-    reportId?: string;
-  }>;
-}
-
-async function fetchReport(reportId: string): Promise<ReportResponse | null> {
-  const { data, error } = await apiClient.GET("/api/v1/reports/{id}", {
-    params: { path: { id: reportId } },
-  });
-  if (error || !data) return null;
-  return data;
-}
-
-export default async function ReportPage({ searchParams }: ReportPageProps) {
-  const { reportId } = await searchParams;
+  const { report, isLoading } = useReport(reportId ?? "");
 
   if (!reportId) {
     return (
@@ -38,16 +27,19 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     );
   }
 
-  let report: ReportResponse | null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium mb-2">Loading Report...</h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  try {
-    report = await fetchReport(reportId);
-
-    if (!report) {
-      throw new Error("Failed to fetch report");
-    }
-  } catch (error) {
-    console.error("Failed to fetch report:", error);
+  if (!report) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
