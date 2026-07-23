@@ -2,6 +2,8 @@
 
 import useSWR from "swr";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -17,7 +19,7 @@ interface UseModelsReturn {
 
 export function useModels(): UseModelsReturn {
   const { data, error, isLoading } = useSWR<{ models: ModelInfo[] }>(
-    "/api/ai/models",
+    `${API_URL}/api/ai/models`,
   );
 
   return {
