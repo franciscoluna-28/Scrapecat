@@ -17,13 +17,13 @@ import { replyToReport } from "./routes/reply";
 import {
   ErrorResponse,
   HealthResponse,
+  RepoOwnerParams,
   CommitsQuery,
   CommitsResponse,
   CommitsCountQuery,
   CommitsCountResponse,
   RepositoriesQuery,
   RepositoriesResponse,
-  BranchesQuery,
   BranchesResponse,
   VerificationOkResponse,
   ModelsResponse,
@@ -49,7 +49,7 @@ export async function buildApp() {
     openapi: {
       info: {
         title: "Fabric API",
-        version: "0.1.0",
+        version: "v1",
         description: "Backend API for Fabric reports",
       },
     },
@@ -59,7 +59,7 @@ export async function buildApp() {
     routePrefix: "/docs",
   });
 
-  app.get("/api/health", {
+  app.get("/api/v1/health", {
     schema: {
       description: "Health check endpoint",
       tags: ["health"],
@@ -67,25 +67,23 @@ export async function buildApp() {
     },
   }, health);
 
-  app.get("/api/commits", {
+  app.get("/api/v1/verification/status", {
     schema: {
-      description: "List commits for a repository within an optional date range",
-      tags: ["commits"],
-      querystring: CommitsQuery,
-      response: { 200: CommitsResponse, 400: ErrorResponse },
+      description: "Verify GitHub token connection status",
+      tags: ["verification"],
+      response: { 200: VerificationOkResponse },
     },
-  }, listCommits);
+  }, checkVerification);
 
-  app.get("/api/commits/count", {
+  app.get("/api/v1/models", {
     schema: {
-      description: "Count commits for a repository within an optional date range",
-      tags: ["commits"],
-      querystring: CommitsCountQuery,
-      response: { 200: CommitsCountResponse, 400: ErrorResponse },
+      description: "List available AI models from OpenRouter",
+      tags: ["models"],
+      response: { 200: ModelsResponse },
     },
-  }, countCommits);
+  }, listModels);
 
-  app.get("/api/repositories", {
+  app.get("/api/v1/repositories", {
     schema: {
       description: "List GitHub repositories for the authenticated user",
       tags: ["repositories"],
@@ -94,32 +92,36 @@ export async function buildApp() {
     },
   }, listRepositories);
 
-  app.get("/api/branches", {
+  app.get("/api/v1/repositories/:owner/:repo/branches", {
     schema: {
       description: "List branches for a repository",
       tags: ["repositories"],
-      querystring: BranchesQuery,
+      params: RepoOwnerParams,
       response: { 200: BranchesResponse, 400: ErrorResponse },
     },
   }, listBranches);
 
-  app.get("/api/verification", {
+  app.get("/api/v1/repositories/:owner/:repo/commits", {
     schema: {
-      description: "Verify GitHub token connection status",
-      tags: ["verification"],
-      response: { 200: VerificationOkResponse },
+      description: "List commits for a repository within an optional date range",
+      tags: ["repositories"],
+      params: RepoOwnerParams,
+      querystring: CommitsQuery,
+      response: { 200: CommitsResponse, 400: ErrorResponse },
     },
-  }, checkVerification);
+  }, listCommits);
 
-  app.get("/api/models", {
+  app.get("/api/v1/repositories/:owner/:repo/commits/count", {
     schema: {
-      description: "List available AI models from OpenRouter",
-      tags: ["models"],
-      response: { 200: ModelsResponse },
+      description: "Count commits for a repository within an optional date range",
+      tags: ["repositories"],
+      params: RepoOwnerParams,
+      querystring: CommitsCountQuery,
+      response: { 200: CommitsCountResponse, 400: ErrorResponse },
     },
-  }, listModels);
+  }, countCommits);
 
-  app.post("/api/reports", {
+  app.post("/api/v1/reports", {
     schema: {
       description: "Generate a new report from commits",
       tags: ["reports"],
@@ -128,7 +130,7 @@ export async function buildApp() {
     },
   }, createReport);
 
-  app.get("/api/reports", {
+  app.get("/api/v1/reports", {
     schema: {
       description: "List all generated reports, optionally filtered by project",
       tags: ["reports"],
@@ -137,7 +139,7 @@ export async function buildApp() {
     },
   }, listReports);
 
-  app.get("/api/reports/:id", {
+  app.get("/api/v1/reports/:id", {
     schema: {
       description: "Get a single report by ID",
       tags: ["reports"],
@@ -146,7 +148,7 @@ export async function buildApp() {
     },
   }, getReport);
 
-  app.put("/api/reports/:id", {
+  app.put("/api/v1/reports/:id", {
     schema: {
       description: "Update a report's editable markdown content",
       tags: ["reports"],
@@ -156,7 +158,7 @@ export async function buildApp() {
     },
   }, updateReport);
 
-  app.post("/api/reports/:id/replies", {
+  app.post("/api/v1/reports/:id/replies", {
     schema: {
       description: "Send a follow-up instruction to refine a report",
       tags: ["reports"],

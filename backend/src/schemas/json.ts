@@ -6,9 +6,12 @@ export const HealthResponse = Type.Object({
   status: Type.Literal("ok"),
 });
 
-export const CommitsQuery = Type.Object({
+export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
   repo: Type.String(),
+});
+
+export const CommitsQuery = Type.Object({
   limit: Type.Optional(Type.String({ default: "100" })),
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
@@ -20,8 +23,6 @@ export const CommitsResponse = Type.Object({
 });
 
 export const CommitsCountQuery = Type.Object({
-  owner: Type.String(),
-  repo: Type.String(),
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
 });
@@ -40,11 +41,6 @@ export const RepositoriesQuery = Type.Object({
 export const RepositoriesResponse = Type.Array(
   Type.Record(Type.String(), Type.Any()),
 );
-
-export const BranchesQuery = Type.Object({
-  owner: Type.String(),
-  repo: Type.String(),
-});
 
 export const BranchesResponse = Type.Object({
   branches: Type.Array(Type.String()),
