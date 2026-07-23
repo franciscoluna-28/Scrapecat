@@ -10,4 +10,4 @@ COPY frontend/package.json ./frontend/package.json
 RUN pnpm install
 
 EXPOSE 4000
-CMD ["pnpm", "--filter", "backend", "dev"]
+CMD ["sh", "-c", "pnpm --filter backend db:push && pnpm --filter backend dev"]
