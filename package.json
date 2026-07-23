@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "concurrently -n frontend,backend -c yellow,green \"pnpm --filter @fabric/frontend dev\" \"pnpm --filter @fabric/backend dev\"",
     "build": "pnpm --filter @fabric/frontend build && pnpm --filter @fabric/backend build",
-    "lint": "pnpm --filter @fabric/frontend lint"
+    "lint": "pnpm --filter @fabric/frontend lint",
+    "codegen": "npx tsx scripts/codegen.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -16,6 +17,7 @@
     ]
   },
   "devDependencies": {
+    "@types/node": "^20",
     "concurrently": "^9.1.0"
   }
 }
