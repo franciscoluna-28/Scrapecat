@@ -15,7 +15,7 @@ interface PageProps {
 }
 
 async function fetchRepositoryById(repoId: number): Promise<GitHubRepository | null> {
-  const { data, error } = await apiClient.GET("/api/repositories", {
+  const { data, error } = await apiClient.GET("/api/v1/repositories", {
     params: { query: { per_page: "100" } },
   });
   if (error || !data) return null;
@@ -24,8 +24,8 @@ async function fetchRepositoryById(repoId: number): Promise<GitHubRepository | n
 
 async function fetchRepositoryBranches(owner: string, repo: string): Promise<string[]> {
   try {
-    const { data, error } = await apiClient.GET("/api/branches", {
-      params: { query: { owner, repo } },
+    const { data, error } = await apiClient.GET("/api/v1/repositories/{owner}/{repo}/branches", {
+      params: { path: { owner, repo } },
     });
     if (error || !data) return ["main", "master"];
     return data.branches || ["main", "master"];

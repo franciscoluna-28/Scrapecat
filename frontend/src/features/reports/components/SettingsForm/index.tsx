@@ -160,7 +160,7 @@ export function SettingsForm({
         endDate ||
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-      const { data, error } = await apiClient.POST("/api/reports", {
+      const { data, error } = await apiClient.POST("/api/v1/reports", {
         body: {
           data: {
             repository: repository.name,

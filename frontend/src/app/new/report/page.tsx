@@ -4,7 +4,7 @@ import type { ProcessedCommit } from "@/src/shared/lib/utils";
 import type { ImageAsset } from "@/src/drizzle/schema";
 import ReportClientPage from "./client-page";
 
-type ReportResponse = paths["/api/reports/{id}"]["get"]["responses"][200]["content"]["application/json"];
+type ReportResponse = paths["/api/v1/reports/{id}"]["get"]["responses"][200]["content"]["application/json"];
 
 interface ReportPageProps {
   searchParams: Promise<{
@@ -13,7 +13,7 @@ interface ReportPageProps {
 }
 
 async function fetchReport(reportId: string): Promise<ReportResponse | null> {
-  const { data, error } = await apiClient.GET("/api/reports/{id}", {
+  const { data, error } = await apiClient.GET("/api/v1/reports/{id}", {
     params: { path: { id: reportId } },
   });
   if (error || !data) return null;

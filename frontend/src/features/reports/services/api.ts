@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { format } from "date-fns";
 import type { paths } from "@/src/shared/api/types";
 
-type CommitsData = paths["/api/commits"]["get"]["responses"][200]["content"]["application/json"];
+type CommitsData = paths["/api/v1/repositories/{owner}/{repo}/commits"]["get"]["responses"][200]["content"]["application/json"];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -18,7 +18,7 @@ export function getCommitsUrl(
   if (!startDate) return null;
   const today = format(new Date(), "yyyy-MM-dd");
   const finalEndDate = endDate || today;
-  let url = `${API_URL}/api/commits?owner=${owner}&repo=${repo}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`;
+  let url = `${API_URL}/api/v1/repositories/${owner}/${repo}/commits?limit=100&startDate=${startDate}&endDate=${finalEndDate}`;
   if (branch) url += `&branch=${encodeURIComponent(branch)}`;
   return url;
 }
@@ -65,10 +65,10 @@ export function getRepositoriesUrl(filters: {
     direction: filters.direction,
     per_page: filters.per_page.toString(),
   });
-  return `${API_URL}/api/repositories?${params.toString()}`;
+  return `${API_URL}/api/v1/repositories?${params.toString()}`;
 }
 
-type RepositoriesData = paths["/api/repositories"]["get"]["responses"][200]["content"]["application/json"];
+type RepositoriesData = paths["/api/v1/repositories"]["get"]["responses"][200]["content"]["application/json"];
 
 export function useRepositories(filters: {
   type: string;

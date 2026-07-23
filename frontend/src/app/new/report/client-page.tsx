@@ -110,7 +110,7 @@ export default function ReportClientPage({
 
     startReplyTransition(async () => {
       try {
-        const { data, error } = await apiClient.POST("/api/reports/{id}/replies", {
+        const { data, error } = await apiClient.POST("/api/v1/reports/{id}/replies", {
           params: { path: { id: reportId! } },
           body: { reply: replyText },
         });
