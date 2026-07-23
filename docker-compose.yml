@@ -1,31 +1,38 @@
 services:
-  app:
+  backend-dev:
+    container_name: fabric-backend
     build:
       context: .
-      target: runner
-      args:
-        GITHUB_TOKEN: ${GITHUB_TOKEN}
+      dockerfile: backend/Dockerfile.dev
     ports:
-      - "3000:3000"
+      - "4000:4000"
     volumes:
-      - app-data:/app/data
+      - .:/app
+      - /app/node_modules
+      - /app/backend/node_modules
+      - /app/frontend/node_modules
+      - /app/.next
     env_file:
-      - .env
-    profiles:
-      - prod
+      - backend/.env
+    environment:
+      - PORT=4000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:3000
+      - DATABASE_URL=file:./dev.db
 
-  app-dev:
+  frontend-dev:
+    container_name: fabric-ui
     build:
       context: .
-      target: dev
+      dockerfile: frontend/Dockerfile.dev
     ports:
       - "3000:3000"
     volumes:
       - .:/app
       - /app/node_modules
+      - /app/frontend/node_modules
       - /app/.next
-    env_file:
-      - .env
-
-volumes:
-  app-data:
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    depends_on:
+      - backend-dev

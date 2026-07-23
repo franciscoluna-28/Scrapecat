@@ -1,23 +1,16 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { useReport } from "@/src/features/reports/services/reports-api";
+import type { ProcessedCommit } from "@/src/shared/lib/utils";
+import type { ImageAsset } from "@/src/drizzle/schema";
 import ReportClientPage from "./client-page";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+export default function ReportPage() {
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
 
-interface ReportPageProps {
-  searchParams: Promise<{
-    reportId?: string;
-  }>;
-}
-
-async function fetchReport(reportId: string) {
-  const res = await fetch(`${API_URL}/api/reports/${reportId}`, {
-    next: { revalidate: 0 },
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
-export default async function ReportPage({ searchParams }: ReportPageProps) {
-  const { reportId } = await searchParams;
+  const { report, isLoading } = useReport(reportId ?? "");
 
   if (!reportId) {
     return (
@@ -34,16 +27,19 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     );
   }
 
-  let report: any;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium mb-2">Loading Report...</h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  try {
-    report = await fetchReport(reportId);
-
-    if (!report) {
-      throw new Error("Failed to fetch report");
-    }
-  } catch (error) {
-    console.error("Failed to fetch report:", error);
+  if (!report) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -60,7 +56,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
   return (
     <ReportClientPage
-      commits={report.sourceCommits || []}
+      commits={(report.sourceCommits || []) as ProcessedCommit[]}
       repository={{
         id: report.githubProjectId,
         name: report.githubRepositoryName,
@@ -71,7 +67,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       branch={report.branch}
       report={report.editableMarkdown}
       reportId={reportId}
-      imageAssets={report.imageAssets || []}
+      imageAssets={(report.imageAssets || []) as ImageAsset[]}
     />
   );
 }

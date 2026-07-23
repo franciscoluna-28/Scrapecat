@@ -1,0 +1,13 @@
+FROM node:22-alpine
+RUN corepack enable && corepack prepare pnpm@10.7.0 --activate
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY backend/package.json ./backend/package.json
+COPY frontend/package.json ./frontend/package.json
+
+RUN pnpm install
+
+EXPOSE 4000
+CMD ["sh", "-c", "pnpm --filter backend db:push && pnpm --filter backend dev"]

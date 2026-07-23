@@ -11,7 +11,7 @@ import { callAI, cleanResponse } from "../shared/ai";
 
 const MAX_LIMIT = 100;
 
-export async function generateReport(req: FastifyRequest, reply: FastifyReply) {
+export async function createReport(req: FastifyRequest, reply: FastifyReply) {
   try {
     const body = req.body as any;
     const parsed = reportInputSchema.safeParse(body?.data);

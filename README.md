@@ -1,13 +1,13 @@
 ## 🐈 Fabric - GitHub Commits to Reports
 
-Fabric is a high-performance data intelligence engine designed to transform raw GitHub repository activity into high-value executive reports. Engineered for Founding Engineers, small startups, and consultants who demand total visibility without the friction of manual tracking.
-
-Built for lean teams tired of micromanagement and non-technical stakeholders who struggle to interpret Git activity. We translate code into clarity.
+Kill micromanagement. Fabric translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth.
 
 ## Tech Stack
-- Backend & Client: Next.js 16.
-- Data Source: Native GitHub REST via `Octokit`.
-- Intelligence: OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis.
+- **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
+- **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui
+- **Data Source:** Native GitHub REST via `Octokit`
+- **Intelligence:** OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis
+- **Package Manager:** pnpm workspaces
 
 ## Core Features
 - **Deep Repository Sync:** Real-time extraction of commit metadata, going far beyond simple line counts to capture the intent of the work.
@@ -17,12 +17,15 @@ Built for lean teams tired of micromanagement and non-technical stakeholders who
 - **Report Persistence:** A centralized dashboard to visualize, manage, and export historical reporting data.
 
 ## Future Roadmap
-- **Multi-VCS Ecosystem:** Expanding support to GitLab, BitBucket, and self-hosted instances.
-- Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
+- **RAG on Repositories (SurrealDB):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Powered by SurrealDB, replacing SQLite as we scale.
+- **External Integrations:** Connect Slack, Linear, Jira, and Notion so reports cross-reference commits with tickets, messages, and docs.
+- **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
+- **Self-Hosted Storage:** MinIO support alongside Cloudflare R2, with more storage providers to come.
+- **Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
+- **UI Renovation:** Full redesign focused on clarity, speed, and making reports the hero — less dashboard clutter, more insight density.
 - **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
 
-
-_The MVP focuses on core report generation and GitHub integration. Refinements and additional integrations will follow._
+AI is increasing commit velocity, not reducing it. Fabric is the missing layer that translates engineering output into something every department can actually understand. Kill micromanagement. Centralize the communication. Let code be the truth.
 
 
 ## Note for Early Adopters
@@ -65,26 +68,20 @@ By re-hosting on R2, images are publicly accessible via your own domain, work fo
 
 ## Environment Setup
 
-Create a .env.local file in the root of your project and populate it with your credentials:
+Copy the backend example and fill in your credentials:
 
 ```Bash
-# GitHub Infrastructure
-GITHUB_TOKEN=your_personal_access_token
-
-# LLM Intelligence (get a free key at https://openrouter.ai/keys)
-OPENROUTER_API_KEY=your_openrouter_api_key
-
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Cloudflare R2 — host PR screenshots on your own infra
-# so shared reports work for stakeholders without GitHub auth
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret
-R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
-R2_BUCKET_NAME=reports
-R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
+cp backend/.env.example backend/.env
 ```
+
+Required values in `backend/.env`:
+
+| Variable | Description |
+|---|---|
+| `OPENROUTER_API_KEY` | LLM access — get a free key at [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `GITHUB_TOKEN` | Repository data access — create one at [github.com/settings/tokens](https://github.com/settings/tokens) |
+
+Optional R2 credentials are documented in the example for PR screenshot hosting.
 
 ## Local Deployment
 Initialize the engine and start the development server:
@@ -110,45 +107,17 @@ The application will be live at http://localhost:3000. Connect your first reposi
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
 
-### Environment
-
-Create a `.env` file from the example:
-
-```Bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-
-```Bash
-GITHUB_TOKEN=your_personal_access_token
-OPENROUTER_API_KEY=your_openrouter_api_key
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-DATABASE_URL=file:data/dev.db
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret
-R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
-R2_BUCKET_NAME=reports
-R2_PUBLIC_URL=https://<your-custom-domain>.com/reports
-```
-
-The compose file reads `GITHUB_TOKEN` from `.env` as a build arg so it's available during the Next.js build step. All vars (including OpenRouter) are also passed at runtime via `env_file`.
-
 ### Development (hot reload)
 
 ```Bash
 docker compose up --build
 ```
 
-Mounts source directly — changes reflected immediately via Next.js HMR at http://localhost:3000.
+Two services start:
+- **Backend** (Fastify) at http://localhost:4000 — auto-reloads via `tsx watch`
+- **Frontend** (Next.js) at http://localhost:3000 — HMR via `next dev`
 
-### Production
-
-```Bash
-docker compose --profile prod up --build
-```
-
-Multi-stage build with optimized image. SQLite data is persisted in a Docker volume.
+Source is mounted directly — changes are reflected immediately. Each service uses its own `Dockerfile.dev` for a leaner, focused build.
 
 ### Stop
 

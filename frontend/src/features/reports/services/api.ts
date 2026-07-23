@@ -1,34 +1,9 @@
 "use client";
 
-import useSWR from "swr";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-export function getCommitsUrl(
-  owner: string,
-  repo: string,
-  startDate?: string,
-  endDate?: string,
-  branch?: string,
-): string | null {
-  if (!startDate) return null;
-  const today = format(new Date(), "yyyy-MM-dd");
-  const finalEndDate = endDate || today;
-  let url = `${API_URL}/api/commits?owner=${owner}&repo=${repo}&limit=100&startDate=${startDate}&endDate=${finalEndDate}`;
-  if (branch) url += `&branch=${encodeURIComponent(branch)}`;
-  return url;
-}
-
-type UseCommitsReturn = {
-  commits: any[];
-  count: number;
-  isLoading: boolean;
-  isValidating: boolean;
-  isFetching: boolean;
-  error: Error | null;
-  hasError: boolean;
-};
+import { apiClient } from "@/src/shared/api/client";
+import { queryKeys } from "@/src/shared/services/keys";
 
 export function useCommits({
   owner,
@@ -42,10 +17,30 @@ export function useCommits({
   startDate?: string;
   endDate?: string;
   branch?: string;
-}): UseCommitsReturn {
-  const key = getCommitsUrl(owner, repo, startDate, endDate, branch);
+}) {
+  const enabled = !!startDate;
 
-  const { data, error, isLoading, isValidating } = useSWR<{ commits: any[] }>(key);
+  const { data, error, isLoading, isFetching } = useQuery({
+    queryKey: queryKeys.commits.list(owner, repo, { startDate, endDate, branch }),
+    queryFn: () =>
+      apiClient
+        .GET("/api/v1/repositories/{owner}/{repo}/commits", {
+          params: {
+            path: { owner, repo },
+            query: {
+              limit: "100",
+              startDate: startDate!,
+              endDate: endDate || format(new Date(), "yyyy-MM-dd"),
+              branch,
+            },
+          },
+        })
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.data;
+        }),
+    enabled,
+  });
 
   const commits = data?.commits ?? [];
 
@@ -53,53 +48,64 @@ export function useCommits({
     commits,
     count: commits.length,
     isLoading,
-    isValidating,
-    isFetching: isLoading || isValidating,
+    isValidating: isFetching,
+    isFetching,
     error: error ?? null,
     hasError: !!error,
   };
 }
-
-export function getRepositoriesUrl(filters: {
-  type: string;
-  sort: string;
-  direction: string;
-  per_page: number;
-}): string {
-  const params = new URLSearchParams({
-    type: filters.type,
-    sort: filters.sort,
-    direction: filters.direction,
-    per_page: filters.per_page.toString(),
-  });
-  return `${API_URL}/api/repositories?${params.toString()}`;
-}
-
-type UseRepositoriesReturn = {
-  repositories: any[];
-  isLoading: boolean;
-  isValidating: boolean;
-  isFetching: boolean;
-  error: Error | null;
-  hasError: boolean;
-};
 
 export function useRepositories(filters: {
   type: string;
   sort: string;
   direction: string;
   per_page: number;
-}): UseRepositoriesReturn {
-  const url = getRepositoriesUrl(filters);
-
-  const { data, error, isLoading, isValidating } = useSWR<any[]>(url);
+}) {
+  const { data, error, isLoading, isFetching } = useQuery({
+    queryKey: queryKeys.repositories.list(filters),
+    queryFn: () =>
+      apiClient
+        .GET("/api/v1/repositories", {
+          params: {
+            query: {
+              type: filters.type,
+              sort: filters.sort,
+              direction: filters.direction,
+              per_page: String(filters.per_page),
+            },
+          },
+        })
+        .then((r) => r.data),
+  });
 
   return {
     repositories: data ?? [],
     isLoading,
-    isValidating,
-    isFetching: isLoading || isValidating,
+    isValidating: isFetching,
+    isFetching,
     error: error ?? null,
     hasError: !!error,
+  };
+}
+
+export function useBranches(owner: string, repo: string) {
+  const { data, error, isLoading } = useQuery({
+    queryKey: queryKeys.branches.list(owner, repo),
+    queryFn: () =>
+      apiClient
+        .GET("/api/v1/repositories/{owner}/{repo}/branches", {
+          params: { path: { owner, repo } },
+        })
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.data;
+        }),
+    enabled: !!owner && !!repo,
+  });
+
+  return {
+    branches: data?.branches ?? [],
+    isLoading,
+    error: error ?? null,
   };
 }

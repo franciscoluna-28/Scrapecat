@@ -2,14 +2,11 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { getRepositoryCommits, getRepositoryCommitCount } from "../shared/github";
 
 export async function listCommits(
-  req: FastifyRequest<{ Querystring: { owner?: string; repo?: string; limit?: string; startDate?: string; endDate?: string; branch?: string } }>,
+  req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { limit?: string; startDate?: string; endDate?: string; branch?: string } }>,
   reply: FastifyReply,
 ) {
-  const { owner, repo, limit, startDate, endDate, branch } = req.query;
-
-  if (!owner || !repo) {
-    return reply.status(400).send({ error: "Missing required parameters: owner and repo" });
-  }
+  const { owner, repo } = req.params;
+  const { limit, startDate, endDate, branch } = req.query;
 
   try {
     const commits = await getRepositoryCommits({
@@ -28,14 +25,11 @@ export async function listCommits(
 }
 
 export async function countCommits(
-  req: FastifyRequest<{ Querystring: { owner?: string; repo?: string; startDate?: string; endDate?: string } }>,
+  req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { startDate?: string; endDate?: string } }>,
   reply: FastifyReply,
 ) {
-  const { owner, repo, startDate, endDate } = req.query;
-
-  if (!owner || !repo) {
-    return reply.status(400).send({ error: "Missing required parameters: owner and repo" });
-  }
+  const { owner, repo } = req.params;
+  const { startDate, endDate } = req.query;
 
   try {
     const count = await getRepositoryCommitCount({

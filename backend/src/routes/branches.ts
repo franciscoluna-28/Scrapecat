@@ -2,14 +2,10 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { getRepositoryBranches } from "../shared/github";
 
 export async function listBranches(
-  req: FastifyRequest<{ Querystring: { owner?: string; repo?: string } }>,
+  req: FastifyRequest<{ Params: { owner: string; repo: string } }>,
   reply: FastifyReply,
 ) {
-  const { owner, repo } = req.query;
-
-  if (!owner || !repo) {
-    return reply.status(400).send({ error: "Missing required parameters: owner and repo" });
-  }
+  const { owner, repo } = req.params;
 
   try {
     const branches = await getRepositoryBranches(owner, repo);

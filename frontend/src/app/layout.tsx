@@ -4,7 +4,7 @@ import "./globals.css";
 import { cn } from "@/src/shared/lib/utils";
 import { Toaster } from "@/src/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
-import SWRConfigProvider from "../shared/providers/SWRConfig";
+import { QueryProvider } from "../shared/providers/QueryProvider";
 
 const poppins = Poppins({subsets:['latin'],variable:'--font-sans',weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']});
 
@@ -34,12 +34,12 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", poppins.variable)}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <SWRConfigProvider>
+          <QueryProvider>
           {children}
           <Toaster richColors />
-          </SWRConfigProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
