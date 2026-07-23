@@ -1,12 +1,10 @@
 ## 🐈 Fabric - GitHub Commits to Reports
 
-Fabric is a high-performance data intelligence engine designed to transform raw GitHub repository activity into high-value executive reports. Engineered for Founding Engineers, small startups, and consultants who demand total visibility without the friction of manual tracking.
-
-Built for lean teams tired of micromanagement and non-technical stakeholders who struggle to interpret Git activity. We translate code into clarity.
+Kill micromanagement. Fabric translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth.
 
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
-- **Frontend:** Next.js 16 (React 19), Tailwind CSS v4, shadcn/ui
+- **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui
 - **Data Source:** Native GitHub REST via `Octokit`
 - **Intelligence:** OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis
 - **Package Manager:** pnpm workspaces
@@ -19,12 +17,15 @@ Built for lean teams tired of micromanagement and non-technical stakeholders who
 - **Report Persistence:** A centralized dashboard to visualize, manage, and export historical reporting data.
 
 ## Future Roadmap
-- **Multi-VCS Ecosystem:** Expanding support to GitLab, BitBucket, and self-hosted instances.
-- Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
+- **RAG on Repositories (SurrealDB):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Powered by SurrealDB, replacing SQLite as we scale.
+- **External Integrations:** Connect Slack, Linear, Jira, and Notion so reports cross-reference commits with tickets, messages, and docs.
+- **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
+- **Self-Hosted Storage:** MinIO support alongside Cloudflare R2, with more storage providers to come.
+- **Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
+- **UI Renovation:** Full redesign focused on clarity, speed, and making reports the hero — less dashboard clutter, more insight density.
 - **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
 
-
-_The MVP focuses on core report generation and GitHub integration. Refinements and additional integrations will follow._
+AI is increasing commit velocity, not reducing it. Fabric is the missing layer that translates engineering output into something every department can actually understand. Kill micromanagement. Centralize the communication. Let code be the truth.
 
 
 ## Note for Early Adopters
