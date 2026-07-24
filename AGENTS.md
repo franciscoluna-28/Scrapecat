@@ -65,3 +65,10 @@ Use codegraph for **structural** questions — what calls what, what would break
 
 The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"*
 <!-- END:codegraph -->
+
+<!-- BEGIN:agent-rules -->
+## Agent Rules
+
+- Always read the commit conventions section above before creating a commit. Use the exact format specified (type: description, imperative mood, lowercase, no period).
+- Run the test suite (`pnpm test` in the backend) before marking work as complete when tests are affected.
+<!-- END:agent-rules -->

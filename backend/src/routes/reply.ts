@@ -2,8 +2,8 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { reports } from "../db/schema";
-import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "../shared/prompts";
-import { callAI, cleanResponse } from "../shared/ai";
+import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "../services/prompts";
+import { callAI, cleanResponse } from "../services/ai";
 
 const MAX_LIMIT = 100;
 

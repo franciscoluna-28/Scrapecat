@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/src/components/ui/badge";
 import { Card, CardContent } from "@/src/components/ui/card";
-import { Calendar, FileText, ChevronRight } from "lucide-react";
+import { FileText, ChevronRight } from "lucide-react";
 
 interface Report {
   id: string;
@@ -34,19 +34,11 @@ export function ReportCard({ report }: Props) {
                   {report.branch}
                 </Badge>
               </div>
-
-              <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  <span>
-                    {new Date(report.startDate).toLocaleDateString()} - {new Date(report.endDate).toLocaleDateString()}
-                  </span>
-                </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span>Created: {new Date(report.createdAt).toLocaleDateString()}</span>
+                <span>Edited: {new Date(report.updatedAt).toLocaleDateString()}</span>
               </div>
 
-              <div className="text-xs text-muted-foreground">
-                Last updated: {new Date(report.updatedAt).toLocaleString()}
-              </div>
             </div>
 
             <ChevronRight className="h-5 w-5 text-muted-foreground ml-4 shrink-0" />
