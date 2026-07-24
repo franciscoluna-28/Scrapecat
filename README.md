@@ -119,6 +119,15 @@ Two services start:
 
 Source is mounted directly — changes are reflected immediately. Each service uses its own `Dockerfile.dev` for a leaner, focused build.
 
+SurrealDB is also available on port **8000** for local development:
+
+| Detail | Value |
+|---|---|
+| WebSocket URL (host) | `ws://localhost:8000/rpc` |
+| WebSocket URL (Docker network) | `ws://surrealdb:8000/rpc` |
+| User / Pass | `root` / `root` |
+| Storage | `rocksdb` persisted via a named volume |
+
 ### Stop
 
 ```Bash
