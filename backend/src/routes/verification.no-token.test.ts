@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../shared/github", () => ({
+vi.mock("../services/github", () => ({
   octokit: { request: vi.fn() },
 }));
 

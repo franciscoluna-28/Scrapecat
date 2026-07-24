@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../shared/github", () => ({
+vi.mock("../services/github", () => ({
   octokit: { request: vi.fn() },
 }));
 
@@ -15,7 +15,7 @@ vi.mock("../config/env", () => ({
 }));
 
 import { buildApp } from "../app";
-import { octokit } from "../shared/github";
+import { octokit } from "../services/github";
 
 describe("GET /api/v1/verification/status", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;

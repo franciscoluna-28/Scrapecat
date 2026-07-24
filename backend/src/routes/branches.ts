@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { getRepositoryBranches } from "../shared/github";
+import { getRepositoryBranches } from "../services/github";
 
 export async function listBranches(
   req: FastifyRequest<{ Params: { owner: string; repo: string } }>,

@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { octokit } from "../shared/github";
+import { octokit } from "../services/github";
 import { env } from "../config/env";
 
 export async function checkVerification(

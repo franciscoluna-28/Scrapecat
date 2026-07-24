@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { getRepositoryCommits, getRepositoryCommitCount } from "../shared/github";
+import { getRepositoryCommits, getRepositoryCommitCount } from "../services/github";
 
 export async function listCommits(
   req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { limit?: string; startDate?: string; endDate?: string; branch?: string } }>,

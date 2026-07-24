@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../shared/github", () => ({
+vi.mock("../services/github", () => ({
   getAllRepositories: vi.fn(),
 }));
 
 import { buildApp } from "../app";
-import { getAllRepositories } from "../shared/github";
+import { getAllRepositories } from "../services/github";
 
 describe("GET /api/v1/repositories", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;

@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { getAllRepositories } from "../shared/github";
+import { getAllRepositories } from "../services/github";
 
 export async function listRepositories(
   req: FastifyRequest<{ Querystring: { type?: string; sort?: string; direction?: string; per_page?: string } }>,

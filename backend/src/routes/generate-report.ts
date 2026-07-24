@@ -3,11 +3,11 @@ import { nanoid } from "nanoid";
 import { reportInputSchema } from "../schemas";
 import { db } from "../db/client";
 import { reports } from "../db/schema";
-import { getPullRequestForCommit } from "../shared/github";
-import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_REPORT } from "../shared/prompts";
+import { getPullRequestForCommit } from "../services/github";
+import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_REPORT } from "../services/prompts";
 import { extractImagesFromPrBody } from "../shared/utils";
-import { uploadImagesToR2 } from "../shared/r2";
-import { callAI, cleanResponse } from "../shared/ai";
+import { uploadImagesToR2 } from "../services/r2";
+import { callAI, cleanResponse } from "../services/ai";
 
 const MAX_LIMIT = 100;
 
