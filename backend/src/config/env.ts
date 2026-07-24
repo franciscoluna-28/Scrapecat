@@ -5,6 +5,7 @@ export const env = {
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
   AI_MODEL: process.env.AI_MODEL || "google/gemma-4-26b-a4b-it:free",
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
+  GIT_PROVIDER: process.env.GIT_PROVIDER || "github",
   R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID || "",
   R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY || "",
   R2_ENDPOINT: process.env.R2_ENDPOINT || "",
