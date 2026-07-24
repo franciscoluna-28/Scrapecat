@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { getRepositoryBranches } from "../services/github";
+import { getGitProvider } from "../services/git-provider";
 
 export async function listBranches(
   req: FastifyRequest<{ Params: { owner: string; repo: string } }>,
@@ -8,7 +8,7 @@ export async function listBranches(
   const { owner, repo } = req.params;
 
   try {
-    const branches = await getRepositoryBranches(owner, repo);
+    const branches = await getGitProvider().listBranches(owner, repo);
     return reply.send({ branches });
   } catch (error) {
     console.error("Error fetching branches:", error);

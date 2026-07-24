@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../services/github", () => ({
-  octokit: { request: vi.fn() },
+const mockProvider = { verifyConnection: vi.fn() };
+
+vi.mock("../services/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 vi.mock("../config/env", () => ({
@@ -10,12 +12,12 @@ vi.mock("../config/env", () => ({
     HOST: "localhost",
     DATABASE_URL: "file:./test.db",
     GITHUB_TOKEN: "mock-token",
+    GIT_PROVIDER: "github",
     CORS_ORIGIN: "*",
   },
 }));
 
 import { buildApp } from "../app";
-import { octokit } from "../services/github";
 
 describe("GET /api/v1/verification/status", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -29,9 +31,10 @@ describe("GET /api/v1/verification/status", () => {
   });
 
   it("returns ok when GitHub token is valid", async () => {
-    vi.mocked(octokit.request).mockResolvedValue({
-      data: { login: "testuser" },
-    } as any);
+    mockProvider.verifyConnection.mockResolvedValue({
+      login: "testuser",
+      rateLimitRemaining: 5000,
+    });
 
     const res = await app.inject({
       method: "GET",
@@ -45,7 +48,7 @@ describe("GET /api/v1/verification/status", () => {
   });
 
   it("returns 500 when GitHub API fails (schema mismatch on error body)", async () => {
-    vi.mocked(octokit.request).mockRejectedValue(new Error("Unauthorized"));
+    mockProvider.verifyConnection.mockRejectedValue(new Error("Unauthorized"));
 
     const res = await app.inject({
       method: "GET",

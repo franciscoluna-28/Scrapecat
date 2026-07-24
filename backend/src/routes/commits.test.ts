@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../services/github", () => ({
-  getRepositoryCommits: vi.fn(),
-  getRepositoryCommitCount: vi.fn(),
+const mockProvider = { listCommits: vi.fn(), countCommits: vi.fn() };
+
+vi.mock("../services/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 import { buildApp } from "../app";
-import { getRepositoryCommits, getRepositoryCommitCount } from "../services/github";
 
 describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -20,8 +20,8 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   });
 
   it("returns commits list", async () => {
-    const commits: any = [{ sha: "abc", commit: { message: "fix" } }];
-    vi.mocked(getRepositoryCommits).mockResolvedValue(commits);
+    const commits: any = [{ sha: "abc", message: "fix", author: "dev", date: "2024-01-15" }];
+    mockProvider.listCommits.mockResolvedValue(commits);
 
     const res = await app.inject({
       method: "GET",
@@ -32,27 +32,23 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   });
 
   it("passes query parameters", async () => {
-    vi.mocked(getRepositoryCommits).mockResolvedValue([]);
+    mockProvider.listCommits.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/commits?limit=50&branch=main&startDate=2024-01-01&endDate=2024-01-31",
     });
 
-    expect(getRepositoryCommits).toHaveBeenCalledWith(
-      expect.objectContaining({
-        owner: "owner1",
-        repo: "repo1",
-        per_page: 50,
-        sha: "main",
-        since: "2024-01-01",
-        until: "2024-01-31",
-      }),
-    );
+    expect(mockProvider.listCommits).toHaveBeenCalledWith("owner1", "repo1", {
+      perPage: 50,
+      branch: "main",
+      since: "2024-01-01",
+      until: "2024-01-31",
+    });
   });
 
   it("returns 500 on error", async () => {
-    vi.mocked(getRepositoryCommits).mockRejectedValue(new Error("API error"));
+    mockProvider.listCommits.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({
       method: "GET",
@@ -75,7 +71,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
   });
 
   it("returns commit count", async () => {
-    vi.mocked(getRepositoryCommitCount).mockResolvedValue(42);
+    mockProvider.countCommits.mockResolvedValue(42);
 
     const res = await app.inject({
       method: "GET",
@@ -86,20 +82,21 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
   });
 
   it("passes date range query parameters", async () => {
-    vi.mocked(getRepositoryCommitCount).mockResolvedValue(0);
+    mockProvider.countCommits.mockResolvedValue(0);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/commits/count?startDate=2024-01-01&endDate=2024-01-31",
     });
 
-    expect(getRepositoryCommitCount).toHaveBeenCalledWith(
-      expect.objectContaining({ since: "2024-01-01", until: "2024-01-31" }),
-    );
+    expect(mockProvider.countCommits).toHaveBeenCalledWith("owner1", "repo1", {
+      since: "2024-01-01",
+      until: "2024-01-31",
+    });
   });
 
   it("returns 500 on error", async () => {
-    vi.mocked(getRepositoryCommitCount).mockRejectedValue(new Error("API error"));
+    mockProvider.countCommits.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({
       method: "GET",

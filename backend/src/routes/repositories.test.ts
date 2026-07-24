@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../services/github", () => ({
-  getAllRepositories: vi.fn(),
+const mockProvider = { listRepositories: vi.fn() };
+
+vi.mock("../services/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 import { buildApp } from "../app";
-import { getAllRepositories } from "../services/github";
 
 describe("GET /api/v1/repositories", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -19,8 +20,8 @@ describe("GET /api/v1/repositories", () => {
   });
 
   it("returns repositories list", async () => {
-    const repos: any = [{ name: "repo1", owner: { login: "user1" } }];
-    vi.mocked(getAllRepositories).mockResolvedValue(repos);
+    const repos: any = [{ name: "repo1", owner: "user1", fullName: "user1/repo1" }];
+    mockProvider.listRepositories.mockResolvedValue(repos);
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(200);
@@ -28,20 +29,23 @@ describe("GET /api/v1/repositories", () => {
   });
 
   it("passes query parameters", async () => {
-    vi.mocked(getAllRepositories).mockResolvedValue([]);
+    mockProvider.listRepositories.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories?type=public&sort=full_name&direction=asc&per_page=5",
     });
 
-    expect(vi.mocked(getAllRepositories)).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "public", sort: "full_name", direction: "asc", per_page: 5 }),
-    );
+    expect(mockProvider.listRepositories).toHaveBeenCalledWith({
+      type: "public",
+      sort: "full_name",
+      direction: "asc",
+      perPage: 5,
+    });
   });
 
   it("returns 500 on error", async () => {
-    vi.mocked(getAllRepositories).mockRejectedValue(new Error("API error"));
+    mockProvider.listRepositories.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(500);

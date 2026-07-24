@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { octokit } from "../services/github";
+import { getGitProvider } from "../services/git-provider";
 import { env } from "../config/env";
 
 export async function checkVerification(
@@ -11,15 +11,13 @@ export async function checkVerification(
       return reply.send({ status: "error", message: "GITHUB_TOKEN is not configured" });
     }
 
-    const { data: user } = await octokit.request("GET /user", {
-      headers: { "X-GitHub-Api-Version": "2022-11-28" },
-    });
+    const { login, rateLimitRemaining } = await getGitProvider().verifyConnection();
 
     return reply.send({
       status: "ok",
       github: {
-        login: user.login,
-        rateLimitRemaining: 5000,
+        login,
+        rateLimitRemaining,
       },
     });
   } catch (error: any) {

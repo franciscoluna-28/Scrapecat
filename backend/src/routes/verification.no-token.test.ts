@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../services/github", () => ({
-  octokit: { request: vi.fn() },
+const mockProvider = { verifyConnection: vi.fn() };
+
+vi.mock("../services/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 vi.mock("../config/env", () => ({
@@ -10,6 +12,7 @@ vi.mock("../config/env", () => ({
     HOST: "localhost",
     DATABASE_URL: "file:./test.db",
     GITHUB_TOKEN: "",
+    GIT_PROVIDER: "github",
     CORS_ORIGIN: "*",
   },
 }));

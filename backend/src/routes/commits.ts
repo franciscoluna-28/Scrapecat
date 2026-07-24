@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { getRepositoryCommits, getRepositoryCommitCount } from "../services/github";
+import { getGitProvider } from "../services/git-provider";
 
 export async function listCommits(
   req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { limit?: string; startDate?: string; endDate?: string; branch?: string } }>,
@@ -9,11 +9,9 @@ export async function listCommits(
   const { limit, startDate, endDate, branch } = req.query;
 
   try {
-    const commits = await getRepositoryCommits({
-      owner,
-      repo,
-      per_page: parseInt(limit || "100"),
-      sha: branch || undefined,
+    const commits = await getGitProvider().listCommits(owner, repo, {
+      perPage: parseInt(limit || "100"),
+      branch: branch || undefined,
       since: startDate || undefined,
       until: endDate || undefined,
     });
@@ -32,9 +30,7 @@ export async function countCommits(
   const { startDate, endDate } = req.query;
 
   try {
-    const count = await getRepositoryCommitCount({
-      owner,
-      repo,
+    const count = await getGitProvider().countCommits(owner, repo, {
       since: startDate || undefined,
       until: endDate || undefined,
     });

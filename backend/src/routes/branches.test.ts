@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
-vi.mock("../services/github", () => ({
-  getRepositoryBranches: vi.fn(),
+const mockProvider = { listBranches: vi.fn() };
+
+vi.mock("../services/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 import { buildApp } from "../app";
-import { getRepositoryBranches } from "../services/github";
 
 describe("GET /api/v1/repositories/:owner/:repo/branches", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -19,7 +20,7 @@ describe("GET /api/v1/repositories/:owner/:repo/branches", () => {
   });
 
   it("returns branches list", async () => {
-    vi.mocked(getRepositoryBranches).mockResolvedValue(["main", "dev"]);
+    mockProvider.listBranches.mockResolvedValue(["main", "dev"]);
 
     const res = await app.inject({
       method: "GET",
@@ -29,19 +30,19 @@ describe("GET /api/v1/repositories/:owner/:repo/branches", () => {
     expect(res.json()).toEqual({ branches: ["main", "dev"] });
   });
 
-  it("calls getRepositoryBranches with correct params", async () => {
-    vi.mocked(getRepositoryBranches).mockResolvedValue([]);
+  it("calls listBranches with correct params", async () => {
+    mockProvider.listBranches.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/myuser/myrepo/branches",
     });
 
-    expect(getRepositoryBranches).toHaveBeenCalledWith("myuser", "myrepo");
+    expect(mockProvider.listBranches).toHaveBeenCalledWith("myuser", "myrepo");
   });
 
   it("returns 500 on error", async () => {
-    vi.mocked(getRepositoryBranches).mockRejectedValue(new Error("API error"));
+    mockProvider.listBranches.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({
       method: "GET",
