@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
-import { Checkbox } from "@/src/components/ui/checkbox";
 import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
 import {
@@ -119,7 +118,6 @@ export function SettingsForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
-  const [quickMode, setQuickMode] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
@@ -171,7 +169,7 @@ export function SettingsForm({
             endDate: finalEndDate,
             commits: processCommitsForAiReport(commits as GitHubCommit[]),
             customInstructions,
-            quickMode,
+            quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,
           },
         },
@@ -373,26 +371,7 @@ export function SettingsForm({
           </>
         )}
 
-        <div className="flex items-start gap-3 rounded-lg border px-4 py-3">
-          <Checkbox
-            id="quickMode"
-            checked={quickMode}
-            onCheckedChange={(v) => setQuickMode(v === true)}
-            className="mt-0.5"
-          />
-          <div className="space-y-0.5">
-            <Label
-              htmlFor="quickMode"
-              className="text-sm font-medium leading-none cursor-pointer"
-            >
-              Quick mode
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Skip PR descriptions and screenshots for faster generation
-            </p>
-          </div>
-        </div>
-
+      
         <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
@@ -413,9 +392,7 @@ export function SettingsForm({
             )}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            {quickMode
-              ? `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed (PR data & images skipped)`
-              : `Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
+            {`Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
           </p>
         </div>
       </CardContent>
