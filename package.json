@@ -1,10 +1,10 @@
 {
-  "name": "fabric",
+  "name": "scrapecat",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c yellow,green \"pnpm --filter @fabric/frontend dev\" \"pnpm --filter @fabric/backend dev\"",
-    "build": "pnpm --filter @fabric/frontend build && pnpm --filter @fabric/backend build",
-    "lint": "pnpm --filter @fabric/frontend lint",
+    "dev": "concurrently -n frontend,backend -c yellow,green \"pnpm --filter @scrapecat/frontend dev\" \"pnpm --filter @scrapecat/backend dev\"",
+    "build": "pnpm --filter @scrapecat/frontend build && pnpm --filter @scrapecat/backend build",
+    "lint": "pnpm --filter @scrapecat/frontend lint",
     "codegen": "npx tsx scripts/codegen.ts"
   },
   "pnpm": {

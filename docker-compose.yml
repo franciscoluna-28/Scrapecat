@@ -2,14 +2,14 @@ services:
   surrealdb:
     image: surrealdb/surrealdb:v2
     user: root
-    command: ["start", "--log", "info", "--user", "root", "--pass", "root", "rocksdb:/data/fabric.db"]
+    command: ["start", "--log", "info", "--user", "root", "--pass", "root", "rocksdb:/data/scrapecat.db"]
     ports:
       - "8000:8000"
     volumes:
       - surrealdb_data:/data
 
   backend-dev:
-    container_name: fabric-backend
+    container_name: scrapecat-backend
     build:
       context: .
       dockerfile: backend/Dockerfile.dev
@@ -30,7 +30,7 @@ services:
       - DATABASE_URL=file:./dev.db
 
   frontend-dev:
-    container_name: fabric-ui
+    container_name: scrapecat-ui
     build:
       context: .
       dockerfile: frontend/Dockerfile.dev

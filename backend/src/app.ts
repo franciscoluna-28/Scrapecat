@@ -48,9 +48,9 @@ export async function buildApp() {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: "Fabric API",
+        title: "Scrapecat API",
         version: "v1",
-        description: "Backend API for Fabric reports",
+        description: "Backend API for Scrapecat reports",
       },
     },
   });

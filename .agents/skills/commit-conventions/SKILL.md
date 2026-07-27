@@ -52,7 +52,7 @@ If a change spans multiple scopes, pick the dominant one and use bullet points t
 feat(docker): add separate dev dockerfiles for backend and frontend
 
 - create backend/Dockerfile.dev and frontend/Dockerfile.dev for focused dev builds
-- simplify docker-compose.yml to dev-only with container names fabric-backend and fabric-ui
+- simplify docker-compose.yml to dev-only with container names scrapecat-backend and scrapecat-ui
 - merge codegraph instructions from CLAUDE.md into AGENTS.md
 - update README.md to reflect current architecture and docker setup
 ```

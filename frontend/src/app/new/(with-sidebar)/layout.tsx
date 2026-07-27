@@ -42,10 +42,10 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
               <SidebarMenuButton size="lg" asChild>
                 <a href="/new">
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                    <Image src={LogoImage} alt="Fabric Logo" width={28} height={28} className="size-7" />
+                    <Image src={LogoImage} alt="Scrapecat Logo" width={28} height={28} className="size-7" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">Fabric</span>
+                    <span className="truncate font-semibold">Scrapecat</span>
                     <span className="truncate text-xs text-muted-foreground">Reports</span>
                   </div>
                 </a>
@@ -79,7 +79,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
           <SidebarTrigger className="-ml-1" />
         
           <h1 className="text-sm hidden">
-            {NAV_ITEMS.find((i) => i.id === activeView)?.label || "Fabric"}
+            {NAV_ITEMS.find((i) => i.id === activeView)?.label || "Scrapecat"}
           </h1>
         </header>
         <div className="flex-1 overflow-y-auto">
