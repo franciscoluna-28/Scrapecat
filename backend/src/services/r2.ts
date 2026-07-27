@@ -30,7 +30,7 @@ async function resolveCdnUrl(imageUrl: string, owner: string, repo: string, prNu
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-        "User-Agent": "fabric/1.0",
+        "User-Agent": "scrapecat/1.0",
       },
       body: JSON.stringify({
         query: `query($owner: String!, $repo: String!, $pr: Int!) {
@@ -83,7 +83,7 @@ export async function uploadImagesToR2(
         ? await resolveCdnUrl(img.url, owner, repo, img.prNumber)
         : img.url;
 
-      const resp = await fetch(downloadUrl, { headers: { "User-Agent": "fabric/1.0" } });
+      const resp = await fetch(downloadUrl, { headers: { "User-Agent": "scrapecat/1.0" } });
       if (!resp.ok) continue;
 
       const buffer = await resp.arrayBuffer();

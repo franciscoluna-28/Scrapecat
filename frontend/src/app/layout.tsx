@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fabric",
-  description: "Fabric Reports - Create reports for your stakeholders using your GitHub commits",
+  title: "Scrapecat",
+  description: "Scrapecat Reports - Create reports for your stakeholders using your GitHub commits",
 };
 
 export default function RootLayout({

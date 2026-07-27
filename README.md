@@ -1,6 +1,6 @@
-## 🐈 Fabric - GitHub Commits to Reports
+## 🐈 Scrapecat - Commits to Reports
 
-Kill micromanagement. Fabric translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth.
+Kill micromanagement. Scrapecat translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth. Starting with GitHub.
 
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
@@ -25,35 +25,35 @@ Kill micromanagement. Fabric translates engineering work into reports normal peo
 - **UI Renovation:** Full redesign focused on clarity, speed, and making reports the hero — less dashboard clutter, more insight density.
 - **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
 
-AI is increasing commit velocity, not reducing it. Fabric is the missing layer that translates engineering output into something every department can actually understand. Kill micromanagement. Centralize the communication. Let code be the truth.
+AI is increasing commit velocity, not reducing it. Scrapecat is the missing layer that translates engineering output into something every department can actually understand. Kill micromanagement. Centralize the communication. Let code be the truth.
 
 
 ## Note for Early Adopters
-Fabric is currently in active development. The primary goal of the MVP is to provide immediate value through GitHub insights. If you encounter any "rough edges", remember: we prioritize speed and transparency over perfection. 
+Scrapecat is currently in active development. The primary goal of the MVP is to provide immediate value through GitHub insights. If you encounter any "rough edges", remember: we prioritize speed and transparency over perfection. 
 
 **Ship fast, refactor as you scale.**
 
 ## Getting Started
-To deploy the Fabric MVP, you need to configure the two primary data streams: the GitHub Control Plane and the Intelligence Layer.
+To deploy the Scrapecat MVP, you need to configure the two primary data streams: the GitHub Control Plane and the Intelligence Layer.
 
 ### 1. GitHub API Configuration
 
-Fabric requires a Personal Access Token (PAT) to securely fetch repository metadata and commit history.
+Scrapecat requires a Personal Access Token (PAT) to securely fetch repository metadata and commit history.
 
 - 1.  Navigate to [GitHub Settings](https://github.com/settings) > Developer Settings > Personal Access Tokens.
 - 2.  For the MVP, ensure the repo (Full control of private repositories) and read:org scopes are enabled.
-- 3. Fabric treats your data as read-only. We analyze the metadata to build reports without ever modifying your source code, following the principle of least privilege (POLP).
+- 3. Scrapecat treats your data as read-only. We analyze the metadata to build reports without ever modifying your source code, following the principle of least privilege (POLP).
 
 ### 2. OpenRouter Intelligence Layer
 
 We utilize OpenRouter's API to access free LLM models for report generation. No paid plan required — the free tier of `google/gemma-4-26b-a4b-it:free` works out of the box.
 
 - 1. Sign up at [OpenRouter](https://openrouter.ai/keys) and create a free API key.
-- 2. Model: Fabric uses `google/gemma-4-26b-a4b-it:free` by default — zero cost, no rate limiting for light usage.
+- 2. Model: Scrapecat uses `google/gemma-4-26b-a4b-it:free` by default — zero cost, no rate limiting for light usage.
 
 ### 3. Cloudflare R2 (Image Hosting)
 
-Fabric extracts screenshots from PR descriptions and re-hosts them on Cloudflare R2 (S3-compatible). This is a **hard requirement** — without R2, images from PR bodies would link directly to `github.com/user-attachments/`, which:
+Scrapecat extracts screenshots from PR descriptions and re-hosts them on Cloudflare R2 (S3-compatible). This is a **hard requirement** — without R2, images from PR bodies would link directly to `github.com/user-attachments/`, which:
 
 - **Breaks for unauthenticated viewers** — GitHub blocks image loads for users not logged in, so stakeholders would see broken images.
 - **Hits GitHub hotlinking limits** — shared reports would quickly exhaust GitHub's rate limits on image serving.
@@ -90,7 +90,7 @@ Initialize the engine and start the development server:
 # Install dependencies
 pnpm install
 
-# Generate database migration. Fabric uses SQLite as default database.
+# Generate database migration. Scrapecat uses SQLite as default database.
 pnpm run db:generate
 
 # Push schema to database. Needed to store reports and repository data.
@@ -135,7 +135,7 @@ docker compose down
 ```
 
 ## Contributing
-Fabric is currently in its founding stage. We welcome contributions from engineers who understand that documentation is as important as code.
+Scrapecat is currently in its founding stage. We welcome contributions from engineers who understand that documentation is as important as code.
 
 - **Bug Reports:** Open an issue with a clear reproduction script and environment details.
 - **Feature Requests:** Focused on scalability, reporting accuracy, and developer autonomy.
@@ -145,9 +145,9 @@ Fabric is currently in its founding stage. We welcome contributions from enginee
 This project is licensed under the MIT License. It is designed to be open, transparent, and resilient—just like the reports it generates.
 
 ## Security & Support
-If you discover a security vulnerability, please open a private issue or contact the maintainer directly. Fabric follows the Principle of Least Privilege (POLP): we fetch data to empower developers, not to expose them.
+If you discover a security vulnerability, please open a private issue or contact the maintainer directly. Scrapecat follows the Principle of Least Privilege (POLP): we fetch data to empower developers, not to expose them.
 
 ---
 
-Fabric | Built for the builders.
+Scrapecat | Built for the builders.
 _Engineered by Francisco Luna_
