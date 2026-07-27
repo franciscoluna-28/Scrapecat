@@ -30,9 +30,9 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/src/components/ui/combobox";
-import { GitHubRepository, GitHubCommit } from "@/src/shared/types";
+import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
-import { processCommitsForAiReport } from "@/src/shared/lib/utils";
+import { processCommitsForAiReport, ProcessedCommit } from "@/src/shared/lib/utils";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
@@ -53,17 +53,7 @@ type Props = {
 };
 
 type CommitPreviewProps = {
-  commits: Array<{
-    sha: string;
-    commit: {
-      message: string;
-      author?: {
-        name?: string;
-        date?: string;
-      } | null;
-    };
-    html_url?: string;
-  }>;
+  commits: ProcessedCommit[];
   commitCount: number;
 };
 
@@ -93,12 +83,12 @@ function CommitsPreview({ commits, commitCount }: CommitPreviewProps) {
             <CommitCard
               commits={commits.map((c) => ({
                 sha: c.sha,
-                message: c.commit.message,
-                author: c.commit.author?.name || "Unknown",
-                date: c.commit.author?.date
-                  ? new Date(c.commit.author.date).toLocaleDateString("en-US")
+                message: c.message || "No commit message",
+                author: c.author || "Unknown",
+                date: c.date
+                  ? new Date(c.date).toLocaleDateString("en-US")
                   : "Unknown",
-                url: c.html_url,
+                url: c.url,
               }))}
             />
           </div>
@@ -167,7 +157,7 @@ export function SettingsForm({
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
-            commits: processCommitsForAiReport(commits as GitHubCommit[]),
+            commits: processCommitsForAiReport(commits as ProcessedCommit[]),
             customInstructions,
             quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,
@@ -358,7 +348,7 @@ export function SettingsForm({
                           </span>
                         ) : (
                           <CommitsPreview
-                            commits={commits as GitHubCommit[]}
+                            commits={commits as ProcessedCommit[]}
                             commitCount={commitCount}
                           />
                         )}
