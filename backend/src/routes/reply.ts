@@ -5,6 +5,7 @@ import { reports } from "../db/schema";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "../services/prompts";
 import { callAI, cleanResponse } from "../services/ai";
 import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
+import { resolveApiKey } from "../services/credentials";
 
 const MAX_LIMIT = 100;
 
@@ -14,7 +15,7 @@ export async function replyToReport(
 ) {
   try {
     const { id } = req.params;
-    const { reply: userReply, model } = req.body as { reply?: string; model?: string };
+    const { reply: userReply, model, provider } = req.body as { reply?: string; model?: string; provider?: string };
 
     if (!userReply || typeof userReply !== "string" || userReply.trim().length === 0) {
       return reply.status(400).send({ error: "reply is required" });
@@ -41,6 +42,8 @@ export async function replyToReport(
     const customInstructions = report.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
     const systemPrompt = buildSystemPrompt(customInstructions);
+
+    const apiKey = provider ? await resolveApiKey(provider) : undefined;
 
     const originalPrompt = buildReportPrompt({
       repository: report.githubRepositoryName,
@@ -78,6 +81,8 @@ export async function replyToReport(
 
       const { content: rawContent } = await callAI({
         model: model || undefined,
+        provider: provider,
+        apiKey: apiKey || undefined,
         messages: messagesWithRetry,
       });
 

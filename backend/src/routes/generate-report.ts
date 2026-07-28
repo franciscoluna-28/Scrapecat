@@ -9,6 +9,7 @@ import { extractImagesFromPrBody } from "../shared/utils";
 import { uploadImagesToR2 } from "../services/r2";
 import { callAI, cleanResponse } from "../services/ai";
 import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
+import { resolveApiKey } from "../services/credentials";
 
 const MAX_LIMIT = 100;
 
@@ -59,6 +60,9 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
     const languageInstruction = getLanguageInstruction(customInstructions);
     const systemPrompt = buildSystemPrompt(customInstructions);
 
+    const provider = data.provider;
+    const apiKey = provider ? await resolveApiKey(provider) : undefined;
+
     const prompt = buildReportPrompt({
       repository: data.repository,
       branch: data.branch,
@@ -76,6 +80,8 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
       attempts++;
       const { content: rawContent } = await callAI({
         model: data.model,
+        provider,
+        apiKey: apiKey || undefined,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: attempts > 1 ? `${prompt}\n\nYour previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` : prompt },

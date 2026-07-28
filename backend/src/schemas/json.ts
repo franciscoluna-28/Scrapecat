@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type, type TSchema } from "@sinclair/typebox";
 
 export const ErrorResponse = Type.Object({ error: Type.String() });
 
@@ -166,4 +166,34 @@ export const ReportReplyBody = Type.Object({
 
 export const ReportReplyResponse = Type.Object({
   report: Type.String(),
+});
+
+export const AddCredentialBody = Type.Object({
+  provider: Type.String(),
+  name: Type.Optional(Type.String()),
+  key: Type.String(),
+});
+
+export const CredentialResponse = Type.Object({
+  id: Type.String(),
+  provider: Type.String(),
+  keyHint: Type.String(),
+  createdAt: Type.String({ format: "date-time" }),
+});
+
+export const CredentialListResponse = Type.Object({
+  keys: Type.Array(CredentialResponse),
+});
+
+export const CredentialCreatedResponse = Type.Object({
+  id: Type.String(),
+});
+
+export const VerifyCredentialBody = Type.Object({
+  provider: Type.String(),
+  key: Type.String(),
+});
+
+export const VerifyCredentialResponse = Type.Object({
+  valid: Type.Boolean(),
 });

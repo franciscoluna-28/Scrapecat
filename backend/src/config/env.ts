@@ -6,9 +6,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default("file:./dev.db"),
   OPENROUTER_API_KEY: z.string().default(""),
   AI_MODEL: z.string().default("google/gemma-4-26b-a4b-it:free"),
+  DEEPSEEK_API_KEY: z.string().default(""),
+  OPENAI_API_KEY: z.string().default(""),
   GITHUB_TOKEN: z.string().default(""),
   GIT_PROVIDER: z.enum(["github", "gitlab"]).default("github"),
-  ENCRYPTION_KEY: z.string().default(""),
+  ENCRYPTION_KEY: z.string().min(1, "ENCRYPTION_KEY is required (use: openssl rand -base64 32)"),
   R2_ACCESS_KEY_ID: z.string().default(""),
   R2_SECRET_ACCESS_KEY: z.string().default(""),
   R2_ENDPOINT: z.string().default(""),
@@ -30,7 +32,6 @@ if (!parsed.success) {
 const missing: string[] = [];
 if (!parsed.data.OPENROUTER_API_KEY) missing.push("OPENROUTER_API_KEY");
 if (!parsed.data.GITHUB_TOKEN) missing.push("GITHUB_TOKEN");
-if (!parsed.data.ENCRYPTION_KEY) missing.push("ENCRYPTION_KEY");
 if (missing.length > 0) {
   console.warn(`Warning: missing environment variables — ${missing.join(", ")}`);
 }
