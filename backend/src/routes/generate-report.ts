@@ -8,6 +8,7 @@ import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_
 import { extractImagesFromPrBody } from "../shared/utils";
 import { uploadImagesToR2 } from "../services/r2";
 import { callAI, cleanResponse } from "../services/ai";
+import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
 
 const MAX_LIMIT = 100;
 
@@ -67,15 +68,35 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
       languageInstruction,
     });
 
-    const { content: rawContent } = await callAI({
-      model: data.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-    });
+    let attempts = 0;
+    const maxAttempts = 2;
+    let generatedReport: string;
 
-    const generatedReport = cleanResponse(rawContent);
+    while (attempts < maxAttempts) {
+      attempts++;
+      const { content: rawContent } = await callAI({
+        model: data.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: attempts > 1 ? `${prompt}\n\nYour previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` : prompt },
+        ],
+      });
+
+      generatedReport = cleanResponse(rawContent);
+
+      if (generatedReport.length > 50) {
+        const validation = validateReportStructure(generatedReport);
+        if (validation.valid) break;
+        console.warn(`Report structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
+      }
+
+      if (attempts >= maxAttempts) {
+        console.warn("Max retry attempts reached, using last generation as-is");
+      }
+    }
+
+    generatedReport ??= FALLBACK_REPORT;
+
     const reportId = nanoid();
     let assets: Awaited<ReturnType<typeof uploadImagesToR2>> = [];
 

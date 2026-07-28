@@ -71,12 +71,12 @@ const markdownComponents: Components = {
   </p>
 ),
   ul: ({ children }) => (
-    <ul className="mb-4">
+    <ul className="mb-4 list-none space-y-1.5">
       {children}
     </ul>
   ),
   li: ({ children }) => (
-    <li className="ml-4 mb-1 text-muted-foreground">
+    <li className="text-muted-foreground">
       <span className="text-foreground">- {children}</span>
     </li>
   ),
@@ -154,7 +154,7 @@ export default function ReportClientPage({
             sidebarOpen ? "w-80" : "w-0"
           } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
         >
-          <div className="p-4 border-b flex items-center justify-between min-w-0">
+          <div className="p-4 border-b flex items-center min-w-0">
             <a href="/new" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors">
               <div className="flex aspect-square size-7 items-center justify-center rounded-lg">
                 <Image src={LogoImage} alt="Scrapecat Logo" width={24} height={24} className="size-6" />
@@ -164,15 +164,6 @@ export default function ReportClientPage({
                 <span className="truncate text-[10px] text-muted-foreground leading-tight">Reports</span>
               </div>
             </a>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBack}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
           </div>
 
           <div className="p-4 space-y-4 border-b min-w-0">
