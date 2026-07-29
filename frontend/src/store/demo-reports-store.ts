@@ -1,4 +1,4 @@
-import { ProcessedCommit } from "../shared/lib/utils";
+import type { ProcessedCommit } from "../shared/types";
 
 export type DemoReport = {
   id: string;

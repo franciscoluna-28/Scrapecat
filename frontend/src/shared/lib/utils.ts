@@ -1,17 +1,10 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { ProcessedCommit } from "@/src/shared/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-
-export type ProcessedCommit = {
-  sha: string;
-  message: string;
-  author: string;
-  url?: string;
-  date: string;
-};
 
 /**
  * Process GitHub commits for AI report generation

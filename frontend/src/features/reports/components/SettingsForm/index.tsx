@@ -32,7 +32,8 @@ import {
 } from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
-import { processCommitsForAiReport, ProcessedCommit } from "@/src/shared/lib/utils";
+import { processCommitsForAiReport } from "@/src/shared/lib/utils";
+import type { ProcessedCommit } from "@/src/shared/types";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";

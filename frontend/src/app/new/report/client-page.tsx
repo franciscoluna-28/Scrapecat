@@ -27,8 +27,8 @@ import {
 import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
-import { ProcessedCommit } from "@/src/shared/lib/utils";
-import type { ImageAsset } from "@/src/drizzle/schema";
+import type { ProcessedCommit } from "@/src/shared/types";
+import type { ImageAsset } from "@/src/shared/types";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
