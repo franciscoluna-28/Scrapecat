@@ -31,7 +31,7 @@ import {
   ComboboxList,
 } from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
-import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
+import { Book, Loader2, GitCommit, Bookmark, Key } from "lucide-react";
 import type { ProcessedCommit } from "@/src/shared/types";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ import { CommitCard } from "@/src/components/global/CommitCard";
 import { apiClient } from "@/src/shared/api/client";
 import { useCommits } from "@/src/features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
-import { useAISettingsStore } from "@/src/store/ai-settings";
+import { useAISettingsStore, PROVIDERS } from "@/src/store/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
 
 type Props = {
@@ -111,9 +111,11 @@ export function SettingsForm({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
+  const selectedProvider = useAISettingsStore((s) => s.selectedProvider);
+  const setSelectedProvider = useAISettingsStore((s) => s.setSelectedProvider);
   const selectedModel = useAISettingsStore((s) => s.selectedModel);
   const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
-  const { models: availableModels, isLoading: modelsLoading } = useModels();
+  const { models: availableModels, isLoading: modelsLoading } = useModels(selectedProvider);
   const modelMap = Object.fromEntries(availableModels.map((m) => [m.id, m]));
 
   const {
@@ -160,6 +162,7 @@ export function SettingsForm({
             customInstructions,
             quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,
+            provider: selectedProvider,
           },
         },
       });
@@ -248,17 +251,43 @@ export function SettingsForm({
             </div>
           </div>
 
-          <div className="border-t pt-3">
+          <div className="border-t pt-3 space-y-3">
+            <div className="max-w-xs">
+              <Label htmlFor="provider" className="text-sm font-medium">
+                Provider
+              </Label>
+              <Select
+                value={selectedProvider}
+                onValueChange={(v: any) => {
+                  setSelectedProvider(v);
+                  setSelectedModel("");
+                }}
+              >
+                <SelectTrigger id="provider" className="mt-1.5">
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        {p.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="max-w-xs">
               <Label htmlFor="model" className="text-sm font-medium">
-                AI Model
+                Model
               </Label>
               <div className="mt-1.5">
                 <Combobox
                   items={availableModels.map((m) => m.id)}
                   itemToStringValue={(id) => modelMap[id]?.name || id}
                   value={selectedModel}
-                  onValueChange={(v) => setSelectedModel(v || "google/gemma-4-26b-a4b-it:free")}
+                  onValueChange={(v) => v && setSelectedModel(v)}
                   disabled={modelsLoading || !mounted}
                 >
                   <ComboboxInput

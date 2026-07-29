@@ -4,10 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { queryKeys } from "./keys";
 
-export function useModels() {
+export function useModels(provider?: string) {
+  const query = provider ? { provider } : undefined;
+
   const { data, error, isLoading } = useQuery({
-    queryKey: queryKeys.models.all,
-    queryFn: () => apiClient.GET("/api/v1/models").then((r) => r.data),
+    queryKey: queryKeys.models.list(provider),
+    queryFn: () =>
+      apiClient.GET("/api/v1/models", { params: { query } }).then((r) => {
+        if (r.error) throw r.error;
+        return r.data;
+      }),
   });
 
   return {
