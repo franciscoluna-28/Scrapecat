@@ -67,6 +67,10 @@ export const VerificationErrorResponse = Type.Object({
   message: Type.String(),
 });
 
+export const ModelsQuery = Type.Object({
+  provider: Type.Optional(Type.String()),
+});
+
 export const ModelsResponse = Type.Object({
   models: Type.Array(
     Type.Object({
@@ -74,6 +78,7 @@ export const ModelsResponse = Type.Object({
       name: Type.String(),
       free: Type.Boolean(),
       description: Type.String(),
+      provider: Type.String(),
     }),
   ),
 });
@@ -88,6 +93,7 @@ const ReportDataInput = Type.Object({
   customInstructions: Type.Optional(Type.String()),
   quickMode: Type.Optional(Type.Boolean()),
   model: Type.Optional(Type.String()),
+  provider: Type.Optional(Type.String()),
 });
 
 export const ReportInputBody = Type.Object({

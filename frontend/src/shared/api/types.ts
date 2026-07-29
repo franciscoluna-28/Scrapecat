@@ -93,10 +93,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List available AI models from OpenRouter */
+        /** @description List available AI models */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    provider?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -115,6 +117,7 @@ export interface paths {
                                 name: string;
                                 free: boolean;
                                 description: string;
+                                provider: string;
                             }[];
                         };
                     };
@@ -413,6 +416,7 @@ export interface paths {
                             customInstructions?: string;
                             quickMode?: boolean;
                             model?: string;
+                            provider?: string;
                         };
                     };
                 };

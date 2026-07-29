@@ -27,6 +27,7 @@ import {
   RepositoriesResponse,
   BranchesResponse,
   VerificationOkResponse,
+  ModelsQuery,
   ModelsResponse,
   ReportInputBody,
   ReportCreatedResponse,
@@ -83,8 +84,9 @@ export async function buildApp() {
 
   app.get("/api/v1/models", {
     schema: {
-      description: "List available AI models from OpenRouter",
+      description: "List available AI models",
       tags: ["models"],
+      querystring: ModelsQuery,
       response: { 200: ModelsResponse },
     },
   }, listModels);
