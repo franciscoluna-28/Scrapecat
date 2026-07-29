@@ -24,4 +24,4 @@ export type ImageAsset = {
 };
 
 export type ProcessedCommit =
-  paths["/api/v1/reports"]["post"]["requestBody"]["content"]["application/json"]["data"]["commits"][number];
+  paths["/api/v1/repositories/{owner}/{repo}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
