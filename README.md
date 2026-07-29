@@ -6,7 +6,7 @@
 
 ## 🐈 Scrapecat - Commits to Reports
 
-Kill micromanagement. Scrapecat translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth. Starting with GitHub.
+Engineering noise into executive clarity. Scrapecat translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily** when everything was on Git. We open-sourced the fix as we believe code history is the only source of truth. Starting with GitHub.
 
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
