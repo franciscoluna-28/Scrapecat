@@ -19,7 +19,15 @@ export const CommitsQuery = Type.Object({
 });
 
 export const CommitsResponse = Type.Object({
-  commits: Type.Array(Type.Record(Type.String(), Type.Any())),
+  commits: Type.Array(
+    Type.Object({
+      sha: Type.String(),
+      message: Type.String(),
+      author: Type.String(),
+      date: Type.String(),
+      url: Type.Optional(Type.String()),
+    }),
+  ),
 });
 
 export const CommitsCountQuery = Type.Object({

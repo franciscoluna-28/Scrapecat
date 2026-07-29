@@ -257,7 +257,11 @@ export interface paths {
                     content: {
                         "application/json": {
                             commits: {
-                                [key: string]: unknown;
+                                sha: string;
+                                message: string;
+                                author: string;
+                                date: string;
+                                url?: string;
                             }[];
                         };
                     };
