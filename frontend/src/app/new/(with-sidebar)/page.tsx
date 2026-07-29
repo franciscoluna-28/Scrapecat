@@ -6,6 +6,7 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitBranch, FileText } from "lucide-react";
 import { RepositoryCard } from "@/src/features/reports/components/RepositoryCard";
+import { CredentialsManager } from "@/src/features/credentials/components/CredentialsManager";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import {
   Select,
@@ -134,6 +135,14 @@ function PageContent() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {activeView === "credentials" && (
+        <Card>
+          <CardContent className="p-6">
+            <CredentialsManager />
+          </CardContent>
+        </Card>
       )}
 
       {activeView === "settings" && (

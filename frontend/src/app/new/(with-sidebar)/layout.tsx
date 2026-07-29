@@ -19,11 +19,12 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import { Separator } from "@/src/components/ui/separator";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
-import { GitBranch, FileText, Settings } from "lucide-react";
+import { GitBranch, FileText, Settings, Key } from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
   { id: "reports", label: "Reports", icon: FileText },
+  { id: "credentials", label: "API Keys", icon: Key },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
