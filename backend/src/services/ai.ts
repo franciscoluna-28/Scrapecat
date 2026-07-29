@@ -99,6 +99,6 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
 export function cleanResponse(rawContent: string): string {
   return rawContent
     .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-    .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
+    .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")
     .trim();
 }

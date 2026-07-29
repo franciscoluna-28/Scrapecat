@@ -277,7 +277,9 @@ export default function ReportClientPage({
               <div className="bg-background/50 rounded-xl p-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <div className="max-w-none select-text space-y-4">
                   <ReactMarkdown components={markdownComponents}>
-                    {currentReport.replace(/•\s*/g, "- ")}
+                    {currentReport
+                      .replace(/•\s*/g, "- ")
+                      .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")}
                   </ReactMarkdown>
                   {imageAssets && imageAssets.length > 0 && (
                     <div className="mt-8 pt-8 border-t space-y-4">
