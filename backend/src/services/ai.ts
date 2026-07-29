@@ -1,7 +1,7 @@
 import { OpenRouter } from "@openrouter/sdk";
+import OpenAI from "openai";
 import { env } from "../config/env";
-
-const DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free";
+import { getProviderConfig, type ProviderName } from "../providers/registry";
 
 export interface AIMessage {
   role: "system" | "user" | "assistant";
@@ -13,26 +13,24 @@ export interface AIRequest {
   messages: AIMessage[];
   temperature?: number;
   maxTokens?: number;
+  apiKey?: string;
+  provider?: string;
 }
 
 export interface AIResponse {
   content: string;
 }
 
-export async function callAI(request: AIRequest): Promise<AIResponse> {
-  if (!env.OPENROUTER_API_KEY) {
-    throw new Error("Missing OPENROUTER_API_KEY");
-  }
-
-  const openRouter = new OpenRouter({ apiKey: env.OPENROUTER_API_KEY });
-
+async function callOpenRouter(
+  messages: AIMessage[],
+  model: string,
+  apiKey: string,
+  temperature: number,
+  maxTokens: number,
+): Promise<AIResponse> {
+  const openRouter = new OpenRouter({ apiKey });
   const result = await openRouter.chat.send({
-    chatRequest: {
-      model: request.model || env.AI_MODEL || DEFAULT_MODEL,
-      messages: request.messages,
-      temperature: request.temperature ?? 0.1,
-      maxTokens: request.maxTokens ?? 1024,
-    },
+    chatRequest: { model, messages, temperature, maxTokens },
   });
 
   const rawContent =
@@ -43,9 +41,64 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   return { content: rawContent };
 }
 
+async function callOpenAICompatible(
+  messages: AIMessage[],
+  model: string,
+  apiKey: string,
+  baseUrl: string,
+  temperature: number,
+  maxTokens: number,
+): Promise<AIResponse> {
+  const client = new OpenAI({ apiKey, baseURL: baseUrl });
+
+  const result = await client.chat.completions.create({
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  });
+
+  return { content: result.choices?.[0]?.message?.content ?? "" };
+}
+
+export async function callAI(request: AIRequest): Promise<AIResponse> {
+  const provider = request.provider || "openrouter";
+  const config = getProviderConfig(provider);
+
+  if (!config) {
+    throw new Error(`Unsupported provider: ${provider}`);
+  }
+
+  const apiKey = request.apiKey || (env as unknown as Record<string, string>)[config.envKey] || "";
+  const model = request.model || config.defaultModel;
+  const temperature = request.temperature ?? 0.1;
+  const maxTokens = request.maxTokens ?? 1024;
+
+  if (!apiKey) {
+    throw new Error(`Missing API key for provider: ${provider}`);
+  }
+
+  if (config.sdk === "openrouter") {
+    return callOpenRouter(request.messages, model, apiKey, temperature, maxTokens);
+  }
+
+  if (config.sdk === "openai-compatible") {
+    return callOpenAICompatible(
+      request.messages,
+      model,
+      apiKey,
+      config.baseUrl,
+      temperature,
+      maxTokens,
+    );
+  }
+
+  throw new Error(`Unknown SDK type for provider: ${provider}`);
+}
+
 export function cleanResponse(rawContent: string): string {
   return rawContent
     .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-    .replace(/^-\s*\n(?=[^\s-])/gm, "- ")
+    .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")
     .trim();
 }

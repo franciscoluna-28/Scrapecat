@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.2",
     "nanoid": "^5.1.11",
+    "openai": "^7.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

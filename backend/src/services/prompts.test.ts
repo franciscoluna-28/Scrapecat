@@ -12,11 +12,13 @@ describe("buildSystemPrompt", () => {
     const result = buildSystemPrompt("Be concise");
     expect(result).toContain("Be concise");
     expect(result).toContain("Senior Product Manager");
+    expect(result).toContain("Product Update");
   });
 
   it("returns base prompt when no custom instructions", () => {
     const result = buildSystemPrompt(undefined);
     expect(result).not.toContain("User Specifications");
+    expect(result).toContain("Product Update");
   });
 });
 
@@ -61,6 +63,7 @@ describe("buildRefinePrompt", () => {
     const result = buildRefinePrompt("Make it shorter");
     expect(result).toContain("Make it shorter");
     expect(result).toContain("Refine the report");
+    expect(result).toContain("template");
   });
 });
 

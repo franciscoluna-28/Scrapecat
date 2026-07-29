@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="./scrapecat.png" alt="Scrapecat" width="1080"   style="border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);">
+</p>
+
+<br>
+
 ## 🐈 Scrapecat - Commits to Reports
 
 Kill micromanagement. Scrapecat translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily**. Everything was on Git. We open-sourced the fix as we believe code history is the only source of truth. Starting with GitHub.

@@ -8,6 +8,8 @@ import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_
 import { extractImagesFromPrBody } from "../shared/utils";
 import { uploadImagesToR2 } from "../services/r2";
 import { callAI, cleanResponse } from "../services/ai";
+import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
+import { resolveApiKey } from "../services/credentials";
 
 const MAX_LIMIT = 100;
 
@@ -22,13 +24,20 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 
     const data = parsed.data;
 
-    if (data.commits.length === 0) {
+    const fetchedCommits = await getGitProvider().listCommits(data.githubOwner, data.repository, {
+      branch: data.branch,
+      since: data.startDate,
+      until: data.endDate,
+      perPage: MAX_LIMIT,
+    });
+
+    if (fetchedCommits.length === 0) {
       return reply.status(400).send({
         error: "Cannot generate report: no commits found in the selected date range",
       });
     }
 
-    const sortedCommits = [...data.commits].sort(
+    const sortedCommits = [...fetchedCommits].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
@@ -58,6 +67,9 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
     const languageInstruction = getLanguageInstruction(customInstructions);
     const systemPrompt = buildSystemPrompt(customInstructions);
 
+    const provider = data.provider;
+    const apiKey = provider ? await resolveApiKey(provider) : undefined;
+
     const prompt = buildReportPrompt({
       repository: data.repository,
       branch: data.branch,
@@ -67,15 +79,37 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
       languageInstruction,
     });
 
-    const { content: rawContent } = await callAI({
-      model: data.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-    });
+    let attempts = 0;
+    const maxAttempts = 2;
+    let generatedReport: string;
 
-    const generatedReport = cleanResponse(rawContent);
+    while (attempts < maxAttempts) {
+      attempts++;
+      const { content: rawContent } = await callAI({
+        model: data.model,
+        provider,
+        apiKey: apiKey || undefined,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: attempts > 1 ? `${prompt}\n\nYour previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` : prompt },
+        ],
+      });
+
+      generatedReport = cleanResponse(rawContent);
+
+      if (generatedReport.length > 50) {
+        const validation = validateReportStructure(generatedReport);
+        if (validation.valid) break;
+        console.warn(`Report structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
+      }
+
+      if (attempts >= maxAttempts) {
+        console.warn("Max retry attempts reached, using last generation as-is");
+      }
+    }
+
+    generatedReport ??= FALLBACK_REPORT;
+
     const reportId = nanoid();
     let assets: Awaited<ReturnType<typeof uploadImagesToR2>> = [];
 

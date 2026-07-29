@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type, type TSchema } from "@sinclair/typebox";
 
 export const ErrorResponse = Type.Object({ error: Type.String() });
 
@@ -19,7 +19,15 @@ export const CommitsQuery = Type.Object({
 });
 
 export const CommitsResponse = Type.Object({
-  commits: Type.Array(Type.Record(Type.String(), Type.Any())),
+  commits: Type.Array(
+    Type.Object({
+      sha: Type.String(),
+      message: Type.String(),
+      author: Type.String(),
+      date: Type.String(),
+      url: Type.Optional(Type.String()),
+    }),
+  ),
 });
 
 export const CommitsCountQuery = Type.Object({
@@ -70,14 +78,6 @@ export const ModelsResponse = Type.Object({
   ),
 });
 
-const CommitInput = Type.Object({
-  sha: Type.String(),
-  message: Type.String(),
-  author: Type.String(),
-  date: Type.String(),
-  url: Type.Optional(Type.String()),
-});
-
 const ReportDataInput = Type.Object({
   repository: Type.String(),
   githubOwner: Type.String(),
@@ -85,7 +85,6 @@ const ReportDataInput = Type.Object({
   branch: Type.String(),
   startDate: Type.String({ format: "date" }),
   endDate: Type.String({ format: "date" }),
-  commits: Type.Array(CommitInput),
   customInstructions: Type.Optional(Type.String()),
   quickMode: Type.Optional(Type.Boolean()),
   model: Type.Optional(Type.String()),
@@ -166,4 +165,34 @@ export const ReportReplyBody = Type.Object({
 
 export const ReportReplyResponse = Type.Object({
   report: Type.String(),
+});
+
+export const AddCredentialBody = Type.Object({
+  provider: Type.String(),
+  name: Type.Optional(Type.String()),
+  key: Type.String(),
+});
+
+export const CredentialResponse = Type.Object({
+  id: Type.String(),
+  provider: Type.String(),
+  keyHint: Type.String(),
+  createdAt: Type.String({ format: "date-time" }),
+});
+
+export const CredentialListResponse = Type.Object({
+  keys: Type.Array(CredentialResponse),
+});
+
+export const CredentialCreatedResponse = Type.Object({
+  id: Type.String(),
+});
+
+export const VerifyCredentialBody = Type.Object({
+  provider: Type.String(),
+  key: Type.String(),
+});
+
+export const VerifyCredentialResponse = Type.Object({
+  valid: Type.Boolean(),
 });

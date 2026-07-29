@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import { DEFAULT_PRESETS } from '@/src/shared/constants/prompts'
+import { DEFAULT_TONE_PRESETS } from '@/src/shared/constants/prompts'
 
 export type PromptPreset = {
   id: string
@@ -40,7 +40,7 @@ export const usePromptPresetsStore = create<PromptPresetsState>()(
         }
         return {
           ...initial,
-          presets: DEFAULT_PRESETS.map((p) => ({ id: nanoid(), ...p })),
+          presets: DEFAULT_TONE_PRESETS.map((p) => ({ id: nanoid(), ...p })),
         }
       },
     },

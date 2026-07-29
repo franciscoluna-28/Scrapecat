@@ -32,7 +32,7 @@ import {
 } from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
-import { processCommitsForAiReport, ProcessedCommit } from "@/src/shared/lib/utils";
+import type { ProcessedCommit } from "@/src/shared/types";
 import { APP_CONFIG } from "@/src/shared/constants/app";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
@@ -157,7 +157,6 @@ export function SettingsForm({
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
-            commits: processCommitsForAiReport(commits as ProcessedCommit[]),
             customInstructions,
             quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,

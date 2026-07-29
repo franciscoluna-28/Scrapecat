@@ -4,6 +4,8 @@ import { db } from "../db/client";
 import { reports } from "../db/schema";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "../services/prompts";
 import { callAI, cleanResponse } from "../services/ai";
+import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
+import { resolveApiKey } from "../services/credentials";
 
 const MAX_LIMIT = 100;
 
@@ -13,7 +15,7 @@ export async function replyToReport(
 ) {
   try {
     const { id } = req.params;
-    const { reply: userReply, model } = req.body as { reply?: string; model?: string };
+    const { reply: userReply, model, provider } = req.body as { reply?: string; model?: string; provider?: string };
 
     if (!userReply || typeof userReply !== "string" || userReply.trim().length === 0) {
       return reply.status(400).send({ error: "reply is required" });
@@ -41,6 +43,8 @@ export async function replyToReport(
     const languageInstruction = getLanguageInstruction(customInstructions);
     const systemPrompt = buildSystemPrompt(customInstructions);
 
+    const apiKey = provider ? await resolveApiKey(provider) : undefined;
+
     const originalPrompt = buildReportPrompt({
       repository: report.githubRepositoryName,
       branch: report.branch,
@@ -64,14 +68,40 @@ export async function replyToReport(
       content: buildRefinePrompt(userReply),
     });
 
-    const { content: rawContent } = await callAI({
-      model: model || undefined,
-      messages,
-    });
+    let attempts = 0;
+    const maxAttempts = 2;
+    let updatedMarkdown: string;
 
-    const updatedMarkdown = cleanResponse(rawContent)
-      .replace(/\n*## Media[\s\S]*$/, "")
-      .trim();
+    while (attempts < maxAttempts) {
+      attempts++;
+
+      const messagesWithRetry = attempts > 1
+        ? [...messages, { role: "user" as const, content: `Your previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` }]
+        : messages;
+
+      const { content: rawContent } = await callAI({
+        model: model || undefined,
+        provider: provider,
+        apiKey: apiKey || undefined,
+        messages: messagesWithRetry,
+      });
+
+      updatedMarkdown = cleanResponse(rawContent)
+        .replace(/\n*## Media[\s\S]*$/, "")
+        .trim();
+
+      if (updatedMarkdown.length > 50) {
+        const validation = validateReportStructure(updatedMarkdown);
+        if (validation.valid) break;
+        console.warn(`Reply structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
+      }
+
+      if (attempts >= maxAttempts) {
+        console.warn("Max retry attempts reached for reply, using last generation as-is");
+      }
+    }
+
+    updatedMarkdown ??= "";
 
     await db
       .update(reports)

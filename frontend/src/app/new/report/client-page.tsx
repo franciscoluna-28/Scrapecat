@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";
+import LogoImage from "@/public/logo.png";
 import { useState, useTransition } from "react";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
@@ -17,7 +18,6 @@ import { CommitCard } from "@/src/components/global/CommitCard";
 import {
   ArrowLeft,
   GitCommit,
-  Plus,
   WandSparkles,
   Loader2,
   PanelLeftClose,
@@ -27,8 +27,8 @@ import {
 import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
 import { GitHubRepositoryClientPage } from "@/src/shared/types";
-import { ProcessedCommit } from "@/src/shared/lib/utils";
-import type { ImageAsset } from "@/src/drizzle/schema";
+import type { ProcessedCommit } from "@/src/shared/types";
+import type { ImageAsset } from "@/src/shared/types";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -71,12 +71,12 @@ const markdownComponents: Components = {
   </p>
 ),
   ul: ({ children }) => (
-    <ul className="mb-4">
+    <ul className="mb-4 list-none space-y-1.5">
       {children}
     </ul>
   ),
   li: ({ children }) => (
-    <li className="ml-4 mb-1 text-muted-foreground">
+    <li className="text-muted-foreground">
       <span className="text-foreground">- {children}</span>
     </li>
   ),
@@ -154,21 +154,16 @@ export default function ReportClientPage({
             sidebarOpen ? "w-80" : "w-0"
           } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
         >
-          <div className="p-4 border-b flex items-center justify-between min-w-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBack}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <Button variant="outline" size="sm" asChild className="shrink-0">
-              <Link href="/new">
-                <Plus className="h-4 w-4 mr-1" /> New Report
-              </Link>
-            </Button>
+          <div className="p-4 border-b flex items-center min-w-0">
+            <a href="/new" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors">
+              <div className="flex aspect-square size-7 items-center justify-center rounded-lg">
+                <Image src={LogoImage} alt="Scrapecat Logo" width={24} height={24} className="size-6" />
+              </div>
+              <div className="grid text-left text-sm leading-tight">
+                <span className="truncate font-semibold text-sm">Scrapecat</span>
+                <span className="truncate text-[10px] text-muted-foreground leading-tight">Reports</span>
+              </div>
+            </a>
           </div>
 
           <div className="p-4 space-y-4 border-b min-w-0">
@@ -212,7 +207,7 @@ export default function ReportClientPage({
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
+          <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
@@ -227,12 +222,9 @@ export default function ReportClientPage({
                 )}
               </Button>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">
+                <h1 className="text-base font-bold tracking-tight">
                   Intelligence Report
                 </h1>
-                <p className="text-xs text-muted-foreground">
-                  Generated on {new Date().toLocaleDateString("en-US")}
-                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -285,7 +277,9 @@ export default function ReportClientPage({
               <div className="bg-background/50 rounded-xl p-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <div className="max-w-none select-text space-y-4">
                   <ReactMarkdown components={markdownComponents}>
-                    {currentReport.replace(/•\s*/g, "- ")}
+                    {currentReport
+                      .replace(/•\s*/g, "- ")
+                      .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")}
                   </ReactMarkdown>
                   {imageAssets && imageAssets.length > 0 && (
                     <div className="mt-8 pt-8 border-t space-y-4">

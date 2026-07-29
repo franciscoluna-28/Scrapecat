@@ -23,3 +23,14 @@ export const reports = sqliteTable("reports", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   customInstructions: text("custom_instructions"),
 });
+
+export const credentials = sqliteTable("credentials", {
+  id: text("id").primaryKey(),
+  provider: text("provider").notNull(),
+  name: text("name").notNull(),
+  encryptedKey: text("encrypted_key").notNull(),
+  keyHint: text("key_hint").notNull(),
+  modalities: text("modalities", { mode: "json" }).$type<string[]>().default(["language"]),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});

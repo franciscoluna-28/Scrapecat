@@ -13,6 +13,7 @@ import { listModels } from "./routes/models";
 import { createReport } from "./routes/generate-report";
 import { listReports, getReport, updateReport } from "./routes/reports";
 import { replyToReport } from "./routes/reply";
+import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "./routes/keys";
 
 import {
   ErrorResponse,
@@ -38,6 +39,11 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
+  AddCredentialBody,
+  CredentialListResponse,
+  CredentialCreatedResponse,
+  VerifyCredentialBody,
+  VerifyCredentialResponse,
 } from "./schemas/json";
 
 export async function buildApp() {
@@ -167,6 +173,41 @@ export async function buildApp() {
       response: { 200: ReportReplyResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse },
     },
   }, replyToReport);
+
+  app.get("/api/v1/credentials", {
+    schema: {
+      description: "List stored credentials (key hints only, no full keys returned)",
+      tags: ["credentials"],
+      response: { 200: CredentialListResponse },
+    },
+  }, listCredentials);
+
+  app.post("/api/v1/credentials", {
+    schema: {
+      description: "Store a new credential (API key encrypted at rest)",
+      tags: ["credentials"],
+      body: AddCredentialBody,
+      response: { 201: CredentialCreatedResponse, 400: ErrorResponse },
+    },
+  }, addCredential);
+
+  app.delete("/api/v1/credentials/:id", {
+    schema: {
+      description: "Delete a stored credential",
+      tags: ["credentials"],
+      params: ReportIdParams,
+      response: { 204: {}, 404: ErrorResponse },
+    },
+  }, deleteCredential);
+
+  app.post("/api/v1/credentials/verify", {
+    schema: {
+      description: "Verify an API key against its provider",
+      tags: ["credentials"],
+      body: VerifyCredentialBody,
+      response: { 200: VerifyCredentialResponse, 400: ErrorResponse },
+    },
+  }, verifyCredential);
 
   return app;
 }
