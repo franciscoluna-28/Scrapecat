@@ -70,14 +70,6 @@ export const ModelsResponse = Type.Object({
   ),
 });
 
-const CommitInput = Type.Object({
-  sha: Type.String(),
-  message: Type.String(),
-  author: Type.String(),
-  date: Type.String(),
-  url: Type.Optional(Type.String()),
-});
-
 const ReportDataInput = Type.Object({
   repository: Type.String(),
   githubOwner: Type.String(),
@@ -85,7 +77,6 @@ const ReportDataInput = Type.Object({
   branch: Type.String(),
   startDate: Type.String({ format: "date" }),
   endDate: Type.String({ format: "date" }),
-  commits: Type.Array(CommitInput),
   customInstructions: Type.Optional(Type.String()),
   quickMode: Type.Optional(Type.Boolean()),
   model: Type.Optional(Type.String()),

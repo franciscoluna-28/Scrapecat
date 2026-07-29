@@ -24,13 +24,20 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 
     const data = parsed.data;
 
-    if (data.commits.length === 0) {
+    const fetchedCommits = await getGitProvider().listCommits(data.githubOwner, data.repository, {
+      branch: data.branch,
+      since: data.startDate,
+      until: data.endDate,
+      perPage: MAX_LIMIT,
+    });
+
+    if (fetchedCommits.length === 0) {
       return reply.status(400).send({
         error: "Cannot generate report: no commits found in the selected date range",
       });
     }
 
-    const sortedCommits = [...data.commits].sort(
+    const sortedCommits = [...fetchedCommits].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 

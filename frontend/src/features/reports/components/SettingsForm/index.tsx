@@ -157,7 +157,6 @@ export function SettingsForm({
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,
-            commits: commits as ProcessedCommit[],
             customInstructions,
             quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,
