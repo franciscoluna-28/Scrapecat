@@ -1,7 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import {
   listCredentials,
-  getCredential,
   createCredential,
   deleteCredential,
   verifyCredential,
