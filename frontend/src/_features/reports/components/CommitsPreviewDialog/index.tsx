@@ -9,7 +9,7 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
 import { GitCommit } from "lucide-react";
 import { ProcessedCommit } from "@/src/shared/types";
-import { CommitCard } from "@/src/components/global/CommitCard";
+import { CommitCard } from "@/src/_features/reports/components/CommitCard";
 
 type CommitPreviewProps = {
   commits: ProcessedCommit[];

@@ -13,7 +13,7 @@ import { useState } from "react";
 import {
   useAddCredential,
   useVerifyCredential,
-} from "@/src/shared/services/credentials";
+} from "@/src/_features/credentials/services";
 import { PROVIDERS } from "@/src/shared/constants";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 

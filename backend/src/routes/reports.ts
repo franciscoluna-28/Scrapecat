@@ -2,13 +2,19 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { reports } from "../db/schema";
+import { listReportsQuerySchema, reportIdParamsSchema, updateReportBodySchema } from "../schemas";
 
 export async function listReports(
-  req: FastifyRequest<{ Querystring: { projectId?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
-    const projectIdParam = req.query.projectId;
+    const parsed = listReportsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.flatten() });
+    }
+
+    const projectIdParam = parsed.data.projectId;
     const projectId = projectIdParam ? Number(projectIdParam) : undefined;
 
     const [distinctProjects, allReports] = await Promise.all([
@@ -43,15 +49,16 @@ export async function listReports(
 }
 
 export async function getReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
-    const { id } = req.params;
-
-    if (!id) {
+    const parsed = reportIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
       return reply.status(400).send({ error: "ID is required" });
     }
+
+    const { id } = parsed.data;
 
     const report = await db.query.reports.findFirst({
       where: eq(reports.id, id),
@@ -83,16 +90,22 @@ export async function getReport(
 }
 
 export async function updateReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
-    const { id } = req.params;
-    const { editableMarkdown } = req.body as { editableMarkdown?: string };
-
-    if (!editableMarkdown) {
-      return reply.status(400).send({ error: "editableMarkdown is required" });
+    const paramsParsed = reportIdParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return reply.status(400).send({ error: "ID is required" });
     }
+
+    const bodyParsed = updateReportBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return reply.status(400).send({ error: bodyParsed.error.flatten() });
+    }
+
+    const { id } = paramsParsed.data;
+    const { editableMarkdown } = bodyParsed.data;
 
     const updated = await db
       .update(reports)

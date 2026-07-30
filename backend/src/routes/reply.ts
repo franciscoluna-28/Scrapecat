@@ -6,16 +6,26 @@ import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefi
 import { callAI, cleanResponse } from "../services/ai";
 import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
 import { resolveApiKey } from "../services/credentials";
+import { reportIdParamsSchema, replyBodySchema } from "../schemas";
 
 const MAX_LIMIT = 100;
 
 export async function replyToReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
-    const { id } = req.params;
-    const { reply: userReply, model, provider } = req.body as { reply?: string; model?: string; provider?: string };
+    const paramsParsed = reportIdParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return reply.status(400).send({ error: "ID is required" });
+    }
+    const { id } = paramsParsed.data;
+
+    const bodyParsed = replyBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return reply.status(400).send({ error: bodyParsed.error.flatten() });
+    }
+    const { reply: userReply, model, provider } = bodyParsed.data;
 
     if (!userReply || typeof userReply !== "string" || userReply.trim().length === 0) {
       return reply.status(400).send({ error: "reply is required" });

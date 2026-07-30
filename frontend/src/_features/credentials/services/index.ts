@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
-import { queryKeys } from "./keys";
+import { queryKeys } from "../../../shared/services/keys";
 
 export function useCredentials() {
   const { data, error, isLoading } = useQuery({
