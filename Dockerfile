@@ -21,9 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG GITHUB_TOKEN
-ARG GROQ_API_KEY
 ENV GITHUB_TOKEN=$GITHUB_TOKEN
-ENV GROQ_API_KEY=$GROQ_API_KEY
 RUN pnpm run build
 
 FROM base AS runner
