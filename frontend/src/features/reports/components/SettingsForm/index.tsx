@@ -15,14 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/src/components/ui/select";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, Bookmark } from "lucide-react";
 import { APP_CONFIG, PROVIDERS } from "@/src/shared/constants";
@@ -34,6 +26,7 @@ import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 import { useAISettingsStore } from "@/src/store/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
 import { CommitsPreviewContainer } from "../CommitsPreviewContainer";
+import { ModelSelector } from "../ModelSelector";
 
 type Props = {
   repository: GitHubRepository;
@@ -64,8 +57,6 @@ export function SettingsForm({
   const selectedModel = useAISettingsStore((s) => s.selectedModel);
   const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
   const { models: availableModels, isLoading: modelsLoading } = useModels(selectedProvider);
-  const modelMap = Object.fromEntries(availableModels.map((m) => [m.id, m]));
-
   const {
     commits,
     count: commitCount,
@@ -231,28 +222,13 @@ export function SettingsForm({
                 Model
               </Label>
               <div className="mt-1.5">
-                <Combobox
-                  items={availableModels.map((m) => m.id)}
-                  itemToStringValue={(id) => modelMap[id]?.name || id}
-                  value={selectedModel}
-                  onValueChange={(v) => v && setSelectedModel(v)}
-                  disabled={modelsLoading || !mounted}
-                >
-                  <ComboboxInput
-                    placeholder={modelsLoading ? "Loading models..." : "Search models..."}
-                    showClear={mounted}
-                  />
-                  <ComboboxContent>
-                    <ComboboxEmpty>No models found.</ComboboxEmpty>
-                    <ComboboxList>
-                      {(modelId) => (
-                        <ComboboxItem key={modelId} value={modelId}>
-                          {modelMap[modelId]?.name} {modelMap[modelId]?.free ? "(Free)" : ""}
-                        </ComboboxItem>
-                      )}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
+                <ModelSelector
+                  models={availableModels}
+                  selectedModel={selectedModel}
+                  onModelChange={setSelectedModel}
+                  loading={modelsLoading}
+                  mounted={mounted}
+                />
               </div>
             </div>
           </div>
