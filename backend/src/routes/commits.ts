@@ -1,12 +1,22 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { getGitProvider } from "../services/git-provider";
+import { ownerRepoParamsSchema, listCommitsQuerySchema, countCommitsQuerySchema } from "../schemas";
 
 export async function listCommits(
-  req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { limit?: string; startDate?: string; endDate?: string; branch?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { owner, repo } = req.params;
-  const { limit, startDate, endDate, branch } = req.query;
+  const paramsParsed = ownerRepoParamsSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    return reply.status(400).send({ error: paramsParsed.error.flatten() });
+  }
+  const { owner, repo } = paramsParsed.data;
+
+  const queryParsed = listCommitsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return reply.status(400).send({ error: queryParsed.error.flatten() });
+  }
+  const { limit, startDate, endDate, branch } = queryParsed.data;
 
   try {
     const commits = await getGitProvider().listCommits(owner, repo, {
@@ -23,11 +33,20 @@ export async function listCommits(
 }
 
 export async function countCommits(
-  req: FastifyRequest<{ Params: { owner: string; repo: string }; Querystring: { startDate?: string; endDate?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { owner, repo } = req.params;
-  const { startDate, endDate } = req.query;
+  const paramsParsed = ownerRepoParamsSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    return reply.status(400).send({ error: paramsParsed.error.flatten() });
+  }
+  const { owner, repo } = paramsParsed.data;
+
+  const queryParsed = countCommitsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return reply.status(400).send({ error: queryParsed.error.flatten() });
+  }
+  const { startDate, endDate } = queryParsed.data;
 
   try {
     const count = await getGitProvider().countCommits(owner, repo, {

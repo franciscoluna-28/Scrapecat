@@ -1,6 +1,7 @@
 export const queryKeys = {
   models: {
     all: ["models"] as const,
+    list: (provider?: string) => ["models", "list", { provider }] as const,
   },
   reports: {
     all: ["reports"] as const,
@@ -27,5 +28,8 @@ export const queryKeys = {
       repo: string,
       params?: { startDate?: string; endDate?: string; branch?: string },
     ) => ["commits", "list", owner, repo, params] as const,
+  },
+  credentials: {
+    all: ["credentials"] as const,
   },
 };

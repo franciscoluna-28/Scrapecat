@@ -27,6 +27,7 @@ import {
   RepositoriesResponse,
   BranchesResponse,
   VerificationOkResponse,
+  ModelsQuery,
   ModelsResponse,
   ReportInputBody,
   ReportCreatedResponse,
@@ -83,9 +84,10 @@ export async function buildApp() {
 
   app.get("/api/v1/models", {
     schema: {
-      description: "List available AI models from OpenRouter",
+      description: "List available AI models",
       tags: ["models"],
-      response: { 200: ModelsResponse },
+      querystring: ModelsQuery,
+      response: { 200: ModelsResponse, 400: ErrorResponse },
     },
   }, listModels);
 
@@ -178,7 +180,7 @@ export async function buildApp() {
     schema: {
       description: "List stored credentials (key hints only, no full keys returned)",
       tags: ["credentials"],
-      response: { 200: CredentialListResponse },
+      response: { 200: CredentialListResponse, 400: ErrorResponse },
     },
   }, listCredentials);
 

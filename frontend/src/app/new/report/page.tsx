@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useReport } from "@/src/features/reports/services/reports-api";
+import { useReport } from "@/src/_features/reports/services/reports-api";
 import type { ProcessedCommit } from "@/src/shared/types";
 import type { ImageAsset } from "@/src/shared/types";
 import ReportClientPage from "./client-page";

@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitBranch, FileText } from "lucide-react";
-import { RepositoryCard } from "@/src/features/reports/components/RepositoryCard";
+import { RepositoryCard } from "@/src/_features/reports/components/RepositoryCard";
+import { CredentialsManager } from "@/src/_features/credentials/components/CredentialsManager";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import {
   Select,
@@ -17,10 +18,10 @@ import {
 import { Label } from "@/src/components/ui/label";
 import { Input } from "@/src/components/ui/input";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
-import { useRepositories } from "@/src/features/reports/services/api";
-import { useReports } from "@/src/features/reports/services/reports-api";
+import { useRepositories } from "@/src/_features/reports/services/api";
+import { useReports } from "@/src/_features/reports/services/reports-api";
 import { GitHubRepository } from "@/src/shared/types";
-import { ReportCard } from "@/src/features/reports/components/ReportCard";
+import { ReportCard } from "@/src/_features/reports/components/ReportCard";
 
 function PageContent() {
   const router = useRouter();
@@ -134,6 +135,14 @@ function PageContent() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {activeView === "credentials" && (
+        <Card>
+          <CardContent className="p-6">
+            <CredentialsManager />
+          </CardContent>
+        </Card>
       )}
 
       {activeView === "settings" && (
