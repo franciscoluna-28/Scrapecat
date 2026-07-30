@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,51 +26,40 @@ interface GitHubSettingsModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function useGitHubSettings(open: boolean) {
+  const store = useGitHubSettingsStore();
+
+  const [values, setValues] = useState({
+    repositoryType: store.repositoryType,
+    perPage: store.perPage,
+    sort: store.sort,
+    direction: store.direction,
+  });
+
+  if (open) {
+    setValues({
+      repositoryType: store.repositoryType,
+      perPage: store.perPage,
+      sort: store.sort,
+      direction: store.direction,
+    });
+  }
+
+  const accept = () => {
+    store.setRepositoryType(values.repositoryType);
+    store.setPerPage(values.perPage);
+    store.setSort(values.sort);
+    store.setDirection(values.direction);
+  };
+
+  return { values, setValues, accept };
+}
+
 export function GitHubSettingsModal({
   open,
   onOpenChange,
 }: GitHubSettingsModalProps) {
-  const {
-    repositoryType,
-    perPage,
-    sort,
-    direction,
-    setRepositoryType,
-    setPerPage,
-    setSort,
-    setDirection,
-  } = useGitHubSettingsStore();
-
-  const [tempRepositoryType, setTempRepositoryType] = useState(repositoryType);
-  const [tempPerPage, setTempPerPage] = useState(perPage);
-  const [tempSort, setTempSort] = useState(sort);
-  const [tempDirection, setTempDirection] = useState(direction);
-
-  // When the modal opens, initialize the temporary state with the current settings
-  useEffect(() => {
-    if (open) {
-      setTempRepositoryType(repositoryType);
-      setTempPerPage(perPage);
-      setTempSort(sort);
-      setTempDirection(direction);
-    }
-  }, [open]);
-
-  const handleAccept = () => {
-    setRepositoryType(tempRepositoryType);
-    setPerPage(tempPerPage);
-    setSort(tempSort);
-    setDirection(tempDirection);
-    onOpenChange(false);
-  };
-
-  const handleCancel = () => {
-    setTempRepositoryType(repositoryType);
-    setTempPerPage(perPage);
-    setTempSort(sort);
-    setTempDirection(direction);
-    onOpenChange(false);
-  };
+  const { values, setValues, accept } = useGitHubSettings(open);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,8 +77,8 @@ export function GitHubSettingsModal({
               Type
             </Label>
             <Select
-              value={tempRepositoryType}
-              onValueChange={(value: any) => setTempRepositoryType(value)}
+              value={values.repositoryType}
+              onValueChange={(repositoryType: any) => setValues((prev) => ({ ...prev, repositoryType }))}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select repository type" />
@@ -112,8 +101,8 @@ export function GitHubSettingsModal({
               type="number"
               min="1"
               max="100"
-              value={tempPerPage}
-              onChange={(e) => setTempPerPage(parseInt(e.target.value) || 10)}
+              value={values.perPage}
+              onChange={(e) => setValues((prev) => ({ ...prev, perPage: parseInt(e.target.value) || 10 }))}
               className="col-span-3"
             />
           </div>
@@ -123,8 +112,8 @@ export function GitHubSettingsModal({
               Sort By
             </Label>
             <Select
-              value={tempSort}
-              onValueChange={(value: any) => setTempSort(value)}
+              value={values.sort}
+              onValueChange={(sort: any) => setValues((prev) => ({ ...prev, sort }))}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select sort field" />
@@ -143,8 +132,8 @@ export function GitHubSettingsModal({
               Direction
             </Label>
             <Select
-              value={tempDirection}
-              onValueChange={(value: any) => setTempDirection(value)}
+              value={values.direction}
+              onValueChange={(direction: any) => setValues((prev) => ({ ...prev, direction }))}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select sort direction" />
@@ -158,10 +147,12 @@ export function GitHubSettingsModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleAccept}>Accept</Button>
+          <Button onClick={() => { accept(); onOpenChange(false); }}>
+            Accept
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

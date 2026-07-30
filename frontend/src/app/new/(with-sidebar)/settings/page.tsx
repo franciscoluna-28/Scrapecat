@@ -2,9 +2,9 @@
 
 import { useSearchParams, notFound } from "next/navigation";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
-import { SettingsForm } from "@/src/features/reports/components/SettingsForm";
-import { RepositoryInfoCard } from "@/src/features/reports/components/RepositoryInfoCard";
-import { useRepositories, useBranches } from "@/src/features/reports/services/api";
+import { SettingsForm } from "@/src/_features/reports/components/SettingsForm";
+import { RepositoryInfoCard } from "@/src/_features/reports/components/RepositoryInfoCard";
+import { useRepositories, useBranches } from "@/src/_features/reports/services/api";
 import type { GitHubRepository } from "@/src/shared/types";
 
 export default function Page() {
@@ -52,7 +52,7 @@ export default function Page() {
             branches={branches.length > 0 ? branches : ["main", "master"]}
             selectedBranch={branch || branches[0] || "main"}
             startDate={startDate || today}
-            endDate={endDate}
+            endDate={endDate ?? undefined}
           />
         </>
       )}

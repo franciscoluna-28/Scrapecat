@@ -16,7 +16,7 @@ import { Key, Plus, XCircle } from "lucide-react";
 import {
   useCredentials,
   useDeleteCredential,
-} from "@/src/shared/services/credentials";
+} from "@/src/_features/credentials/services";
 import { toast } from "sonner";
 import { AddCredentialDialogContent } from "../AddCredentialDialogContent";
 import { CredentialRow } from "../CredentialRow";

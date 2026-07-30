@@ -87,7 +87,7 @@ export async function buildApp() {
       description: "List available AI models",
       tags: ["models"],
       querystring: ModelsQuery,
-      response: { 200: ModelsResponse },
+      response: { 200: ModelsResponse, 400: ErrorResponse },
     },
   }, listModels);
 
@@ -180,7 +180,7 @@ export async function buildApp() {
     schema: {
       description: "List stored credentials (key hints only, no full keys returned)",
       tags: ["credentials"],
-      response: { 200: CredentialListResponse },
+      response: { 200: CredentialListResponse, 400: ErrorResponse },
     },
   }, listCredentials);
 
