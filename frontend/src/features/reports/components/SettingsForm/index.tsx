@@ -31,9 +31,9 @@ import {
   ComboboxList,
 } from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
-import { Book, Loader2, GitCommit, Bookmark, Key } from "lucide-react";
+import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
 import type { ProcessedCommit } from "@/src/shared/types";
-import { APP_CONFIG } from "@/src/shared/constants/app";
+import { APP_CONFIG, PROVIDERS } from "@/src/shared/constants";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
 import { Skeleton } from "@/src/components/ui/skeleton";
@@ -41,7 +41,7 @@ import { CommitCard } from "@/src/components/global/CommitCard";
 import { apiClient } from "@/src/shared/api/client";
 import { useCommits } from "@/src/features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
-import { useAISettingsStore, PROVIDERS } from "@/src/store/ai-settings";
+import { useAISettingsStore } from "@/src/store/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
 
 type Props = {
