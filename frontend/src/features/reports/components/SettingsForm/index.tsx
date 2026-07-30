@@ -36,9 +36,6 @@ type Props = {
   endDate?: string;
 };
 
-
-
-
 export function SettingsForm({
   repository,
   branches,
@@ -56,7 +53,8 @@ export function SettingsForm({
   const setSelectedProvider = useAISettingsStore((s) => s.setSelectedProvider);
   const selectedModel = useAISettingsStore((s) => s.selectedModel);
   const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
-  const { models: availableModels, isLoading: modelsLoading } = useModels(selectedProvider);
+  const { models: availableModels, isLoading: modelsLoading } =
+    useModels(selectedProvider);
   const {
     commits,
     count: commitCount,
@@ -208,9 +206,7 @@ export function SettingsForm({
                 <SelectContent>
                   {PROVIDERS.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      <span className="flex items-center gap-2">
-                        {p.label}
-                      </span>
+                      <span className="flex items-center gap-2">{p.label}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -278,7 +274,6 @@ export function SettingsForm({
           commits={commits}
         />
 
-      
         <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
