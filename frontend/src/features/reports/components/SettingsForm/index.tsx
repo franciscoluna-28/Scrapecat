@@ -7,14 +7,7 @@ import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/src/components/ui/dialog";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
+
 import {
   Select,
   SelectContent,
@@ -31,18 +24,16 @@ import {
   ComboboxList,
 } from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
-import { Book, Loader2, GitCommit, Bookmark } from "lucide-react";
-import type { ProcessedCommit } from "@/src/shared/types";
+import { Book, Loader2, Bookmark } from "lucide-react";
 import { APP_CONFIG, PROVIDERS } from "@/src/shared/constants";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/global/DatePicker";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { CommitCard } from "@/src/components/global/CommitCard";
 import { apiClient } from "@/src/shared/api/client";
 import { useCommits } from "@/src/features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 import { useAISettingsStore } from "@/src/store/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
+import { CommitsPreviewContainer } from "../CommitsPreviewContainer";
 
 type Props = {
   repository: GitHubRepository;
@@ -52,51 +43,8 @@ type Props = {
   endDate?: string;
 };
 
-type CommitPreviewProps = {
-  commits: ProcessedCommit[];
-  commitCount: number;
-};
 
-function CommitsPreview({ commits, commitCount }: CommitPreviewProps) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground px-0"
-        >
-          <GitCommit className="h-4 w-4 mr-2" />
-          {commitCount} {commitCount === 1 ? "commit" : "commits"} found for
-          this period
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[80vh] p-0">
-        <DialogHeader className="p-6 pb-4 border-b">
-          <DialogTitle>Source Commits</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {commitCount} commits will be included in the report
-          </p>
-        </DialogHeader>
-        <ScrollArea className="h-[60vh]">
-          <div className="p-6">
-            <CommitCard
-              commits={commits.map((c) => ({
-                sha: c.sha,
-                message: c.message || "No commit message",
-                author: c.author || "Unknown",
-                date: c.date
-                  ? new Date(c.date).toLocaleDateString("en-US")
-                  : "Unknown",
-                url: c.url,
-              }))}
-            />
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
-  );
-}
+
 
 export function SettingsForm({
   repository,
@@ -346,48 +294,13 @@ export function SettingsForm({
           />
         </div>
 
-        {startDate && (
-          <>
-            <Card className="border-none shadow-none">
-              <CardContent className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted border">
-                  <GitCommit className="h-4 w-4 text-muted-foreground" />
-                </div>
-
-                <div className="flex flex-col overflow-hidden">
-                  <Label className="text-sm font-semibold whitespace-nowrap">
-                    Sync Status
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    {isFetching ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                        <Skeleton className="h-4 w-32 bg-muted" />
-                      </div>
-                    ) : hasError ? (
-                      <span className="text-sm text-muted-foreground">
-                        Verification failed. Check connection.
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {commitCount === 0 ? (
-                          <span className="text-sm text-muted-foreground">
-                            No commits found for this period
-                          </span>
-                        ) : (
-                          <CommitsPreview
-                            commits={commits as ProcessedCommit[]}
-                            commitCount={commitCount}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <CommitsPreviewContainer
+          startDate={startDate}
+          isFetching={isFetching}
+          hasError={hasError}
+          commitCount={commitCount}
+          commits={commits}
+        />
 
       
         <div className="pt-1 space-y-1.5">
