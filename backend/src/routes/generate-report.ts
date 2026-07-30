@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { nanoid } from "nanoid";
-import { reportInputSchema } from "../schemas";
+import { reportInputBodySchema } from "../schemas";
 import { db } from "../db/client";
 import { reports } from "../db/schema";
 import { getGitProvider } from "../services/git-provider";
@@ -15,14 +15,12 @@ const MAX_LIMIT = 100;
 
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
   try {
-    const body = req.body as any;
-    const parsed = reportInputSchema.safeParse(body?.data);
-
+    const parsed = reportInputBodySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
     }
 
-    const data = parsed.data;
+    const data = parsed.data.data;
 
     const fetchedCommits = await getGitProvider().listCommits(data.githubOwner, data.repository, {
       branch: data.branch,

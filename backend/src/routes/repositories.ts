@@ -1,11 +1,16 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { getGitProvider } from "../services/git-provider";
+import { listReposQuerySchema } from "../schemas";
 
 export async function listRepositories(
-  req: FastifyRequest<{ Querystring: { type?: string; sort?: string; direction?: string; per_page?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { type, sort, direction, per_page } = req.query;
+  const parsed = listReposQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return reply.status(400).send({ error: parsed.error.flatten() });
+  }
+  const { type, sort, direction, per_page } = parsed.data;
 
   try {
     const repositories = await getGitProvider().listRepositories({

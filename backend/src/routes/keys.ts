@@ -5,14 +5,24 @@ import {
   deleteCredential,
   verifyCredential,
 } from "../services/credentials";
-import { addCredentialSchema, credentialIdParamsSchema, verifyCredentialSchema } from "../schemas";
+import {
+  addCredentialSchema,
+  credentialIdParamsSchema,
+  verifyCredentialSchema,
+  listKeysQuerySchema,
+} from "../schemas";
 
 export async function listKeys(
-  req: FastifyRequest<{ Querystring: { provider?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const parsed = listKeysQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return reply.status(400).send({ error: parsed.error.flatten() });
+  }
+
   try {
-    const keys = await listCredentials(req.query.provider);
+    const keys = await listCredentials(parsed.data.provider);
     return reply.send({ keys });
   } catch (error) {
     console.error("Error listing credentials:", error);
@@ -21,7 +31,7 @@ export async function listKeys(
 }
 
 export async function addKey(
-  req: FastifyRequest<{ Body: { provider: string; name?: string; key: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
@@ -42,7 +52,7 @@ export async function addKey(
 }
 
 export async function deleteKey(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
@@ -64,7 +74,7 @@ export async function deleteKey(
 }
 
 export async function verifyKey(
-  req: FastifyRequest<{ Body: { provider: string; key: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
