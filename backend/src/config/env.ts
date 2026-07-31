@@ -3,7 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   HOST: z.string().default("0.0.0.0"),
-  DATABASE_URL: z.string().default("file:./dev.db"),
+  DATABASE_URL: z.string().default("postgres://scrapecat:scrapecat@localhost:5432/scrapecat"),
   OPENROUTER_API_KEY: z.string().default(""),
   AI_MODEL: z.string().default("google/gemma-4-26b-a4b-it:free"),
   DEEPSEEK_API_KEY: z.string().default(""),

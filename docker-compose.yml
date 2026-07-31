@@ -35,7 +35,10 @@ services:
       - PORT=4000
       - HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000
-      - DATABASE_URL=file:./dev.db
+      - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend-dev:
     container_name: scrapecat-ui

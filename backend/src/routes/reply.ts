@@ -1,49 +1,46 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
-import { db } from "../db/client";
-import { reports } from "../db/schema";
+import { reportIdParamsSchema, replyBodySchema } from "../schemas";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, buildRefinePrompt } from "../services/prompts";
 import { callAI, cleanResponse } from "../services/ai";
 import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
 import { resolveApiKey } from "../services/credentials";
-import { reportIdParamsSchema, replyBodySchema } from "../schemas";
+import * as reportsStore from "../db/stores/reports-store";
+import * as commitChunksStore from "../db/stores/commit-chunks-store";
+import * as projectsStore from "../db/stores/projects-store";
 
 const MAX_LIMIT = 100;
 
 export async function replyToReport(
-  req: FastifyRequest,
+  req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
   try {
-    const paramsParsed = reportIdParamsSchema.safeParse(req.params);
-    if (!paramsParsed.success) {
-      return reply.status(400).send({ error: "ID is required" });
+    const params = reportIdParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return reply.status(400).send({ error: params.error.flatten() });
     }
-    const { id } = paramsParsed.data;
 
-    const bodyParsed = replyBodySchema.safeParse(req.body);
-    if (!bodyParsed.success) {
-      return reply.status(400).send({ error: bodyParsed.error.flatten() });
+    const body = replyBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
     }
-    const { reply: userReply, model, provider } = bodyParsed.data;
 
-    if (!userReply || typeof userReply !== "string" || userReply.trim().length === 0) {
+    const { reply: userReply, model, provider } = body.data;
+
+    if (!userReply || userReply.trim().length === 0) {
       return reply.status(400).send({ error: "reply is required" });
     }
 
-    const report = await db.query.reports.findFirst({
-      where: eq(reports.id, id),
-    });
-
+    const report = await reportsStore.getReport(params.data.id);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
 
-    const sortedCommits = [...(report.sourceCommits || [])].sort(
-      (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-
-    const limitedCommits = sortedCommits.slice(0, MAX_LIMIT);
+    const chunks = await commitChunksStore.listCommitsForProject(report.projectId, {
+      startDate: report.startDate,
+      endDate: report.endDate,
+    });
+    const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
 
     const cleanMarkdown = (report.originalMarkdown || "")
       .replace(/\n*## Media[\s\S]*$/, "")
@@ -55,11 +52,13 @@ export async function replyToReport(
 
     const apiKey = provider ? await resolveApiKey(provider) : undefined;
 
+    const project = await projectsStore.getProjectById(report.projectId);
+
     const originalPrompt = buildReportPrompt({
-      repository: report.githubRepositoryName,
+      repository: project?.repositoryName ?? report.title,
       branch: report.branch,
-      startDate: report.startDate,
-      endDate: report.endDate,
+      startDate: report.startDate.toISOString().slice(0, 10),
+      endDate: report.endDate.toISOString().slice(0, 10),
       commits: limitedCommits,
       languageInstruction,
     });
@@ -91,7 +90,7 @@ export async function replyToReport(
 
       const { content: rawContent } = await callAI({
         model: model || undefined,
-        provider: provider,
+        provider,
         apiKey: apiKey || undefined,
         messages: messagesWithRetry,
       });
@@ -113,10 +112,7 @@ export async function replyToReport(
 
     updatedMarkdown ??= "";
 
-    await db
-      .update(reports)
-      .set({ editableMarkdown: updatedMarkdown, updatedAt: new Date() })
-      .where(eq(reports.id, id));
+    await reportsStore.updateReportMarkdown(params.data.id, updatedMarkdown);
 
     return reply.send({ report: updatedMarkdown });
   } catch (error: any) {

@@ -1,1 +1,0 @@
-ALTER TABLE `reports` ADD `custom_instructions` text;

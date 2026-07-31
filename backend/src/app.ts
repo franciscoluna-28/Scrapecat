@@ -13,6 +13,7 @@ import { listModels } from "./routes/models";
 import { createReport } from "./routes/generate-report";
 import { listReports, getReport, updateReport } from "./routes/reports";
 import { replyToReport } from "./routes/reply";
+import { listProjects, listProjectCommits } from "./routes/projects";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "./routes/keys";
 
 import {
@@ -40,6 +41,10 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
+  ProjectIdParams,
+  ProjectsResponse,
+  ProjectCommitsQuery,
+  ProjectCommitsResponse,
   AddCredentialBody,
   CredentialListResponse,
   CredentialCreatedResponse,
@@ -175,6 +180,24 @@ export async function buildApp() {
       response: { 200: ReportReplyResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse },
     },
   }, replyToReport);
+
+  app.get("/api/v1/projects", {
+    schema: {
+      description: "List synced GitHub projects",
+      tags: ["projects"],
+      response: { 200: ProjectsResponse },
+    },
+  }, listProjects);
+
+  app.get("/api/v1/projects/:projectId/commits", {
+    schema: {
+      description: "List normalized commits for a project within an optional date range",
+      tags: ["projects"],
+      params: ProjectIdParams,
+      querystring: ProjectCommitsQuery,
+      response: { 200: ProjectCommitsResponse, 400: ErrorResponse },
+    },
+  }, listProjectCommits);
 
   app.get("/api/v1/credentials", {
     schema: {

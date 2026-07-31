@@ -5,6 +5,7 @@ export type { GitProvider } from "./provider";
 export type {
   Repository,
   Commit,
+  CommitDetail,
   PullRequest,
   RepositoryFilters,
   CommitParams,

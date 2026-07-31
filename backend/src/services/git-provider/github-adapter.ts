@@ -5,6 +5,7 @@ import type { GitProvider } from "./provider";
 import type {
   Repository,
   Commit,
+  CommitDetail,
   PullRequest,
   RepositoryFilters,
   CommitParams,
@@ -105,6 +106,37 @@ export class GithubAdapter implements GitProvider {
       until: params?.until,
     });
     return data.map(toCommit);
+  }
+
+  async getCommitDetails(owner: string, repo: string, sha: string): Promise<CommitDetail | null> {
+    try {
+      const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/commits/{ref}", {
+        owner,
+        repo,
+        ref: sha,
+      });
+      const stats = data.stats ?? {};
+      return {
+        sha,
+        message: data.commit?.message ?? "",
+        author: data.commit?.author?.name ?? data.commit?.author?.email ?? "",
+        date: data.commit?.author?.date ?? "",
+        url: data.html_url,
+        stats: {
+          additions: stats.additions ?? 0,
+          deletions: stats.deletions ?? 0,
+          total: stats.total ?? 0,
+        },
+        files: (data.files ?? []).map((f: any) => ({
+          filename: f.filename ?? "",
+          additions: f.additions ?? 0,
+          deletions: f.deletions ?? 0,
+          patch: f.patch ?? null,
+        })),
+      };
+    } catch {
+      return null;
+    }
   }
 
   async countCommits(owner: string, repo: string, params?: DateRangeParams): Promise<number> {

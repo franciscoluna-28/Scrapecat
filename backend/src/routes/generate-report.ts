@@ -1,21 +1,24 @@
+import { randomUUID } from "crypto";
 import { FastifyRequest, FastifyReply } from "fastify";
-import { nanoid } from "nanoid";
 import { reportInputBodySchema } from "../schemas";
-import { db } from "../db/client";
-import { reports } from "../db/schema";
 import { getGitProvider } from "../services/git-provider";
 import { buildSystemPrompt, getLanguageInstruction, buildReportPrompt, FALLBACK_REPORT } from "../services/prompts";
-import { extractImagesFromPrBody } from "../shared/utils";
+import { extractImagesFromPrBody, extractReportTitle } from "../shared/utils";
 import { uploadImagesToR2 } from "../services/r2";
 import { callAI, cleanResponse } from "../services/ai";
 import { validateReportStructure, buildTemplateInstruction } from "../schemas/report-output";
 import { resolveApiKey } from "../services/credentials";
+import { buildCommitChunks, type EnrichedCommit } from "../services/chunks";
+import * as projectsStore from "../db/stores/projects-store";
+import * as commitChunksStore from "../db/stores/commit-chunks-store";
+import * as reportsStore from "../db/stores/reports-store";
 
 const MAX_LIMIT = 100;
 
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
   try {
     const parsed = reportInputBodySchema.safeParse(req.body);
+
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
     }
@@ -41,7 +44,7 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 
     const limitedCommits = sortedCommits.slice(0, MAX_LIMIT);
 
-    let enrichedCommits: Array<typeof limitedCommits[number] & { prBody: string | null; prNumber: number }>;
+    let enrichedCommits: EnrichedCommit[];
 
     if (data.quickMode) {
       enrichedCommits = limitedCommits.map((c) => ({ ...c, prBody: null, prNumber: 0 }));
@@ -61,12 +64,28 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
       });
     }
 
+    const provider = data.provider;
+    const apiKey = provider ? await resolveApiKey(provider) : undefined;
+
+    const project = await projectsStore.upsertProject({
+      githubProjectId: data.githubProjectId,
+      repositoryName: data.repository,
+      defaultBranch: data.branch,
+    });
+
+    const chunks = await buildCommitChunks(
+      getGitProvider(),
+      data.githubOwner,
+      data.repository,
+      enrichedCommits,
+    );
+    await commitChunksStore.upsertCommitChunks(
+      chunks.map((c) => ({ ...c, projectId: project.id })),
+    );
+
     const customInstructions = data.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
     const systemPrompt = buildSystemPrompt(customInstructions);
-
-    const provider = data.provider;
-    const apiKey = provider ? await resolveApiKey(provider) : undefined;
 
     const prompt = buildReportPrompt({
       repository: data.repository,
@@ -108,7 +127,7 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 
     generatedReport ??= FALLBACK_REPORT;
 
-    const reportId = nanoid();
+    const reportId = randomUUID();
     let assets: Awaited<ReturnType<typeof uploadImagesToR2>> = [];
 
     if (!data.quickMode) {
@@ -123,25 +142,20 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
       assets = await uploadImagesToR2(images, reportId, data.githubOwner, data.repository);
     }
 
-    const now = new Date();
-    await db.insert(reports).values({
+    await reportsStore.createReport({
       id: reportId,
-      githubProjectId: data.githubProjectId,
-      githubRepositoryName: data.repository,
+      projectId: project.id,
+      title: extractReportTitle(generatedReport, data.repository),
       originalMarkdown: generatedReport,
       editableMarkdown: generatedReport,
-      startDate: data.startDate,
-      endDate: data.endDate,
+      startDate: new Date(data.startDate),
+      endDate: new Date(data.endDate),
       branch: data.branch,
-      createdAt: now,
-      updatedAt: now,
-      sourceCommitsUpdatedAt: now,
-      sourceCommits: enrichedCommits,
-      imageAssets: assets.length > 0 ? assets : [],
       customInstructions: customInstructions || null,
+      imageAssets: assets.length > 0 ? assets : [],
     });
 
-    return reply.code(201).send({ reportId, report: generatedReport });
+    return reply.code(201).send({ reportId, projectId: project.id });
   } catch (error: any) {
     console.error("Error generating report:", error);
     if (error?.status === 429) {

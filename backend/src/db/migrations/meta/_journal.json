@@ -1,40 +1,12 @@
 {
   "version": "7",
-  "dialect": "sqlite",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "6",
-      "when": 1778030503351,
-      "tag": "0000_milky_zarda",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1778030955241,
-      "tag": "0001_fantastic_dracula",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1778210730260,
-      "tag": "0002_harsh_radioactive_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1778700350441,
-      "tag": "0003_yummy_roland_deschain",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1785332666177,
-      "tag": "0004_abandoned_stingray",
+      "version": "7",
+      "when": 1785509536728,
+      "tag": "0000_absent_machine_man",
       "breakpoints": true
     }
   ]
