@@ -50,30 +50,37 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
 2. Fetch commits from GitHub via `getGitProvider().listCommits()` (max 100)
 3. Enrich with PR data unless `quickMode` — fetches PR body for each commit via `getPullRequestForCommit()`
-4. Build system prompt (with template instruction) + user prompt via `src/services/prompts.ts`
-5. Call AI with up to 2 retries if structure validation fails
-6. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
-7. Extract images from PR bodies, upload to R2 via `src/services/r2.ts`
-8. Store in SQLite via Drizzle ORM
-9. Return `{ reportId, report }`
+4. Upsert the project (`githubProjects` via `projects-store`) and normalize commits into `commitChunks` (`commit-chunks-store`), building `diff_summary` from per-commit diffs fetched via `getCommitDetails()`
+5. Build system prompt (with template instruction) + user prompt via `src/services/prompts.ts`
+6. Call AI with up to 2 retries if structure validation fails
+7. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
+8. Extract images from PR bodies, upload to R2 via `src/services/r2.ts`
+9. Store in Postgres via Drizzle ORM
+10. Return `{ reportId, projectId }`
 
-Report refinement (`src/routes/reply.ts`): same flow but prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
+Report refinement (`src/routes/reply.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
 
 ## Database (`src/db/`)
 
-Uses `@libsql/client` (Turso/libSQL, SQLite-compatible). Drizzle ORM with SQLite dialect.
+Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvector (`pgvector/pgvector` in docker-compose, extension `vector`).
 
 Tables defined in `src/db/schema.ts`:
-- **reports** — stores generated reports with commits and image assets
-- **credentials** — stores encrypted API keys with masked hints
+- **github_projects** — normalized projects (uuid PK, unique GitHub project id, repo name, default branch)
+- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536), NULL until RAG phase), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
+- **reports** — generated reports linked to a project (uuid PK, title, markdown, image assets)
+- **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
-No connection pooling. No migration auto-discovery — managed via `drizzle-kit` with migrations in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:push`.
+All DB access goes through the store layer in `src/db/stores/` (`projects-store`, `commit-chunks-store`, `reports-store`, `credentials-store`) — routes never import `db` directly.
 
-JSON columns (`source_commits`, `image_assets`, `modalities`) use Drizzle's `{ mode: "json" }` with `.$type<T>()`.
+Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` (or `db:push` for dev).
+
+## Provider naming (`src/providers/registry.ts`)
+
+Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`). No aliasing layer.
 
 ## Git provider abstraction (`src/services/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `listCommits`, `countCommits`, `getPullRequestForCommit`, `verifyConnection`.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `listCommits`, `getCommitDetails`, `countCommits`, `getPullRequestForCommit`, `verifyConnection`.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 
@@ -91,7 +98,7 @@ Encryption output format: `base64url(iv + tag + ciphertext)`.
 
 Zod-validated `process.env` with `.default()` for all optional fields. Non-defaulted required: `ENCRYPTION_KEY`. Warns on missing `OPENROUTER_API_KEY` and `GITHUB_TOKEN` but does not exit.
 
-Key defaults: `PORT: 4000`, `HOST: "0.0.0.0"`, `DATABASE_URL: "file:./dev.db"`, `CORS_ORIGIN: "http://localhost:3000"`.
+Key defaults: `PORT: 4000`, `HOST: "0.0.0.0"`, `DATABASE_URL: "postgres://scrapecat:scrapecat@localhost:5432/scrapecat"`, `CORS_ORIGIN: "http://localhost:3000"`.
 
 ## Testing
 
@@ -105,6 +112,8 @@ const res = await app.inject({ method: "GET", url: "/api/v1/..." });
 expect(res.statusCode).toBe(200);
 ```
 
+Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_URL`, etc.). The postgres client is lazy — importing it does not require a live DB.
+
 ## Environment knobs
 
 | Variable | Meaning |
@@ -115,7 +124,7 @@ expect(res.statusCode).toBe(200);
 | `AI_MODEL` | Default model override |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
-| `DATABASE_URL` | libSQL connection string (default `file:./dev.db`) |
+| `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
 | `R2_*` | Cloudflare R2 config (optional, image uploads) |
 

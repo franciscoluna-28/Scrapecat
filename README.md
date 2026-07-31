@@ -9,7 +9,7 @@
 Engineering noise into executive clarity. Scrapecat translates engineering work into reports normal people read without fancy meetings. Built because a CEO kept asking what engineering was doing **daily** when everything was on Git. We open-sourced the fix as we believe code history is the only source of truth. Starting with GitHub.
 
 ## Tech Stack
-- **Backend:** Fastify 5 (Node.js), Drizzle ORM + libSQL, OpenRouter SDK
+- **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui
 - **Data Source:** Native GitHub REST via `Octokit`
 - **Intelligence:** OpenRouter API utilizing Google Gemma 4 for free, low-latency report synthesis
@@ -23,7 +23,7 @@ Engineering noise into executive clarity. Scrapecat translates engineering work 
 - **Report Persistence:** A centralized dashboard to visualize, manage, and export historical reporting data.
 
 ## Future Roadmap
-- **RAG on Repositories (SurrealDB):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Powered by SurrealDB, replacing SQLite as we scale.
+- **RAG on Repositories (pgvector):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Commits are normalized into `commit_chunks` with `diff_summary` text and a pgvector `embedding` column (HNSW-indexed) ready for semantic search.
 - **External Integrations:** Connect Slack, Linear, Jira, and Notion so reports cross-reference commits with tickets, messages, and docs.
 - **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
 - **Self-Hosted Storage:** MinIO support alongside Cloudflare R2, with more storage providers to come.
@@ -96,10 +96,10 @@ Initialize the engine and start the development server:
 # Install dependencies
 pnpm install
 
-# Generate database migration. Scrapecat uses SQLite as default database.
+# Generate database migration. Scrapecat uses PostgreSQL (pgvector) as the database.
 pnpm run db:generate
 
-# Push schema to database. Needed to store reports and repository data.
+# Push schema to database. Needed to store projects, commits, reports, and credentials.
 pnpm run db:push
 
 # Start the development server
@@ -119,20 +119,21 @@ The application will be live at http://localhost:3000. Connect your first reposi
 docker compose up --build
 ```
 
-Two services start:
+Three services start:
+- **Postgres (pgvector)** at http://localhost:5432 — persisted via a named volume, healthchecked before the backend boots
 - **Backend** (Fastify) at http://localhost:4000 — auto-reloads via `tsx watch`
 - **Frontend** (Next.js) at http://localhost:3000 — HMR via `next dev`
 
 Source is mounted directly — changes are reflected immediately. Each service uses its own `Dockerfile.dev` for a leaner, focused build.
 
-SurrealDB is also available on port **8000** for local development:
+Postgres connection defaults:
 
 | Detail | Value |
 |---|---|
-| WebSocket URL (host) | `ws://localhost:8000/rpc` |
-| WebSocket URL (Docker network) | `ws://surrealdb:8000/rpc` |
-| User / Pass | `root` / `root` |
-| Storage | `rocksdb` persisted via a named volume |
+| Host (host) | `localhost:5432` |
+| Host (Docker network) | `db:5432` |
+| User / Pass / DB | `scrapecat` / `scrapecat` / `scrapecat` |
+| Extension | `vector` (pgvector) — enabled by the migration |
 
 ### Stop
 
