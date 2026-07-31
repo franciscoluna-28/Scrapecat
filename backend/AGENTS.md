@@ -7,7 +7,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - Run API: `pnpm dev` (tsx watch on `src/index.ts`, port 4000, Swagger at http://localhost:4000/docs)
 - Tests: `pnpm test` (vitest run)
 - Watch tests: `pnpm test:watch`
-- DB migrations: `pnpm db:generate` then `pnpm db:push`
+- DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
 
 ## API layer (`src/routes/` + `src/app.ts`)
@@ -72,7 +72,7 @@ Tables defined in `src/db/schema.ts`:
 
 All DB access goes through the store layer in `src/db/stores/` (`projects-store`, `commit-chunks-store`, `reports-store`, `credentials-store`) — routes never import `db` directly.
 
-Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` (or `db:push` for dev).
+Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
 
 ## Provider naming (`src/providers/registry.ts`)
 

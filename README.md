@@ -99,8 +99,8 @@ pnpm install
 # Generate database migration. Scrapecat uses PostgreSQL (pgvector) as the database.
 pnpm run db:generate
 
-# Push schema to database. Needed to store projects, commits, reports, and credentials.
-pnpm run db:push
+# Apply migrations to the database. Needed to create projects, commits, reports, and credentials tables.
+pnpm run db:migrate
 
 # Start the development server
 pnpm run dev
