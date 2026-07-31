@@ -7,7 +7,6 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "test": "vitest run",
     "test:watch": "vitest"
