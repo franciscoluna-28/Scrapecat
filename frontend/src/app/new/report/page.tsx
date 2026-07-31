@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useReport } from "@/src/_features/reports/services/reports-api";
-import type { ProcessedCommit } from "@/src/shared/types";
+import { useProjectCommits } from "@/src/_features/reports/services/projects-api";
 import type { ImageAsset } from "@/src/shared/types";
 import ReportClientPage from "./client-page";
 
@@ -11,6 +11,11 @@ export default function ReportPage() {
   const reportId = searchParams.get("reportId");
 
   const { report, isLoading } = useReport(reportId ?? "");
+
+  const { commits, isLoading: isLoadingCommits } = useProjectCommits(report?.projectId, {
+    startDate: report?.startDate,
+    endDate: report?.endDate,
+  });
 
   if (!reportId) {
     return (
@@ -27,7 +32,7 @@ export default function ReportPage() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || isLoadingCommits) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -56,12 +61,8 @@ export default function ReportPage() {
 
   return (
     <ReportClientPage
-      commits={(report.sourceCommits || []) as ProcessedCommit[]}
-      repository={{
-        id: report.githubProjectId,
-        name: report.githubRepositoryName,
-        full_name: report.githubRepositoryName,
-      }}
+      commits={commits}
+      repositoryName={report.repositoryName || report.title}
       startDate={report.startDate}
       endDate={report.endDate}
       branch={report.branch}

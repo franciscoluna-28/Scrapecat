@@ -4,55 +4,47 @@ import { useState, useMemo } from "react";
 import { Input } from "@/src/components/ui/input";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitCommit, Search } from "lucide-react";
-
-type CommitInfo = {
-  sha: string;
-  message: string;
-  author: string;
-  date: string;
-  url?: string;
-};
+import type { StoredCommit } from "@/src/shared/types";
 
 type CommitCardProps = {
-  commits: CommitInfo[];
+  commits: StoredCommit[];
 };
 
-function CommitCardItem({ commit }: { commit: CommitInfo }) {
+function CommitCardItem({ commit }: { commit: StoredCommit }) {
   return (
-    <Card key={commit.sha || commit.message} className="overflow-hidden">
+    <Card key={commit.id || commit.commitSha} className="overflow-hidden">
       <CardContent className="p-3">
         <div className="flex items-start gap-2 mb-1.5">
           <GitCommit className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            {commit.url ? (
-              <a
-                href={commit.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs leading-relaxed line-clamp-2 hover:underline"
-              >
-                {commit.message}
-              </a>
-            ) : (
-              <p className="text-xs leading-relaxed line-clamp-2">
-                {commit.message}
-              </p>
-            )}
-            {commit.sha && (
+            <p className="text-xs leading-relaxed line-clamp-2">
+              {commit.commitMessage}
+            </p>
+            {commit.commitSha && (
               <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">
-                {commit.sha.slice(0, 7)}
+                {commit.commitSha.slice(0, 7)}
               </p>
             )}
           </div>
         </div>
         <div className="flex items-center justify-between pl-5">
           <span className="text-xs text-muted-foreground truncate">
-            {commit.author}
+            {commit.author ?? "Unknown"}
           </span>
           <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
-            {commit.date}
+            {new Date(commit.committedAt).toLocaleDateString("en-US")}
           </span>
         </div>
+        {commit.diffSummary && (
+          <details className="mt-2 pl-5">
+            <summary className="text-[10px] text-muted-foreground/60 cursor-pointer hover:text-foreground">
+              View diff
+            </summary>
+            <pre className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap rounded-md bg-muted/60 p-2 overflow-x-auto max-h-40 overflow-y-auto">
+              {commit.diffSummary}
+            </pre>
+          </details>
+        )}
       </CardContent>
     </Card>
   );
@@ -65,8 +57,8 @@ export function CommitCard({ commits }: CommitCardProps) {
     () =>
       commits.filter(
         (c) =>
-          c.message.toLowerCase().includes(search.toLowerCase()) ||
-          c.author.toLowerCase().includes(search.toLowerCase()),
+          c.commitMessage.toLowerCase().includes(search.toLowerCase()) ||
+          (c.author ?? "").toLowerCase().includes(search.toLowerCase()),
       ),
     [commits, search],
   );
@@ -91,7 +83,7 @@ export function CommitCard({ commits }: CommitCardProps) {
           </p>
         ) : (
           filtered.map((commit) => (
-            <CommitCardItem key={commit.sha || commit.message} commit={commit} />
+            <CommitCardItem key={commit.id || commit.commitSha} commit={commit} />
           ))
         )}
       </div>
