@@ -384,8 +384,9 @@ export interface paths {
                         "application/json": {
                             reports: {
                                 id: string;
-                                githubRepositoryName: string;
-                                githubProjectId: number;
+                                projectId: string;
+                                title: string;
+                                repositoryName: string;
                                 startDate: string;
                                 endDate: string;
                                 branch: string;
@@ -393,10 +394,6 @@ export interface paths {
                                 createdAt: string;
                                 /** Format: date-time */
                                 updatedAt: string;
-                            }[];
-                            distinctProjects: {
-                                id: number;
-                                name: string;
                             }[];
                         };
                     };
@@ -441,7 +438,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             reportId: string;
-                            report: string;
+                            projectId: string;
                         };
                     };
                 };
@@ -502,6 +499,9 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
+                            projectId: string;
+                            title: string;
+                            repositoryName: string;
                             originalMarkdown: string;
                             editableMarkdown: string;
                             startDate: string;
@@ -511,10 +511,6 @@ export interface paths {
                             createdAt: string;
                             /** Format: date-time */
                             updatedAt: string;
-                            githubProjectId: number;
-                            githubRepositoryName: string;
-                            sourceCommits?: unknown[];
-                            sourceCommitsUpdatedAt?: string | null;
                             imageAssets?: unknown[];
                         };
                     };
@@ -619,6 +615,7 @@ export interface paths {
                     "application/json": {
                         reply: string;
                         model?: string;
+                        provider?: string;
                     };
                 };
             };
@@ -669,6 +666,116 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List synced GitHub projects */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            projects: {
+                                id: string;
+                                githubProjectId: number;
+                                repositoryName: string;
+                                defaultBranch: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List normalized commits for a project within an optional date range */
+        get: {
+            parameters: {
+                query?: {
+                    startDate?: string;
+                    endDate?: string;
+                };
+                header?: never;
+                path: {
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            commits: {
+                                id: string;
+                                commitSha: string;
+                                commitMessage: string;
+                                author?: string | null;
+                                diffSummary: string;
+                                /** Format: date-time */
+                                committedAt: string;
+                                metadata?: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
