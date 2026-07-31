@@ -74,6 +74,10 @@ All DB access goes through the store layer in `src/db/stores/` (`projects-store`
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
 
+`db:migrate` runs `src/db/migrate.ts` (the `drizzle-orm/postgres-js` migrator) instead of `drizzle-kit migrate`, which fails silently with the postgres driver on this setup. Migration files must stay self-contained: after `db:generate`, prepend `CREATE EXTENSION IF NOT EXISTS vector;` and the `credential_provider` `CREATE TYPE` statements — drizzle-kit does not emit them.
+
+`DATABASE_URL` for migrations comes from `process.env` first, then `backend/.env` (via dotenv), then the default. Note the shell environment overrides `.env`.
+
 ## Provider naming (`src/providers/registry.ts`)
 
 Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`). No aliasing layer.
