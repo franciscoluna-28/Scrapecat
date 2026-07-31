@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/src/components/ui/dialog";
 import { CopyButton } from "@/src/components/ui/copy-button";
-import { CommitCard } from "@/src/components/global/CommitCard";
+import { CommitCard } from "@/src/_features/reports/components/CommitCard";
 import {
   ArrowLeft,
   GitCommit,
