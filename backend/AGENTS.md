@@ -7,6 +7,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - Run API: `pnpm dev` (tsx watch on `src/index.ts`, port 4000, Swagger at http://localhost:4000/docs)
 - Tests: `pnpm test` (vitest run)
 - Watch tests: `pnpm test:watch`
+- Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
 
@@ -66,7 +67,9 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **github_projects** — normalized projects (uuid PK, unique GitHub project id, repo name, default branch)
-- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536), NULL until RAG phase), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
+- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
+
+> **RAG is WIP.** The `embedding` column and HNSW index are infrastructure only — no embedding provider or backfill job exists, so embeddings are always NULL. Do not write queries that assume vectors are populated.
 - **reports** — generated reports linked to a project (uuid PK, title, markdown, image assets)
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
