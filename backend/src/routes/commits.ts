@@ -26,8 +26,13 @@ export async function listCommits(
       until: endDate || undefined,
     });
     return reply.send({ commits });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching commits:", error);
+    if (error?.status === 404 || error?.status === 422) {
+      return reply.status(400).send({
+        error: "Branch or repository not found on GitHub. Check the branch name and repository access.",
+      });
+    }
     return reply.status(500).send({ error: "Failed to fetch commits" });
   }
 }
