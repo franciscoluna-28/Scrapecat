@@ -31,7 +31,7 @@ function createOctokit(token: string) {
         console.warn(`Secondary rate limit for ${options.method} ${options.url}`);
       },
     },
-    retry: { doNotRetry: [422] },
+    retry: { doNotRetry: [400, 401, 403, 404, 410, 422, 451] },
   });
 }
 
@@ -64,6 +64,7 @@ function toPullRequest(raw: any): PullRequest {
   return {
     body: raw.body ?? null,
     number: raw.number,
+    title: raw.title ?? "",
     url: raw.html_url,
   };
 }

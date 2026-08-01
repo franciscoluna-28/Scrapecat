@@ -34,6 +34,7 @@ export interface CommitDetail extends Commit {
 export interface PullRequest {
   body: string | null;
   number: number;
+  title: string;
   url: string;
 }
 
