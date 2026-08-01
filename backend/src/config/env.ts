@@ -16,6 +16,12 @@ const envSchema = z.object({
   R2_ENDPOINT: z.string().default(""),
   R2_BUCKET_NAME: z.string().default(""),
   R2_PUBLIC_URL: z.string().default(""),
+  EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(100),
+  EMBEDDING_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
 });
 

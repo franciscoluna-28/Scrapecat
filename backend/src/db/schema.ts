@@ -29,7 +29,7 @@ export const vector = customType<{ data: number[]; driverData: string }>({
     return "vector(1536)";
   },
   toDriver(value: number[]): string {
-    return `[${value.join(",")}]`; // Formato string nativo de pgvector
+    return `[${value.join(",")}]`; 
   },
   fromDriver(value: string): number[] {
     return value
@@ -44,6 +44,16 @@ export type ImageAsset = {
   r2Url: string;
   commitSha: string;
   commitMessage: string;
+};
+
+export type CommitChunkMetadata = {
+  filesChanged?: string[];
+  additions?: number;
+  deletions?: number;
+  commitUrl?: string;
+  prNumber?: number;
+  prTitle?: string;
+  prUrl?: string;
 };
 
 export const githubProjects = pgTable("github_projects", {
@@ -67,15 +77,14 @@ export const commitChunks = pgTable(
     author: text("author"),
     diffSummary: text("diff_summary").notNull(),
     embedding: vector("embedding"),
+    contentHash: text("content_hash"),
+    embeddingHash: text("embedding_hash"),
     metadata: jsonb("metadata")
-      .$type<{
-        filesChanged?: string[];
-        additions?: number;
-        deletions?: number;
-      }>()
+      .$type<CommitChunkMetadata>()
       .default({}),
     committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => {
     return {

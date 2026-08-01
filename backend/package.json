@@ -10,7 +10,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "embed:backfill": "tsx scripts/embed-backfill.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
