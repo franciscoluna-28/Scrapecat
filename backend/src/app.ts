@@ -55,7 +55,10 @@ import {
 export async function buildApp() {
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: env.CORS_ORIGIN });
+  await app.register(cors, {
+    origin: env.CORS_ORIGIN,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+  });
 
   await app.register(swagger, {
     openapi: {
