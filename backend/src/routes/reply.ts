@@ -88,12 +88,18 @@ export async function replyToReport(
         ? [...messages, { role: "user" as const, content: `Your previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` }]
         : messages;
 
-      const { content: rawContent } = await callAI({
+      const { content: rawContent, finishReason } = await callAI({
         model: model || undefined,
         provider,
         apiKey: apiKey || undefined,
+        maxTokens: 4096,
         messages: messagesWithRetry,
       });
+
+      if (finishReason === "length") {
+        console.warn("Reply truncated by token limit, retrying with fallback");
+        continue;
+      }
 
       updatedMarkdown = cleanResponse(rawContent)
         .replace(/\n*## Media[\s\S]*$/, "")
