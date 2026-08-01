@@ -206,7 +206,6 @@ export const ProjectCommitsResponse = Type.Object({
 
 export const AddCredentialBody = Type.Object({
   provider: Type.String(),
-  name: Type.Optional(Type.String()),
   key: Type.String(),
 });
 

@@ -15,6 +15,13 @@
       "when": 1785552150751,
       "tag": "0001_wonderful_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785585243348,
+      "tag": "0002_funny_shen",
+      "breakpoints": true
     }
   ]
 }

@@ -24,7 +24,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   const legacyProjectId = 999_999_003;
   const embedProjectId = 999_999_004;
   const repositoryName = "integration-test-repo";
-  const credentialName = "integration-test-key";
 
   const cleanupProject = async (id: number) => {
     const project = await projectsStore.getProjectByGithubId(id);
@@ -33,17 +32,21 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     }
   };
 
+  const cleanupCredential = async () => {
+    const existing = await credentialsStore.listCredentials();
+    for (const c of existing) {
+      if (c.keyHint === "sk-test-hint") {
+        await credentialsStore.deleteCredentialById(c.id);
+      }
+    }
+  };
+
   beforeAll(async () => {
     await cleanupProject(githubProjectId);
     await cleanupProject(chunkProjectId);
     await cleanupProject(legacyProjectId);
     await cleanupProject(embedProjectId);
-    const existing = await credentialsStore.listCredentials();
-    for (const c of existing) {
-      if (c.name === credentialName) {
-        await credentialsStore.deleteCredentialById(c.id);
-      }
-    }
+    await cleanupCredential();
   });
 
   afterAll(async () => {
@@ -51,12 +54,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     await cleanupProject(chunkProjectId);
     await cleanupProject(legacyProjectId);
     await cleanupProject(embedProjectId);
-    const existing = await credentialsStore.listCredentials();
-    for (const c of existing) {
-      if (c.name === credentialName) {
-        await credentialsStore.deleteCredentialById(c.id);
-      }
-    }
+    await cleanupCredential();
   });
 
   it("projects-store upserts idempotently and lists", async () => {
@@ -218,16 +216,15 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("credentials-store CRUD round-trips", async () => {
-    const created = await credentialsStore.insertCredential({
+    const created = await credentialsStore.upsertCredential({
       provider: "openrouter",
-      name: credentialName,
       encryptedKey: "encrypted-value",
       keyHint: "sk-test-hint",
     });
     expect(created.keyHint).toBe("sk-test-hint");
 
     const got = await credentialsStore.getCredentialById(created.id);
-    expect(got?.name).toBe(credentialName);
+    expect(got?.keyHint).toBe("sk-test-hint");
 
     const listed = await credentialsStore.listCredentials("openrouter");
     expect(listed.some((c) => c.id === created.id)).toBe(true);

@@ -17,7 +17,6 @@ export const reportInputSchema = z.object({
 
 export const addCredentialSchema = z.object({
   provider: z.string().min(1),
-  name: z.string().optional(),
   key: z.string().min(1, "API key is required"),
 });
 

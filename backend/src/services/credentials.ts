@@ -7,7 +7,6 @@ export function toSafeCredential(row: Awaited<ReturnType<typeof credentialsStore
   return {
     id: row.id,
     provider: row.provider,
-    name: row.name,
     keyHint: row.keyHint,
     createdAt: row.createdAt,
   };
@@ -26,16 +25,14 @@ export async function getCredential(id: string) {
 
 export async function createCredential(data: {
   provider: string;
-  name?: string;
   key: string;
 }): Promise<string> {
   if (!isProviderSupported(data.provider)) {
     throw new Error(`Unsupported provider: ${data.provider}`);
   }
 
-  const row = await credentialsStore.insertCredential({
+  const row = await credentialsStore.upsertCredential({
     provider: data.provider as CredentialProvider,
-    name: data.name?.trim() || data.provider,
     encryptedKey: encrypt(data.key),
     keyHint: maskApiKey(data.key),
   });

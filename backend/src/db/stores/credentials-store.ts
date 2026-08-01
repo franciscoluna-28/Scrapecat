@@ -4,13 +4,23 @@ import { credentials, type CredentialProvider } from "../schema";
 
 export type CredentialInput = {
   provider: CredentialProvider;
-  name: string;
   encryptedKey: string;
   keyHint: string;
 };
 
-export async function insertCredential(input: CredentialInput) {
-  const [row] = await db.insert(credentials).values(input).returning();
+export async function upsertCredential(input: CredentialInput) {
+  const [row] = await db
+    .insert(credentials)
+    .values(input)
+    .onConflictDoUpdate({
+      target: credentials.provider,
+      set: {
+        encryptedKey: input.encryptedKey,
+        keyHint: input.keyHint,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
   return row;
 }
 

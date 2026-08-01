@@ -114,14 +114,19 @@ export const reports = pgTable("reports", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const credentials = pgTable("credentials", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  provider: credentialProviderEnum("provider").notNull(),
-  name: text("name").notNull().unique(),
-  encryptedKey: text("encrypted_key").notNull(),
-  keyHint: text("key_hint").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const credentials = pgTable(
+  "credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: credentialProviderEnum("provider").notNull(),
+    encryptedKey: text("encrypted_key").notNull(),
+    keyHint: text("key_hint").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    providerUnique: uniqueIndex("credentials_provider_unique").on(table.provider),
+  }),
+);
 
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

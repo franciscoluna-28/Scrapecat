@@ -842,7 +842,6 @@ export interface paths {
                 content: {
                     "application/json": {
                         provider: string;
-                        name?: string;
                         key: string;
                     };
                 };
