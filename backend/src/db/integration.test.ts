@@ -1,26 +1,43 @@
 import { randomUUID } from "crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "./client";
-import { githubProjects, credentials } from "./schema";
+import { githubProjects, credentials, commitChunks } from "./schema";
 import * as projectsStore from "./stores/projects-store";
 import * as commitChunksStore from "./stores/commit-chunks-store";
 import * as reportsStore from "./stores/reports-store";
 import * as credentialsStore from "./stores/credentials-store";
 import { buildApp } from "../app";
+import { embedNewChunks } from "../services/embed-chunks";
+
+vi.mock("../services/embeddings", () => ({
+  embedTexts: vi.fn(async (texts: string[]) =>
+    texts.map(() => Array.from({ length: 1536 }, () => 0)),
+  ),
+}));
 
 const enabled = process.env.DB_INTEGRATION === "1";
 
 describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   const githubProjectId = 999_999_001;
+  const chunkProjectId = 999_999_002;
+  const legacyProjectId = 999_999_003;
+  const embedProjectId = 999_999_004;
   const repositoryName = "integration-test-repo";
   const credentialName = "integration-test-key";
 
-  beforeAll(async () => {
-    const project = await projectsStore.getProjectByGithubId(githubProjectId);
+  const cleanupProject = async (id: number) => {
+    const project = await projectsStore.getProjectByGithubId(id);
     if (project) {
       await db.delete(githubProjects).where(eq(githubProjects.id, project.id));
     }
+  };
+
+  beforeAll(async () => {
+    await cleanupProject(githubProjectId);
+    await cleanupProject(chunkProjectId);
+    await cleanupProject(legacyProjectId);
+    await cleanupProject(embedProjectId);
     const existing = await credentialsStore.listCredentials();
     for (const c of existing) {
       if (c.name === credentialName) {
@@ -30,10 +47,10 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   afterAll(async () => {
-    const project = await projectsStore.getProjectByGithubId(githubProjectId);
-    if (project) {
-      await db.delete(githubProjects).where(eq(githubProjects.id, project.id));
-    }
+    await cleanupProject(githubProjectId);
+    await cleanupProject(chunkProjectId);
+    await cleanupProject(legacyProjectId);
+    await cleanupProject(embedProjectId);
     const existing = await credentialsStore.listCredentials();
     for (const c of existing) {
       if (c.name === credentialName) {
@@ -84,6 +101,99 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       endDate: new Date("2027-01-31"),
     });
     expect(outOfRange.filter((c) => c.commitSha === "abc123")).toHaveLength(0);
+  });
+
+  it("getChunksByShas returns stored shas and sets content_hash on upsert", async () => {
+    const project = await projectsStore.upsertProject({ githubProjectId: chunkProjectId, repositoryName });
+    await commitChunksStore.upsertCommitChunks([
+      {
+        projectId: project.id,
+        commitSha: "sha-1",
+        commitMessage: "feat: first",
+        author: "tester",
+        diffSummary: "first summary",
+        metadata: { commitUrl: "https://github.com/org/repo/commit/sha-1" },
+        committedAt: new Date("2026-02-01T00:00:00Z"),
+      },
+    ]);
+
+    const found = await commitChunksStore.getChunksByShas(project.id, ["sha-1", "sha-missing"]);
+    expect(found.has("sha-1")).toBe(true);
+    expect(found.get("sha-1")?.contentHash).toBe(commitChunksStore.contentHashOf("first summary"));
+    expect(found.has("sha-missing")).toBe(false);
+  });
+
+  it("embedding pipeline embeds pending chunks and is idempotent", async () => {
+    const project = await projectsStore.upsertProject({ githubProjectId: embedProjectId, repositoryName });
+    await commitChunksStore.upsertCommitChunks([
+      {
+        projectId: project.id,
+        commitSha: "embed-abc",
+        commitMessage: "feat: embeddings",
+        author: "tester",
+        diffSummary: "embedding corpus text",
+        metadata: {},
+        committedAt: new Date("2026-02-02T00:00:00Z"),
+      },
+    ]);
+
+    const first = await embedNewChunks(project.id);
+    expect(first.embedded).toBe(1);
+
+    const rows = await db
+      .select()
+      .from(commitChunks)
+      .where(eq(commitChunks.commitSha, "embed-abc"));
+    expect(rows[0].embeddingHash).toBe(commitChunksStore.contentHashOf("embedding corpus text"));
+    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("embedding corpus text"));
+
+    const second = await embedNewChunks(project.id);
+    expect(second.embedded).toBe(0);
+
+    await commitChunksStore.upsertCommitChunks([
+      {
+        projectId: project.id,
+        commitSha: "embed-abc",
+        commitMessage: "feat: embeddings",
+        author: "tester",
+        diffSummary: "changed corpus text",
+        metadata: {},
+        committedAt: new Date("2026-02-02T00:00:00Z"),
+      },
+    ]);
+
+    const third = await embedNewChunks(project.id);
+    expect(third.embedded).toBe(1);
+  });
+
+  it("embedding pipeline normalizes legacy rows with null content_hash", async () => {
+    const project = await projectsStore.upsertProject({ githubProjectId: legacyProjectId, repositoryName });
+    const [row] = await db
+      .insert(commitChunks)
+      .values({
+        projectId: project.id,
+        commitSha: "legacy-abc",
+        commitMessage: "feat: legacy",
+        author: "tester",
+        diffSummary: "legacy corpus text",
+        metadata: {},
+        committedAt: new Date("2026-02-03T00:00:00Z"),
+      })
+      .returning();
+    expect(row.contentHash).toBeNull();
+
+    const result = await embedNewChunks(project.id);
+    expect(result.embedded).toBe(1);
+
+    const rows = await db
+      .select()
+      .from(commitChunks)
+      .where(eq(commitChunks.commitSha, "legacy-abc"));
+    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("legacy corpus text"));
+    expect(rows[0].embeddingHash).toBe(commitChunksStore.contentHashOf("legacy corpus text"));
+
+    const second = await embedNewChunks(project.id);
+    expect(second.embedded).toBe(0);
   });
 
   it("reports-store creates and lists reports linked to a project", async () => {
