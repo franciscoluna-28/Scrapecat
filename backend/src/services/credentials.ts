@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { getProviderConfig, isProviderSupported } from "../providers/registry";
 import { encrypt, decrypt, maskApiKey } from "./encryption";
 import type { CredentialProvider } from "../db/schema";
@@ -34,15 +33,14 @@ export async function createCredential(data: {
     throw new Error(`Unsupported provider: ${data.provider}`);
   }
 
-  const id = nanoid();
-  await credentialsStore.insertCredential({
+  const row = await credentialsStore.insertCredential({
     provider: data.provider as CredentialProvider,
     name: data.name?.trim() || data.provider,
     encryptedKey: encrypt(data.key),
     keyHint: maskApiKey(data.key),
   });
 
-  return id;
+  return row.id;
 }
 
 export async function deleteCredential(id: string): Promise<boolean> {
