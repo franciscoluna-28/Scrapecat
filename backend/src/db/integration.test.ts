@@ -1,16 +1,16 @@
 import { randomUUID } from "crypto";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { db } from "./client";
-import { githubProjects, credentials, commitChunks } from "./schema";
-import * as projectsStore from "./stores/projects-store";
-import * as commitChunksStore from "./stores/commit-chunks-store";
-import * as reportsStore from "./stores/reports-store";
-import * as credentialsStore from "./stores/credentials-store";
-import { buildApp } from "../app";
-import { embedNewChunks } from "../services/embed-chunks";
+import { db } from "@/db/client";
+import { githubProjects, credentials, commitChunks } from "@/db/schema";
+import * as projectsStore from "@/projects/stores/projects-store";
+import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
+import * as reportsStore from "@/reports/stores/reports-store";
+import * as credentialsStore from "@/credentials/stores/credentials-store";
+import { buildApp } from "@/app";
+import { embedNewChunks } from "@/projects/embed-chunks";
 
-vi.mock("../services/embeddings", () => ({
+vi.mock("@/projects/embeddings", () => ({
   embedTexts: vi.fn(async (texts: string[]) =>
     texts.map(() => Array.from({ length: 1536 }, () => 0)),
   ),

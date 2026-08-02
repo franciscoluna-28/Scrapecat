@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractImagesFromPrBody } from "./utils";
+import { extractImagesFromPrBody } from "@/shared/utils";
 
 describe("extractImagesFromPrBody", () => {
   const sha = "abc123";
