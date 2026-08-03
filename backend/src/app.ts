@@ -8,7 +8,7 @@ import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
-import { createReport, listReports, getReport, updateReport, replyToReport } from "@/reports/routes";
+import { createReport, listReports, getReport, getReportCommits, updateReport, replyToReport } from "@/reports/routes";
 import { listProjects, listProjectCommits } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
@@ -159,6 +159,15 @@ export async function buildApp() {
       response: { 200: ReportGetResponse, 404: ErrorResponse },
     },
   }, getReport);
+
+  app.get("/api/v1/reports/:id/commits", {
+    schema: {
+      description: "List commits for a report, syncing new commits from GitHub",
+      tags: ["reports"],
+      params: ReportIdParams,
+      response: { 200: ProjectCommitsResponse, 404: ErrorResponse },
+    },
+  }, getReportCommits);
 
   app.put("/api/v1/reports/:id", {
     schema: {

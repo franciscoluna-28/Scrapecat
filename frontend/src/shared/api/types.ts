@@ -589,6 +589,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/{id}/commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List commits for a report, syncing new commits from GitHub */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            commits: {
+                                id: string;
+                                commitSha: string;
+                                commitMessage: string;
+                                author?: string | null;
+                                diffSummary: string;
+                                /** Format: date-time */
+                                committedAt: string;
+                                metadata?: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/{id}/replies": {
         parameters: {
             query?: never;
@@ -697,6 +757,7 @@ export interface paths {
                             projects: {
                                 id: string;
                                 githubProjectId: number;
+                                githubOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
                                 /** Format: date-time */

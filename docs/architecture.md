@@ -12,7 +12,6 @@
 │     PostgreSQL + pgvector (projects, commits, reports)   │
 │     Drizzle ORM · postgres-js driver                     │
 │     Store layer per domain (src/projects/stores/, …)     │
-│     R2 (S3-compatible image storage)                     │
 │     Octokit (GitHub REST API)                            │
 │     ──[future]──── GitLab · Bitbucket                    │
 └─────────────────────────────────────────────────────────┘
@@ -52,16 +51,14 @@ The API has zero authentication. Fine for the MVP's trusted deployments. Impossi
 
 One ~160-line handler does validation, GitHub fetch, chunk building, AI retry loop, and report persistence. Should be extracted into a service.
 
-- The PR deep-search + R2 image pipeline (`src/reports/r2.ts`, `extractImagesFromPrBody`) is deprecated from the report path. Both files remain in the tree but are unwired.
-- `quickMode` is a no-op — the frontend still sends it, the backend ignores it.
 - Per-commit PR/detail enrichment (`getPullRequestForCommit`, `getCommitDetails`) only runs for SHAs not already stored, concurrency-limited to 6, and degrades gracefully on failure.
-- Legacy reports with a `## Media` section silently lose it during refinement (`replyToReport` in `src/reports/routes.ts` strips it).
+- Commit reads are store-first with GitHub delta sync: `GET /api/v1/reports/:id/commits` and `POST /api/v1/reports` share `syncProjectCommits()` (`src/projects/sync.ts`); a full GitHub fetch happens only when nothing is stored yet.
 
 ### Validation & data-integrity gaps
 
 - `startDate`/`endDate` are unvalidated strings; invalid dates surface as generic 500s.
 - `limit` in `GET /repositories/:owner/:repo/commits` is `parseInt`-ed without validation (NaN can propagate to GitHub).
-- `GET /repositories/*`, `/commits`, `/commits/count` hit GitHub live instead of the commit store — discovery endpoints, not the normalized read path.
+- `GET /repositories/*`, `/commits`, `/commits/count` hit GitHub live — discovery endpoints by design; the normalized read path is `GET /projects/:id/commits` and `GET /reports/:id/commits`.
 - No transactions: project upsert, chunk upsert, and report create are separate writes. A mid-way failure leaves chunks persisted without a report (safe today — chunks are the cache — but should be intentional).
 
 ## What needs to happen

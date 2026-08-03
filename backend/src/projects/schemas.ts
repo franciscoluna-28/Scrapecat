@@ -19,6 +19,7 @@ export const ProjectsResponse = Type.Object({
     Type.Object({
       id: Type.String(),
       githubProjectId: Type.Integer(),
+      githubOwner: Type.String(),
       repositoryName: Type.String(),
       defaultBranch: Type.String(),
       createdAt: Type.String({ format: "date-time" }),

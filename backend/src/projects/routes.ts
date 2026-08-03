@@ -10,6 +10,7 @@ export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
       projects: projects.map((p) => ({
         id: p.id,
         githubProjectId: p.githubProjectId,
+        githubOwner: p.githubOwner,
         repositoryName: p.repositoryName,
         defaultBranch: p.defaultBranch,
         createdAt: p.createdAt,

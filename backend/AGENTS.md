@@ -53,14 +53,21 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 ## Report generation flow (`src/reports/routes.ts`)
 
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
-2. Fetch commits from GitHub via `getGitProvider().listCommits()` (max 100)
-3. Enrich with PR data — fetches PR body for each commit via `getPullRequestForCommit()`
-4. Upsert the project (`githubProjects` via `projects-store`) and normalize commits into `commitChunks` (`commit-chunks-store`), building `diff_summary` from per-commit diffs fetched via `getCommitDetails()`
-5. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
-6. Call AI with up to 2 retries if structure validation fails
-7. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
-8. Store in Postgres via Drizzle ORM
-9. Return `{ reportId, projectId }`
+2. Upsert the project (`githubProjects` via `projects-store`, storing `github_owner`)
+3. Sync commits via `syncProjectCommits()` (`src/projects/sync.ts`): fetch from GitHub (max 100), enrich only SHAs not already in `commitChunks` via `buildCommitChunks`, upsert them, fire-and-forget `embedNewChunks`
+4. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
+5. Call AI with up to 2 retries if structure validation fails
+6. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
+7. Store in Postgres via Drizzle ORM
+8. Return `{ reportId, projectId }`
+
+### Read-path model
+
+The DB is the read model for commits once a project exists. GitHub is only consulted to sync **new** commits; a full GitHub fetch is the fallback only when nothing is stored.
+
+- **Discovery** (repos/branches, pre-sync commit preview) hits GitHub live: `src/gitRepositories/routes.ts`
+- **Report commits** (`GET /api/v1/reports/:id/commits`): loads the report + project, calls `syncProjectCommits()` to pull new commits, then serves the stored rows from `commitChunks` (`listCommitsForProject`). If the GitHub sync fails it logs and still serves stored commits.
+- **Report generation** (`POST /api/v1/reports`) is the single sync point — it shares `syncProjectCommits()` with the read path.
 
 Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
 
@@ -69,7 +76,7 @@ Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but re
 Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvector (`pgvector/pgvector` in docker-compose, extension `vector`).
 
 Tables defined in `src/db/schema.ts`:
-- **github_projects** — normalized projects (uuid PK, unique GitHub project id, repo name, default branch)
+- **github_projects** — normalized projects (uuid PK, unique GitHub project id, owner, repo name, default branch)
 - **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
 
 > **RAG is WIP.** The `embedding` column and HNSW index are infrastructure only — no embedding provider or backfill job exists, so embeddings are always NULL. Do not write queries that assume vectors are populated.
