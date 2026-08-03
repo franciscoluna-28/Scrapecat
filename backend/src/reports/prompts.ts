@@ -58,16 +58,3 @@ export function buildRefinePrompt(reply: string): string {
   ].join("\n");
 }
 
-export const FALLBACK_REPORT = `# Product Update - Executive Summary
-
-## Business Impact
-Unable to generate summary due to API rate limits. Please try again later.
-
-## Key Achievements
-Report generation temporarily unavailable.
-
-## Productivity Overview
-Rate limit reached. Consider upgrading API plan for higher limits.
-
-### Strategic Direction
-Wait a few minutes before retrying. Consider reducing data size for faster processing.`;

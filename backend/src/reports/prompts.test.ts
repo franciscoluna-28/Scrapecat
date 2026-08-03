@@ -4,7 +4,6 @@ import {
   getLanguageInstruction,
   buildReportPrompt,
   buildRefinePrompt,
-  FALLBACK_REPORT,
 } from "@/reports/prompts";
 
 describe("buildSystemPrompt", () => {
@@ -64,12 +63,5 @@ describe("buildRefinePrompt", () => {
     expect(result).toContain("Make it shorter");
     expect(result).toContain("Refine the report");
     expect(result).toContain("template");
-  });
-});
-
-describe("FALLBACK_REPORT", () => {
-  it("is a non-empty string", () => {
-    expect(typeof FALLBACK_REPORT).toBe("string");
-    expect(FALLBACK_REPORT.length).toBeGreaterThan(0);
   });
 });

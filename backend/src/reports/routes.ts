@@ -12,11 +12,11 @@ import {
   replyToReportUseCase,
   NoCommitsError,
   ReportNotFoundError,
+  AIGenerationError,
 } from "@/reports/use-cases";
-import { syncProjectCommits } from "@/projects/sync";
 import * as projectsStore from "@/projects/stores/projects-store";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
+import * as reportCommitsStore from "@/reports/stores/report-commits-store";
 import { formatDate } from "@/shared/utils";
 
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
@@ -32,6 +32,9 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
     console.error("Error generating report:", error);
     if (error instanceof NoCommitsError) {
       return reply.status(400).send({ error: error.message });
+    }
+    if (error instanceof AIGenerationError) {
+      return reply.status(error.status).send({ error: error.message });
     }
     if (error?.status === 404 || error?.status === 422) {
       return reply.status(400).send({
@@ -130,31 +133,10 @@ export async function getReportCommits(
       return reply.status(404).send({ error: "Report not found" });
     }
 
-    const project = await projectsStore.getProjectById({ id: report.projectId });
-    if (!project) {
-      return reply.status(404).send({ error: "Report project not found" });
-    }
-
-    const startDate = formatDate(report.startDate);
-    const endDate = formatDate(report.endDate);
-
-    try {
-      await syncProjectCommits({
-        projectId: project.id,
-        owner: project.githubOwner,
-        repo: project.repositoryName,
-        branch: report.branch,
-        startDate,
-        endDate,
-      });
-    } catch (error) {
-      console.warn("Failed to sync new commits from GitHub; serving stored commits:", error);
-    }
-
-    const commits = await commitChunksStore.listCommitsForProject({
-      projectId: project.id,
-      startDate: report.startDate,
-      endDate: report.endDate,
+    const commits = await reportCommitsStore.listCommitsForReport({
+      reportId: report.id,
+      projectId: report.projectId,
+      branch: report.branch,
     });
 
     return reply.send({
