@@ -147,7 +147,7 @@ export default function ReportClientPage({
       <div className="flex h-screen overflow-hidden">
         <div
           className={`${
-            sidebarOpen ? "w-80" : "w-0"
+            sidebarOpen ? "w-96" : "w-0"
           } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
         >
           <div className="p-4 border-b flex items-center min-w-0">

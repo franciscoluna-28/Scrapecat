@@ -8,7 +8,11 @@ import type { GitHubProject } from "@/src/shared/types";
 export function useProjects() {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.projects.list,
-    queryFn: () => apiClient.GET("/api/v1/projects").then((r) => r.data),
+    queryFn: () =>
+      apiClient.GET("/api/v1/projects").then((r) => {
+        if (r.error) throw r.error;
+        return r.data;
+      }),
   });
 
   return {

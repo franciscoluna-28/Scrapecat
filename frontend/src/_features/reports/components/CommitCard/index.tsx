@@ -12,39 +12,29 @@ type CommitCardProps = {
 
 function CommitCardItem({ commit }: { commit: StoredCommit }) {
   return (
-    <Card key={commit.id || commit.commitSha} className="overflow-hidden">
+    <Card className="overflow-hidden">
       <CardContent className="p-3">
         <div className="flex items-start gap-2 mb-1.5">
-          <GitCommit className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+          <GitCommit className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs leading-relaxed line-clamp-2">
+            <p className="text-xs leading-relaxed line-clamp-3 [overflow-wrap:anywhere]">
               {commit.commitMessage}
             </p>
             {commit.commitSha && (
-              <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">
+              <p className="text-[11px] font-mono text-muted-foreground/60 mt-0.5">
                 {commit.commitSha.slice(0, 7)}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center justify-between pl-5">
-          <span className="text-xs text-muted-foreground truncate">
+        <div className="flex items-center justify-between pl-5 gap-2">
+          <span className="text-xs text-muted-foreground truncate min-w-0">
             {commit.author ?? "Unknown"}
           </span>
-          <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
+          <span className="text-[11px] text-muted-foreground/60 shrink-0">
             {new Date(commit.committedAt).toLocaleDateString("en-US")}
           </span>
         </div>
-        {commit.diffSummary && (
-          <details className="mt-2 pl-5">
-            <summary className="text-[10px] text-muted-foreground/60 cursor-pointer hover:text-foreground">
-              View diff
-            </summary>
-            <pre className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap rounded-md bg-muted/60 p-2 overflow-x-auto max-h-40 overflow-y-auto">
-              {commit.diffSummary}
-            </pre>
-          </details>
-        )}
       </CardContent>
     </Card>
   );

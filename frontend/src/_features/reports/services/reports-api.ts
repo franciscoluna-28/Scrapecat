@@ -14,7 +14,10 @@ export function useReports(projectId?: string) {
         .GET("/api/v1/reports", {
           params: { query },
         })
-        .then((r) => r.data),
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.data;
+        }),
   });
 
   return {
