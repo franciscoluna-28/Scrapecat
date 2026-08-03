@@ -58,7 +58,7 @@ One ~160-line handler does validation, GitHub fetch, chunk building, AI retry lo
 
 - `startDate`/`endDate` are unvalidated strings; invalid dates surface as generic 500s.
 - `limit` in `GET /repositories/:owner/:repo/commits` is `parseInt`-ed without validation (NaN can propagate to GitHub).
-- `GET /repositories/*`, `/commits`, `/commits/count` hit GitHub live — discovery endpoints by design; the normalized read path is `GET /projects/:id/commits` and `GET /reports/:id/commits`.
+- `GET /repositories/*`, `/commits`, `/commits/count` hit GitHub live — discovery endpoints by design; the normalized read path is `GET /reports/:id/commits`.
 - No transactions: project upsert, chunk upsert, and report create are separate writes. A mid-way failure leaves chunks persisted without a report (safe today — chunks are the cache — but should be intentional).
 
 ## What needs to happen

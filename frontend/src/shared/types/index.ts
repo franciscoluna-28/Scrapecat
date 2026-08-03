@@ -18,7 +18,7 @@ export type GitHubProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
 
 export type StoredCommit =
-  paths["/api/v1/projects/{projectId}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
+  paths["/api/v1/reports/{id}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
 
 export type ReportSummary =
   paths["/api/v1/reports"]["get"]["responses"]["200"]["content"]["application/json"]["reports"][number];

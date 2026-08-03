@@ -73,7 +73,7 @@ See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/r
 
 ## Integration tests (Postgres)
 
-`src/db/integration.test.ts` exercises the store layer and the DB-backed routes (`GET /api/v1/projects`, `GET /api/v1/projects/{id}/commits`, `GET /api/v1/reports`) against a **live Postgres**. It is skipped by default and runs only under the integration config:
+`src/db/integration.test.ts` exercises the store layer and the DB-backed routes (`GET /api/v1/projects`, `GET /api/v1/reports/:id/commits`, `GET /api/v1/reports`) against a **live Postgres**. It is skipped by default and runs only under the integration config:
 
 ```bash
 pnpm test:integration   # requires a running Postgres (e.g. docker compose up -d db)

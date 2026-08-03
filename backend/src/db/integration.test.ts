@@ -236,8 +236,28 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     expect(await credentialsStore.getCredentialById(created.id)).toBeNull();
   });
 
-  it("GET /api/v1/projects and project commits hit postgres", async () => {
+  it("GET /api/v1/projects and report commits hit postgres", async () => {
     const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
+    const report = await reportsStore.createReport({
+      id: randomUUID(),
+      projectId: project.id,
+      title: "Project Commits Report",
+      originalMarkdown: "# Project Commits Report",
+      editableMarkdown: "# Project Commits Report",
+      startDate: new Date("2026-01-01T00:00:00Z"),
+      endDate: new Date("2026-01-31T00:00:00Z"),
+      branch: "main",
+    });
+    await commitChunksStore.upsertCommitChunks([
+      {
+        projectId: project.id,
+        commitSha: "report-commits-sha",
+        commitMessage: "feat: report commits",
+        author: "tester",
+        diffSummary: "diff summary for report commits",
+        committedAt: new Date("2026-01-10T00:00:00Z"),
+      },
+    ]);
     const app = await buildApp();
     try {
       const res = await app.inject({ method: "GET", url: "/api/v1/projects" });
@@ -247,10 +267,10 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
 
       const commits = await app.inject({
         method: "GET",
-        url: `/api/v1/projects/${project.id}/commits?startDate=2026-01-01&endDate=2026-01-31`,
+        url: `/api/v1/reports/${report.id}/commits`,
       });
       expect(commits.statusCode).toBe(200);
-      expect(commits.json().commits.length).toBeGreaterThan(0);
+      expect(commits.json().commits.some((c: any) => c.commitSha === "report-commits-sha")).toBe(true);
     } finally {
       await app.close();
     }

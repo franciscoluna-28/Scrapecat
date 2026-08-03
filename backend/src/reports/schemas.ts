@@ -119,3 +119,17 @@ export const ReportReplyBody = Type.Object({
 export const ReportReplyResponse = Type.Object({
   report: Type.String(),
 });
+
+export const ReportCommitsResponse = Type.Object({
+  commits: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      commitSha: Type.String(),
+      commitMessage: Type.String(),
+      author: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+      diffSummary: Type.String(),
+      committedAt: Type.String({ format: "date-time" }),
+      metadata: Type.Optional(Type.Any()),
+    }),
+  ),
+});

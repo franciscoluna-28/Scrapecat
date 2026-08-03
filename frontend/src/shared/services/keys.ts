@@ -12,10 +12,6 @@ export const queryKeys = {
   projects: {
     all: ["projects"] as const,
     list: ["projects", "list"] as const,
-    commits: (
-      projectId: string,
-      params?: { startDate?: string; endDate?: string },
-    ) => ["projects", "commits", projectId, params] as const,
   },
   repositories: {
     all: ["repositories"] as const,

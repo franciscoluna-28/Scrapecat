@@ -9,7 +9,7 @@ import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits, updateReport, replyToReport } from "@/reports/routes";
-import { listProjects, listProjectCommits } from "@/projects/routes";
+import { listProjects } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
@@ -38,8 +38,9 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
+  ReportCommitsResponse,
 } from "@/reports/schemas";
-import { ProjectIdParams, ProjectsResponse, ProjectCommitsQuery, ProjectCommitsResponse } from "@/projects/schemas";
+import { ProjectsResponse } from "@/projects/schemas";
 import {
   AddCredentialBody,
   CredentialListResponse,
@@ -165,7 +166,7 @@ export async function buildApp() {
       description: "List commits for a report, syncing new commits from GitHub",
       tags: ["reports"],
       params: ReportIdParams,
-      response: { 200: ProjectCommitsResponse, 404: ErrorResponse },
+      response: { 200: ReportCommitsResponse, 404: ErrorResponse },
     },
   }, getReportCommits);
 
@@ -196,16 +197,6 @@ export async function buildApp() {
       response: { 200: ProjectsResponse },
     },
   }, listProjects);
-
-  app.get("/api/v1/projects/:projectId/commits", {
-    schema: {
-      description: "List normalized commits for a project within an optional date range",
-      tags: ["projects"],
-      params: ProjectIdParams,
-      querystring: ProjectCommitsQuery,
-      response: { 200: ProjectCommitsResponse, 400: ErrorResponse },
-    },
-  }, listProjectCommits);
 
   app.get("/api/v1/credentials", {
     schema: {
