@@ -11,6 +11,13 @@ export type GitHubRepository = {
   forks_count?: number;
 };
 
+export type ImageAsset = {
+  originalUrl: string;
+  r2Url: string;
+  commitSha: string;
+  commitMessage: string;
+};
+
 export type ProcessedCommit =
   paths["/api/v1/repositories/{owner}/{repo}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
 
@@ -18,7 +25,7 @@ export type GitHubProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
 
 export type StoredCommit =
-  paths["/api/v1/reports/{id}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
+  paths["/api/v1/projects/{projectId}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
 
 export type ReportSummary =
   paths["/api/v1/reports"]["get"]["responses"]["200"]["content"]["application/json"]["reports"][number];

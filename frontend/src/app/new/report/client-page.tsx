@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
-import type { StoredCommit } from "@/src/shared/types";
+import type { ImageAsset, StoredCommit } from "@/src/shared/types";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -41,6 +41,7 @@ type Props = {
   branch: string;
   report: string;
   reportId?: string;
+  imageAssets?: ImageAsset[];
 };
 
 const markdownComponents: Components = {
@@ -92,6 +93,7 @@ export default function ReportClientPage({
   branch,
   report,
   reportId,
+  imageAssets,
 }: Props) {
   const [isReplying, startReplyTransition] = useTransition();
   const [replyText, setReplyText] = useState("");
@@ -277,6 +279,19 @@ export default function ReportClientPage({
                       .replace(/•\s*/g, "- ")
                       .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")}
                   </ReactMarkdown>
+                  {imageAssets && imageAssets.length > 0 && (
+                    <div className="mt-8 pt-8 border-t space-y-4">
+                      <h2 className="text-lg font-semibold text-foreground/90">Media</h2>
+                      {imageAssets.map((asset, i) => (
+                        <img
+                          key={i}
+                          src={asset.r2Url}
+                          alt={asset.commitMessage || "Screenshot"}
+                          className="rounded-lg border max-w-full"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

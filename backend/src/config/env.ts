@@ -11,6 +11,11 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().default(""),
   GIT_PROVIDER: z.enum(["github", "gitlab"]).default("github"),
   ENCRYPTION_KEY: z.string().min(1, "ENCRYPTION_KEY is required (use: openssl rand -base64 32)"),
+  R2_ACCESS_KEY_ID: z.string().default(""),
+  R2_SECRET_ACCESS_KEY: z.string().default(""),
+  R2_ENDPOINT: z.string().default(""),
+  R2_BUCKET_NAME: z.string().default(""),
+  R2_PUBLIC_URL: z.string().default(""),
   EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
   EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(100),
   EMBEDDING_ENABLED: z

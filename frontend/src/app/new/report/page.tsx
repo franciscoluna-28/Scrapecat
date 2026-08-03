@@ -1,7 +1,9 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useReport, useReportCommits } from "@/src/_features/reports/services/reports-api";
+import { useReport } from "@/src/_features/reports/services/reports-api";
+import { useProjectCommits } from "@/src/_features/reports/services/projects-api";
+import type { ImageAsset } from "@/src/shared/types";
 import ReportClientPage from "./client-page";
 
 export default function ReportPage() {
@@ -10,7 +12,10 @@ export default function ReportPage() {
 
   const { report, isLoading } = useReport(reportId ?? "");
 
-  const { commits, isLoading: isLoadingCommits } = useReportCommits(reportId ?? "");
+  const { commits, isLoading: isLoadingCommits } = useProjectCommits(report?.projectId, {
+    startDate: report?.startDate,
+    endDate: report?.endDate,
+  });
 
   if (!reportId) {
     return (
@@ -63,6 +68,7 @@ export default function ReportPage() {
       branch={report.branch}
       report={report.editableMarkdown}
       reportId={reportId}
+      imageAssets={(report.imageAssets || []) as ImageAsset[]}
     />
   );
 }

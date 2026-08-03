@@ -1,22 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { formatDate, extractReportTitle } from "@/shared/utils";
+import { extractImagesFromPrBody } from "@/shared/utils";
 
-describe("formatDate", () => {
-  it("returns YYYY-MM-DD", () => {
-    expect(formatDate(new Date("2026-01-15T00:00:00Z"))).toBe("2026-01-15");
+describe("extractImagesFromPrBody", () => {
+  const sha = "abc123";
+  const message = "fix: typo";
+
+  it("extracts markdown images", () => {
+    const body = "Some text\n![screenshot](https://example.com/img.png)\nmore text";
+    const result = extractImagesFromPrBody(body, sha, message);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      url: "https://example.com/img.png",
+      alt: "screenshot",
+      commitSha: sha,
+      commitMessage: message,
+    });
   });
-});
 
-describe("extractReportTitle", () => {
-  it("extracts the h1 from markdown", () => {
-    expect(extractReportTitle("# Product Update\n\nSome text", "fallback")).toBe("Product Update");
+  it("extracts HTML img tags", () => {
+    const body = '<img src="https://example.com/photo.jpg" alt="photo" />';
+    const result = extractImagesFromPrBody(body, sha, message);
+    expect(result).toHaveLength(1);
+    expect(result[0].url).toBe("https://example.com/photo.jpg");
   });
 
-  it("ignores h2 headings", () => {
-    expect(extractReportTitle("## Not The Title\n\n# The Title", "fallback")).toBe("The Title");
+  it("returns empty array when no images", () => {
+    const result = extractImagesFromPrBody("just text, no images", sha, message);
+    expect(result).toEqual([]);
   });
 
-  it("falls back when no h1 exists", () => {
-    expect(extractReportTitle("just text", "fallback")).toBe("fallback");
+  it("extracts multiple images", () => {
+    const body = "![a](https://a.png) text ![b](https://b.png)";
+    const result = extractImagesFromPrBody(body, sha, message);
+    expect(result).toHaveLength(2);
   });
 });

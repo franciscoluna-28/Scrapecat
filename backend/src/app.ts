@@ -7,9 +7,9 @@ import { env } from "@/config/env";
 import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
-import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
-import { createReport, listReports, getReport, getReportCommits, updateReport, replyToReport } from "@/reports/routes";
-import { listProjects } from "@/projects/routes";
+import { listRepositories, listBranches, listCommits, countCommits } from "@/repositories/routes";
+import { createReport, listReports, getReport, updateReport, replyToReport } from "@/reports/routes";
+import { listProjects, listProjectCommits } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
@@ -25,7 +25,7 @@ import {
   RepositoriesQuery,
   RepositoriesResponse,
   BranchesResponse,
-} from "@/gitRepositories/schemas";
+} from "@/repositories/schemas";
 import {
   ReportInputBody,
   ReportCreatedResponse,
@@ -38,9 +38,8 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
-  ReportCommitsResponse,
 } from "@/reports/schemas";
-import { ProjectsResponse } from "@/projects/schemas";
+import { ProjectIdParams, ProjectsResponse, ProjectCommitsQuery, ProjectCommitsResponse } from "@/projects/schemas";
 import {
   AddCredentialBody,
   CredentialListResponse,
@@ -161,15 +160,6 @@ export async function buildApp() {
     },
   }, getReport);
 
-  app.get("/api/v1/reports/:id/commits", {
-    schema: {
-      description: "List commits for a report, syncing new commits from GitHub",
-      tags: ["reports"],
-      params: ReportIdParams,
-      response: { 200: ReportCommitsResponse, 404: ErrorResponse },
-    },
-  }, getReportCommits);
-
   app.put("/api/v1/reports/:id", {
     schema: {
       description: "Update a report's editable markdown content",
@@ -197,6 +187,16 @@ export async function buildApp() {
       response: { 200: ProjectsResponse },
     },
   }, listProjects);
+
+  app.get("/api/v1/projects/:projectId/commits", {
+    schema: {
+      description: "List normalized commits for a project within an optional date range",
+      tags: ["projects"],
+      params: ProjectIdParams,
+      querystring: ProjectCommitsQuery,
+      response: { 200: ProjectCommitsResponse, 400: ErrorResponse },
+    },
+  }, listProjectCommits);
 
   app.get("/api/v1/credentials", {
     schema: {

@@ -97,6 +97,7 @@ export function SettingsForm({
             startDate,
             endDate: finalEndDate,
             customInstructions,
+            quickMode: true, // Always use quickMode for the MVP stage as the image uploading and PR fetching is still experimental
             model: selectedModel,
             provider: selectedProvider,
           },

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
-import type { ReportDetail, ReportSummary, StoredCommit } from "@/src/shared/types";
+import type { ReportDetail, ReportSummary } from "@/src/shared/types";
 
 export function useReports(projectId?: string) {
   const query = projectId ? { projectId } : undefined;
@@ -44,28 +44,6 @@ export function useReport(id: string) {
 
   return {
     report: (data ?? null) as ReportDetail | null,
-    isLoading,
-    error: error ?? null,
-  };
-}
-
-export function useReportCommits(id: string) {
-  const { data, error, isLoading } = useQuery({
-    queryKey: queryKeys.reports.commits(id),
-    queryFn: () =>
-      apiClient
-        .GET("/api/v1/reports/{id}/commits", {
-          params: { path: { id } },
-        })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
-        }),
-    enabled: !!id,
-  });
-
-  return {
-    commits: (data?.commits ?? []) as StoredCommit[],
     isLoading,
     error: error ?? null,
   };
