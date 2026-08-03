@@ -18,7 +18,6 @@ import {
   getLanguageInstruction,
   buildReportPrompt,
   buildRefinePrompt,
-  FALLBACK_REPORT,
 } from "@/reports/prompts";
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
@@ -30,6 +29,28 @@ export class NoCommitsError extends Error {
   readonly status = 400;
   constructor() {
     super("Cannot generate report: no commits found in the selected date range");
+  }
+}
+
+export class AIGenerationError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+
+  static from(error: unknown): AIGenerationError {
+    const status = (error as any)?.status;
+    if (status === 429) {
+      return new AIGenerationError(
+        "AI rate limit reached. Please wait a moment and try again.",
+        429,
+      );
+    }
+    return new AIGenerationError(
+      "AI report generation failed. Please try again.",
+      500,
+    );
   }
 }
 
@@ -59,12 +80,15 @@ async function generateReport(opts: {
     languageInstruction,
   });
 
-  let generatedReport = FALLBACK_REPORT;
+  const maxAttempts = 2;
+  let lastError: unknown = null;
+  let lastReport = "";
 
-  try {
-    const maxAttempts = 2;
-    for (let attempts = 1; attempts <= maxAttempts; attempts++) {
-      const { content: rawContent, finishReason } = await callAI({
+  for (let attempts = 1; attempts <= maxAttempts; attempts++) {
+    let content: string;
+    let finishReason: string | null | undefined;
+    try {
+      const result = await callAI({
         model: opts.input.model,
         provider: opts.provider,
         apiKey: opts.apiKey || undefined,
@@ -80,29 +104,38 @@ async function generateReport(opts: {
           },
         ],
       });
-
-      if (finishReason === "length") {
-        console.warn(`Report truncated by token limit (attempt ${attempts}/${maxAttempts})`);
-        continue;
-      }
-
-      const cleaned = cleanResponse(rawContent);
-      if (cleaned.length > 50) {
-        const validation = validateReportStructure(cleaned);
-        if (validation.valid) {
-          generatedReport = cleaned;
-          break;
-        }
-        console.warn(`Report structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
-      }
-      generatedReport = cleaned;
+      content = result.content;
+      finishReason = result.finishReason;
+    } catch (error) {
+      lastError = error;
+      console.error(`AI report call failed (attempt ${attempts}/${maxAttempts}):`, error);
+      continue;
     }
-  } catch (error) {
-    console.error("AI call failed, storing fallback report:", error);
-    generatedReport = FALLBACK_REPORT;
+
+    if (finishReason === "length") {
+      console.warn(`Report truncated by token limit (attempt ${attempts}/${maxAttempts})`);
+      continue;
+    }
+
+    const cleaned = cleanResponse(content);
+    if (cleaned.length > 50) {
+      const validation = validateReportStructure(cleaned);
+      if (validation.valid) {
+        return cleaned;
+      }
+      console.warn(`Report structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
+    }
+    lastReport = cleaned;
   }
 
-  return generatedReport;
+  if (lastError) {
+    throw AIGenerationError.from(lastError);
+  }
+  console.error("AI never produced a valid report after retries:", lastReport);
+  throw new AIGenerationError(
+    "AI failed to produce a valid report after retries. Please try again.",
+    500,
+  );
 }
 
 export async function createReportUseCase(input: CreateReportInput) {
@@ -262,7 +295,8 @@ export async function replyToReportUseCase(input: {
 
   let attempts = 0;
   const maxAttempts = 2;
-  let updatedMarkdown: string;
+  let lastError: unknown = null;
+  let lastMarkdown = "";
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -271,38 +305,56 @@ export async function replyToReportUseCase(input: {
       ? [...messages, { role: "user" as const, content: `Your previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` }]
       : messages;
 
-    const { content: rawContent, finishReason } = await callAI({
-      model: input.model || undefined,
-      provider: input.provider,
-      apiKey: apiKey || undefined,
-      maxTokens: 4096,
-      messages: messagesWithRetry,
-    });
-
-    if (finishReason === "length") {
-      console.warn("Reply truncated by token limit, retrying with fallback");
+    let content: string;
+    let finishReason: string | null | undefined;
+    try {
+      const result = await callAI({
+        model: input.model || undefined,
+        provider: input.provider,
+        apiKey: apiKey || undefined,
+        maxTokens: 4096,
+        messages: messagesWithRetry,
+      });
+      content = result.content;
+      finishReason = result.finishReason;
+    } catch (error) {
+      lastError = error;
+      console.error(`AI reply call failed (attempt ${attempts}/${maxAttempts}):`, error);
       continue;
     }
 
-    updatedMarkdown = cleanResponse(rawContent).trim();
+    if (finishReason === "length") {
+      console.warn(`Reply truncated by token limit (attempt ${attempts}/${maxAttempts})`);
+      continue;
+    }
 
-    if (updatedMarkdown.length > 50) {
-      const validation = validateReportStructure(updatedMarkdown);
+    lastMarkdown = cleanResponse(content).trim();
+
+    if (lastMarkdown.length > 50) {
+      const validation = validateReportStructure(lastMarkdown);
       if (validation.valid) break;
       console.warn(`Reply structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
     }
 
     if (attempts >= maxAttempts) {
-      console.warn("Max retry attempts reached for reply, using last generation as-is");
+      console.warn("Max retry attempts reached for reply");
     }
   }
 
-  updatedMarkdown ??= "";
+  if (lastMarkdown.length <= 50) {
+    if (lastError) {
+      throw AIGenerationError.from(lastError);
+    }
+    throw new AIGenerationError(
+      "AI failed to produce a valid reply after retries. Please try again.",
+      500,
+    );
+  }
 
   await reportsStore.updateReportMarkdown({
     id: input.reportId,
-    editableMarkdown: updatedMarkdown,
+    editableMarkdown: lastMarkdown,
   });
 
-  return updatedMarkdown;
+  return lastMarkdown;
 }

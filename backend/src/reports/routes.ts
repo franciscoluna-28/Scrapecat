@@ -12,6 +12,7 @@ import {
   replyToReportUseCase,
   NoCommitsError,
   ReportNotFoundError,
+  AIGenerationError,
 } from "@/reports/use-cases";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as reportsStore from "@/reports/stores/reports-store";
@@ -31,6 +32,9 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
     console.error("Error generating report:", error);
     if (error instanceof NoCommitsError) {
       return reply.status(400).send({ error: error.message });
+    }
+    if (error instanceof AIGenerationError) {
+      return reply.status(error.status).send({ error: error.message });
     }
     if (error?.status === 404 || error?.status === 422) {
       return reply.status(400).send({
