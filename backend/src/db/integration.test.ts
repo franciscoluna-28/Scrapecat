@@ -26,7 +26,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   const repositoryName = "integration-test-repo";
 
   const cleanupProject = async (id: number) => {
-    const project = await projectsStore.getProjectByGithubId(id);
+    const project = await projectsStore.getProjectByGithubId({ githubProjectId: id });
     if (project) {
       await db.delete(githubProjects).where(eq(githubProjects.id, project.id));
     }
@@ -58,11 +58,15 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("projects-store upserts idempotently and lists", async () => {
-    const p = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName, defaultBranch: "main" });
+    const p = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName, defaultBranch: "main" },
+    });
     expect(p.repositoryName).toBe(repositoryName);
     expect(p.defaultBranch).toBe("main");
 
-    const p2 = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName: `${repositoryName}-v2` });
+    const p2 = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName: `${repositoryName}-v2` },
+    });
     expect(p2.id).toBe(p.id);
     expect(p2.repositoryName).toBe(`${repositoryName}-v2`);
 
@@ -71,7 +75,9 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("commit-chunks-store upserts with dedupe and filters by date range", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName },
+    });
     const chunk = {
       projectId: project.id,
       commitSha: "abc123",
@@ -81,20 +87,22 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       metadata: { additions: 5, deletions: 2, filesChanged: ["src/a.ts"] },
       committedAt: new Date("2026-01-10T00:00:00Z"),
     };
-    await commitChunksStore.upsertCommitChunks([chunk]);
-    await commitChunksStore.upsertCommitChunks([chunk]);
+    await commitChunksStore.upsertCommitChunks({ inputs: [chunk] });
+    await commitChunksStore.upsertCommitChunks({ inputs: [chunk] });
 
-    const all = await commitChunksStore.listCommitsForProject(project.id);
+    const all = await commitChunksStore.listCommitsForProject({ projectId: project.id });
     expect(all.filter((c) => c.commitSha === "abc123")).toHaveLength(1);
     expect(all[0].diffSummary).toBe("diff summary for integration test");
 
-    const inRange = await commitChunksStore.listCommitsForProject(project.id, {
+    const inRange = await commitChunksStore.listCommitsForProject({
+      projectId: project.id,
       startDate: new Date("2026-01-01"),
       endDate: new Date("2026-01-31"),
     });
     expect(inRange.some((c) => c.commitSha === "abc123")).toBe(true);
 
-    const outOfRange = await commitChunksStore.listCommitsForProject(project.id, {
+    const outOfRange = await commitChunksStore.listCommitsForProject({
+      projectId: project.id,
       startDate: new Date("2027-01-01"),
       endDate: new Date("2027-01-31"),
     });
@@ -102,38 +110,49 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("getChunksByShas returns stored shas and sets content_hash on upsert", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId: chunkProjectId, githubOwner: "test-owner", repositoryName });
-    await commitChunksStore.upsertCommitChunks([
-      {
-        projectId: project.id,
-        commitSha: "sha-1",
-        commitMessage: "feat: first",
-        author: "tester",
-        diffSummary: "first summary",
-        metadata: { commitUrl: "https://github.com/org/repo/commit/sha-1" },
-        committedAt: new Date("2026-02-01T00:00:00Z"),
-      },
-    ]);
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId: chunkProjectId, githubOwner: "test-owner", repositoryName },
+    });
+    await commitChunksStore.upsertCommitChunks({
+      inputs: [
+        {
+          projectId: project.id,
+          commitSha: "sha-1",
+          commitMessage: "feat: first",
+          author: "tester",
+          diffSummary: "first summary",
+          metadata: { commitUrl: "https://github.com/org/repo/commit/sha-1" },
+          committedAt: new Date("2026-02-01T00:00:00Z"),
+        },
+      ],
+    });
 
-    const found = await commitChunksStore.getChunksByShas(project.id, ["sha-1", "sha-missing"]);
+    const found = await commitChunksStore.getChunksByShas({
+      projectId: project.id,
+      shas: ["sha-1", "sha-missing"],
+    });
     expect(found.has("sha-1")).toBe(true);
     expect(found.get("sha-1")?.contentHash).toBe(commitChunksStore.contentHashOf("first summary"));
     expect(found.has("sha-missing")).toBe(false);
   });
 
   it("embedding pipeline embeds pending chunks and is idempotent", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId: embedProjectId, githubOwner: "test-owner", repositoryName });
-    await commitChunksStore.upsertCommitChunks([
-      {
-        projectId: project.id,
-        commitSha: "embed-abc",
-        commitMessage: "feat: embeddings",
-        author: "tester",
-        diffSummary: "embedding corpus text",
-        metadata: {},
-        committedAt: new Date("2026-02-02T00:00:00Z"),
-      },
-    ]);
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId: embedProjectId, githubOwner: "test-owner", repositoryName },
+    });
+    await commitChunksStore.upsertCommitChunks({
+      inputs: [
+        {
+          projectId: project.id,
+          commitSha: "embed-abc",
+          commitMessage: "feat: embeddings",
+          author: "tester",
+          diffSummary: "embedding corpus text",
+          metadata: {},
+          committedAt: new Date("2026-02-02T00:00:00Z"),
+        },
+      ],
+    });
 
     const first = await embedNewChunks(project.id);
     expect(first.embedded).toBe(1);
@@ -148,24 +167,28 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     const second = await embedNewChunks(project.id);
     expect(second.embedded).toBe(0);
 
-    await commitChunksStore.upsertCommitChunks([
-      {
-        projectId: project.id,
-        commitSha: "embed-abc",
-        commitMessage: "feat: embeddings",
-        author: "tester",
-        diffSummary: "changed corpus text",
-        metadata: {},
-        committedAt: new Date("2026-02-02T00:00:00Z"),
-      },
-    ]);
+    await commitChunksStore.upsertCommitChunks({
+      inputs: [
+        {
+          projectId: project.id,
+          commitSha: "embed-abc",
+          commitMessage: "feat: embeddings",
+          author: "tester",
+          diffSummary: "changed corpus text",
+          metadata: {},
+          committedAt: new Date("2026-02-02T00:00:00Z"),
+        },
+      ],
+    });
 
     const third = await embedNewChunks(project.id);
     expect(third.embedded).toBe(1);
   });
 
   it("embedding pipeline normalizes legacy rows with null content_hash", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId: legacyProjectId, githubOwner: "test-owner", repositoryName });
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId: legacyProjectId, githubOwner: "test-owner", repositoryName },
+    });
     const [row] = await db
       .insert(commitChunks)
       .values({
@@ -195,18 +218,22 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("reports-store creates and lists reports linked to a project", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName },
+    });
     const reportId = randomUUID();
     const report = await reportsStore.createReport({
-      id: reportId,
-      projectId: project.id,
-      title: "Integration Test Report",
-      originalMarkdown: "# Integration Test Report",
-      editableMarkdown: "# Integration Test Report",
-      startDate: new Date("2026-01-01T00:00:00Z"),
-      endDate: new Date("2026-01-31T00:00:00Z"),
-      branch: "main",
-      customInstructions: null,
+      input: {
+        id: reportId,
+        projectId: project.id,
+        title: "Integration Test Report",
+        originalMarkdown: "# Integration Test Report",
+        editableMarkdown: "# Integration Test Report",
+        startDate: new Date("2026-01-01T00:00:00Z"),
+        endDate: new Date("2026-01-31T00:00:00Z"),
+        branch: "main",
+        customInstructions: null,
+      },
     });
     expect(report.id).toBe(reportId);
     expect(report.title).toBe("Integration Test Report");
@@ -237,27 +264,33 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("GET /api/v1/projects and report commits hit postgres", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
-    const report = await reportsStore.createReport({
-      id: randomUUID(),
-      projectId: project.id,
-      title: "Project Commits Report",
-      originalMarkdown: "# Project Commits Report",
-      editableMarkdown: "# Project Commits Report",
-      startDate: new Date("2026-01-01T00:00:00Z"),
-      endDate: new Date("2026-01-31T00:00:00Z"),
-      branch: "main",
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
-    await commitChunksStore.upsertCommitChunks([
-      {
+    const report = await reportsStore.createReport({
+      input: {
+        id: randomUUID(),
         projectId: project.id,
-        commitSha: "report-commits-sha",
-        commitMessage: "feat: report commits",
-        author: "tester",
-        diffSummary: "diff summary for report commits",
-        committedAt: new Date("2026-01-10T00:00:00Z"),
+        title: "Project Commits Report",
+        originalMarkdown: "# Project Commits Report",
+        editableMarkdown: "# Project Commits Report",
+        startDate: new Date("2026-01-01T00:00:00Z"),
+        endDate: new Date("2026-01-31T00:00:00Z"),
+        branch: "main",
       },
-    ]);
+    });
+    await commitChunksStore.upsertCommitChunks({
+      inputs: [
+        {
+          projectId: project.id,
+          commitSha: "report-commits-sha",
+          commitMessage: "feat: report commits",
+          author: "tester",
+          diffSummary: "diff summary for report commits",
+          committedAt: new Date("2026-01-10T00:00:00Z"),
+        },
+      ],
+    });
     const app = await buildApp();
     try {
       const res = await app.inject({ method: "GET", url: "/api/v1/projects" });
@@ -277,16 +310,20 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("GET /api/v1/reports returns reports stored in postgres", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName },
+    });
     const report = await reportsStore.createReport({
-      id: randomUUID(),
-      projectId: project.id,
-      title: "Integration Test Report",
-      originalMarkdown: "# Integration Test Report",
-      editableMarkdown: "# Integration Test Report",
-      startDate: new Date("2026-01-01T00:00:00Z"),
-      endDate: new Date("2026-01-31T00:00:00Z"),
-      branch: "main",
+      input: {
+        id: randomUUID(),
+        projectId: project.id,
+        title: "Integration Test Report",
+        originalMarkdown: "# Integration Test Report",
+        editableMarkdown: "# Integration Test Report",
+        startDate: new Date("2026-01-01T00:00:00Z"),
+        endDate: new Date("2026-01-31T00:00:00Z"),
+        branch: "main",
+      },
     });
     const app = await buildApp();
     try {
@@ -303,31 +340,38 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("reports-store updates markdown and bumps updatedAt", async () => {
-    const project = await projectsStore.upsertProject({ githubProjectId, githubOwner: "test-owner", repositoryName });
-    const report = await reportsStore.createReport({
-      id: randomUUID(),
-      projectId: project.id,
-      title: "Update Me",
-      originalMarkdown: "# Original",
-      editableMarkdown: "# Original",
-      startDate: new Date("2026-01-01T00:00:00Z"),
-      endDate: new Date("2026-01-31T00:00:00Z"),
-      branch: "main",
+    const project = await projectsStore.upsertProject({
+      input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
-    const updated = await reportsStore.updateReportMarkdown(report.id, "# Edited");
+    const report = await reportsStore.createReport({
+      input: {
+        id: randomUUID(),
+        projectId: project.id,
+        title: "Update Me",
+        originalMarkdown: "# Original",
+        editableMarkdown: "# Original",
+        startDate: new Date("2026-01-01T00:00:00Z"),
+        endDate: new Date("2026-01-31T00:00:00Z"),
+        branch: "main",
+      },
+    });
+    const updated = await reportsStore.updateReportMarkdown({
+      id: report.id,
+      editableMarkdown: "# Edited",
+    });
     expect(updated?.editableMarkdown).toBe("# Edited");
     expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(report.updatedAt.getTime());
   });
 
   it("deletes a project and cascades to its chunks and reports", async () => {
-    const project = await projectsStore.getProjectByGithubId(githubProjectId);
+    const project = await projectsStore.getProjectByGithubId({ githubProjectId });
     expect(project).not.toBeNull();
     if (project) {
       await db.delete(githubProjects).where(eq(githubProjects.id, project.id));
     }
-    expect(await projectsStore.getProjectByGithubId(githubProjectId)).toBeNull();
+    expect(await projectsStore.getProjectByGithubId({ githubProjectId })).toBeNull();
     if (project) {
-      expect(await commitChunksStore.listCommitsForProject(project.id)).toHaveLength(0);
+      expect(await commitChunksStore.listCommitsForProject({ projectId: project.id })).toHaveLength(0);
     }
   });
 });

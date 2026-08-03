@@ -75,7 +75,10 @@ export function useRepositories(filters: {
             },
           },
         })
-        .then((r) => r.data),
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.data;
+        }),
   });
 
   return {

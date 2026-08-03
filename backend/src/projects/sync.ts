@@ -1,18 +1,19 @@
 import { getGitProvider } from "@/shared/integrations/git-provider";
-import { buildCommitChunks } from "@/projects/chunks";
+import { buildCommitChunks, type CommitChunk } from "@/projects/chunks";
 import { embedNewChunks } from "@/projects/embed-chunks";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
+import type { DbOrTx, Tx } from "@/db/client";
+import type { Commit } from "@/shared/integrations/git-provider";
 
-const MAX_LIMIT = 100;
+export const MAX_LIMIT = 100;
 
-export async function syncProjectCommits(opts: {
-  projectId: string;
+export async function fetchProjectCommits(opts: {
   owner: string;
   repo: string;
   branch?: string;
   startDate?: string;
   endDate?: string;
-}) {
+}): Promise<Commit[]> {
   const fetched = await getGitProvider().listCommits(opts.owner, opts.repo, {
     branch: opts.branch,
     since: opts.startDate,
@@ -24,28 +25,67 @@ export async function syncProjectCommits(opts: {
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
 
-  const limited = sorted.slice(0, MAX_LIMIT);
+  return sorted.slice(0, MAX_LIMIT);
+}
 
-  const existing = await commitChunksStore.getChunksByShas(
-    opts.projectId,
-    limited.map((c) => c.sha),
-  );
+export async function buildMissingChunks(opts: {
+  projectId: string;
+  owner: string;
+  repo: string;
+  commits: Commit[];
+  tx?: DbOrTx;
+}): Promise<CommitChunk[]> {
+  const existing = await commitChunksStore.getChunksByShas({
+    projectId: opts.projectId,
+    shas: opts.commits.map((c) => c.sha),
+    tx: opts.tx,
+  });
 
-  const missing = limited.filter((c) => !existing.has(c.sha));
+  const missing = opts.commits.filter((c) => !existing.has(c.sha));
 
-  const chunks = await buildCommitChunks(
-    getGitProvider(),
-    opts.owner,
-    opts.repo,
-    missing,
-  );
-  await commitChunksStore.upsertCommitChunks(
-    chunks.map((c) => ({ ...c, projectId: opts.projectId })),
-  );
+  return buildCommitChunks(getGitProvider(), opts.owner, opts.repo, missing);
+}
+
+export async function writeChunks(opts: {
+  projectId: string;
+  chunks: CommitChunk[];
+  tx?: Tx;
+}) {
+  await commitChunksStore.upsertCommitChunks({
+    inputs: opts.chunks.map((c) => ({ ...c, projectId: opts.projectId })),
+    tx: opts.tx,
+  });
+}
+
+export async function syncProjectCommits(opts: {
+  projectId: string;
+  owner: string;
+  repo: string;
+  branch?: string;
+  startDate?: string;
+  endDate?: string;
+  tx?: Tx;
+}) {
+  const commits = await fetchProjectCommits({
+    owner: opts.owner,
+    repo: opts.repo,
+    branch: opts.branch,
+    startDate: opts.startDate,
+    endDate: opts.endDate,
+  });
+
+  const chunks = await buildMissingChunks({
+    projectId: opts.projectId,
+    owner: opts.owner,
+    repo: opts.repo,
+    commits,
+    tx: opts.tx,
+  });
+  await writeChunks({ projectId: opts.projectId, chunks, tx: opts.tx });
 
   void embedNewChunks(opts.projectId).catch((err: any) => {
     console.warn("Embedding sync failed (will be retried by backfill):", err?.message ?? err);
   });
 
-  return limited;
+  return commits;
 }

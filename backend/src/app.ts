@@ -101,7 +101,7 @@ export async function buildApp() {
       description: "List GitHub repositories for the authenticated user",
       tags: ["repositories"],
       querystring: RepositoriesQuery,
-      response: { 200: RepositoriesResponse },
+      response: { 200: RepositoriesResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
   }, listRepositories);
 
@@ -148,7 +148,7 @@ export async function buildApp() {
       description: "List all generated reports, optionally filtered by project",
       tags: ["reports"],
       querystring: ReportsListQuery,
-      response: { 200: ReportsListResponse },
+      response: { 200: ReportsListResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
   }, listReports);
 
@@ -194,7 +194,7 @@ export async function buildApp() {
     schema: {
       description: "List synced GitHub projects",
       tags: ["projects"],
-      response: { 200: ProjectsResponse },
+      response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
 
