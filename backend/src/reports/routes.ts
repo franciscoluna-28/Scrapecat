@@ -7,7 +7,6 @@ import {
   updateReportBodySchema,
   replyBodySchema,
 } from "@/reports/schemas";
-import { getGitProvider } from "@/shared/integrations/git-provider";
 import {
   buildSystemPrompt,
   getLanguageInstruction,
@@ -18,8 +17,7 @@ import {
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
 import { resolveApiKey } from "@/credentials/services";
-import { buildCommitChunks } from "@/projects/chunks";
-import { embedNewChunks } from "@/projects/embed-chunks";
+import { syncProjectCommits } from "@/projects/sync";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
@@ -37,54 +35,30 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 
     const data = parsed.data.data;
 
-    const fetchedCommits = await getGitProvider().listCommits(data.githubOwner, data.repository, {
-      branch: data.branch,
-      since: data.startDate,
-      until: data.endDate,
-      perPage: MAX_LIMIT,
-    });
-
-    if (fetchedCommits.length === 0) {
-      return reply.status(400).send({
-        error: "Cannot generate report: no commits found in the selected date range",
-      });
-    }
-
-    const sortedCommits = [...fetchedCommits].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-
-    const limitedCommits = sortedCommits.slice(0, MAX_LIMIT);
-
     const provider = data.provider;
     const apiKey = provider ? await resolveApiKey(provider) : undefined;
 
     const project = await projectsStore.upsertProject({
       githubProjectId: data.githubProjectId,
+      githubOwner: data.githubOwner,
       repositoryName: data.repository,
       defaultBranch: data.branch,
     });
 
-    const existing = await commitChunksStore.getChunksByShas(
-      project.id,
-      limitedCommits.map((c) => c.sha),
-    );
-
-    const missingCommits = limitedCommits.filter((c) => !existing.has(c.sha));
-
-    const chunks = await buildCommitChunks(
-      getGitProvider(),
-      data.githubOwner,
-      data.repository,
-      missingCommits,
-    );
-    await commitChunksStore.upsertCommitChunks(
-      chunks.map((c) => ({ ...c, projectId: project.id })),
-    );
-
-    void embedNewChunks(project.id).catch((err: any) => {
-      console.warn("Embedding sync failed (will be retried by backfill):", err?.message ?? err);
+    const limitedCommits = await syncProjectCommits({
+      projectId: project.id,
+      owner: data.githubOwner,
+      repo: data.repository,
+      branch: data.branch,
+      startDate: data.startDate,
+      endDate: data.endDate,
     });
+
+    if (limitedCommits.length === 0) {
+      return reply.status(400).send({
+        error: "Cannot generate report: no commits found in the selected date range",
+      });
+    }
 
     const customInstructions = data.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
@@ -236,11 +210,68 @@ export async function getReport(
       branch: report.branch,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
-      imageAssets: report.imageAssets ?? [],
     });
   } catch (error) {
     console.error("Error fetching report:", error);
     return reply.status(500).send({ error: "Failed to fetch report" });
+  }
+}
+
+export async function getReportCommits(
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const params = reportIdParamsSchema.safeParse(req.params);
+  if (!params.success) {
+    return reply.status(400).send({ error: params.error.flatten() });
+  }
+
+  try {
+    const report = await reportsStore.getReport(params.data.id);
+    if (!report) {
+      return reply.status(404).send({ error: "Report not found" });
+    }
+
+    const project = await projectsStore.getProjectById(report.projectId);
+    if (!project) {
+      return reply.status(404).send({ error: "Report project not found" });
+    }
+
+    const startDate = formatDate(report.startDate);
+    const endDate = formatDate(report.endDate);
+
+    try {
+      await syncProjectCommits({
+        projectId: project.id,
+        owner: project.githubOwner,
+        repo: project.repositoryName,
+        branch: report.branch,
+        startDate,
+        endDate,
+      });
+    } catch (error) {
+      console.warn("Failed to sync new commits from GitHub; serving stored commits:", error);
+    }
+
+    const commits = await commitChunksStore.listCommitsForProject(project.id, {
+      startDate: report.startDate,
+      endDate: report.endDate,
+    });
+
+    return reply.send({
+      commits: commits.map((c) => ({
+        id: c.id,
+        commitSha: c.commitSha,
+        commitMessage: c.commitMessage,
+        author: c.author,
+        diffSummary: c.diffSummary,
+        committedAt: c.committedAt,
+        metadata: c.metadata,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching report commits:", error);
+    return reply.status(500).send({ error: "Failed to fetch report commits" });
   }
 }
 
@@ -307,9 +338,7 @@ export async function replyToReport(
     });
     const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
 
-    const cleanMarkdown = (report.originalMarkdown || "")
-      .replace(/\n*## Media[\s\S]*$/, "")
-      .trim();
+    const cleanMarkdown = (report.originalMarkdown || "").trim();
 
     const customInstructions = report.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
@@ -366,9 +395,7 @@ export async function replyToReport(
         continue;
       }
 
-      updatedMarkdown = cleanResponse(rawContent)
-        .replace(/\n*## Media[\s\S]*$/, "")
-        .trim();
+      updatedMarkdown = cleanResponse(rawContent).trim();
 
       if (updatedMarkdown.length > 50) {
         const validation = validateReportStructure(updatedMarkdown);

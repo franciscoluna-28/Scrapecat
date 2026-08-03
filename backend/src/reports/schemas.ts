@@ -9,7 +9,6 @@ export const reportInputSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   customInstructions: z.string().optional(),
-  quickMode: z.boolean().optional(),
   model: z.string().optional(),
   provider: z
     .enum(["openrouter", "deepseek", "openai"])
@@ -46,7 +45,6 @@ const ReportDataInput = Type.Object({
   startDate: Type.String({ format: "date" }),
   endDate: Type.String({ format: "date" }),
   customInstructions: Type.Optional(Type.String()),
-  quickMode: Type.Optional(Type.Boolean()),
   model: Type.Optional(Type.String()),
   provider: Type.Optional(Type.String()),
 });
@@ -100,7 +98,6 @@ export const ReportGetResponse = Type.Object({
   branch: Type.String(),
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
-  imageAssets: Type.Optional(Type.Array(Type.Any())),
 });
 
 export const ReportUpdateBody = Type.Object({
@@ -121,4 +118,18 @@ export const ReportReplyBody = Type.Object({
 
 export const ReportReplyResponse = Type.Object({
   report: Type.String(),
+});
+
+export const ReportCommitsResponse = Type.Object({
+  commits: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      commitSha: Type.String(),
+      commitMessage: Type.String(),
+      author: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+      diffSummary: Type.String(),
+      committedAt: Type.String({ format: "date-time" }),
+      metadata: Type.Optional(Type.Any()),
+    }),
+  ),
 });

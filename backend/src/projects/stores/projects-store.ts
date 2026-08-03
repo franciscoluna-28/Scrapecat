@@ -4,6 +4,7 @@ import { githubProjects } from "@/db/schema";
 
 export type ProjectInput = {
   githubProjectId: number;
+  githubOwner: string;
   repositoryName: string;
   defaultBranch?: string;
 };
@@ -13,12 +14,14 @@ export async function upsertProject(input: ProjectInput) {
     .insert(githubProjects)
     .values({
       githubProjectId: input.githubProjectId,
+      githubOwner: input.githubOwner,
       repositoryName: input.repositoryName,
       defaultBranch: input.defaultBranch ?? "main",
     })
     .onConflictDoUpdate({
       target: githubProjects.githubProjectId,
       set: {
+        githubOwner: input.githubOwner,
         repositoryName: input.repositoryName,
         updatedAt: new Date(),
       },

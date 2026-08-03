@@ -422,7 +422,6 @@ export interface paths {
                             /** Format: date */
                             endDate: string;
                             customInstructions?: string;
-                            quickMode?: boolean;
                             model?: string;
                             provider?: string;
                         };
@@ -511,7 +510,6 @@ export interface paths {
                             createdAt: string;
                             /** Format: date-time */
                             updatedAt: string;
-                            imageAssets?: unknown[];
                         };
                     };
                 };
@@ -584,6 +582,66 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{id}/commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List commits for a report, syncing new commits from GitHub */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            commits: {
+                                id: string;
+                                commitSha: string;
+                                commitMessage: string;
+                                author?: string | null;
+                                diffSummary: string;
+                                /** Format: date-time */
+                                committedAt: string;
+                                metadata?: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -699,6 +757,7 @@ export interface paths {
                             projects: {
                                 id: string;
                                 githubProjectId: number;
+                                githubOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
                                 /** Format: date-time */
@@ -706,69 +765,6 @@ export interface paths {
                                 /** Format: date-time */
                                 updatedAt: string;
                             }[];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/commits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description List normalized commits for a project within an optional date range */
-        get: {
-            parameters: {
-                query?: {
-                    startDate?: string;
-                    endDate?: string;
-                };
-                header?: never;
-                path: {
-                    projectId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            commits: {
-                                id: string;
-                                commitSha: string;
-                                commitMessage: string;
-                                author?: string | null;
-                                diffSummary: string;
-                                /** Format: date-time */
-                                committedAt: string;
-                                metadata?: unknown;
-                            }[];
-                        };
-                    };
-                };
-                /** @description Default Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
                         };
                     };
                 };

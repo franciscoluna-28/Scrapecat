@@ -1,0 +1,2 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE "reports" DROP COLUMN "image_assets";
