@@ -236,7 +236,6 @@ export async function getReport(
       branch: report.branch,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
-      imageAssets: report.imageAssets ?? [],
     });
   } catch (error) {
     console.error("Error fetching report:", error);
@@ -307,9 +306,7 @@ export async function replyToReport(
     });
     const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
 
-    const cleanMarkdown = (report.originalMarkdown || "")
-      .replace(/\n*## Media[\s\S]*$/, "")
-      .trim();
+    const cleanMarkdown = (report.originalMarkdown || "").trim();
 
     const customInstructions = report.customInstructions?.trim();
     const languageInstruction = getLanguageInstruction(customInstructions);
@@ -366,9 +363,7 @@ export async function replyToReport(
         continue;
       }
 
-      updatedMarkdown = cleanResponse(rawContent)
-        .replace(/\n*## Media[\s\S]*$/, "")
-        .trim();
+      updatedMarkdown = cleanResponse(rawContent).trim();
 
       if (updatedMarkdown.length > 50) {
         const validation = validateReportStructure(updatedMarkdown);

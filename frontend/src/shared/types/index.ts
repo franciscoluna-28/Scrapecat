@@ -11,13 +11,6 @@ export type GitHubRepository = {
   forks_count?: number;
 };
 
-export type ImageAsset = {
-  originalUrl: string;
-  r2Url: string;
-  commitSha: string;
-  commitMessage: string;
-};
-
 export type ProcessedCommit =
   paths["/api/v1/repositories/{owner}/{repo}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
 

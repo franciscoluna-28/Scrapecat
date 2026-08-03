@@ -54,14 +54,13 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
 2. Fetch commits from GitHub via `getGitProvider().listCommits()` (max 100)
-3. Enrich with PR data unless `quickMode` — fetches PR body for each commit via `getPullRequestForCommit()`
+3. Enrich with PR data — fetches PR body for each commit via `getPullRequestForCommit()`
 4. Upsert the project (`githubProjects` via `projects-store`) and normalize commits into `commitChunks` (`commit-chunks-store`), building `diff_summary` from per-commit diffs fetched via `getCommitDetails()`
 5. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
 6. Call AI with up to 2 retries if structure validation fails
 7. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
-8. Extract images from PR bodies, upload to R2 via `src/reports/r2.ts` (deprecated — unwired from the report path)
-9. Store in Postgres via Drizzle ORM
-10. Return `{ reportId, projectId }`
+8. Store in Postgres via Drizzle ORM
+9. Return `{ reportId, projectId }`
 
 Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
 
@@ -74,7 +73,7 @@ Tables defined in `src/db/schema.ts`:
 - **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
 
 > **RAG is WIP.** The `embedding` column and HNSW index are infrastructure only — no embedding provider or backfill job exists, so embeddings are always NULL. Do not write queries that assume vectors are populated.
-- **reports** — generated reports linked to a project (uuid PK, title, markdown, image assets)
+- **reports** — generated reports linked to a project (uuid PK, title, markdown)
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
 All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts` + `commit-chunks-store.ts`, `src/reports/stores/reports-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
@@ -139,7 +138,6 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `OPENAI_API_KEY` | For OpenAI provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
-| `R2_*` | Cloudflare R2 config (optional, image uploads) |
 
 ## Deep dives
 

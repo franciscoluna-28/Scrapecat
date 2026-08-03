@@ -39,13 +39,6 @@ export const vector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
-export type ImageAsset = {
-  originalUrl: string;
-  r2Url: string;
-  commitSha: string;
-  commitMessage: string;
-};
-
 export type CommitChunkMetadata = {
   filesChanged?: string[];
   additions?: number;
@@ -109,7 +102,6 @@ export const reports = pgTable("reports", {
   endDate: timestamp("end_date", { withTimezone: true }).notNull(),
   branch: text("branch").notNull(),
   customInstructions: text("custom_instructions"),
-  imageAssets: jsonb("image_assets").$type<ImageAsset[]>().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

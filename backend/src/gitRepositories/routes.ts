@@ -5,7 +5,7 @@ import {
   listCommitsQuerySchema,
   countCommitsQuerySchema,
   listReposQuerySchema,
-} from "@/repositories/schemas";
+} from "@/gitRepositories/schemas";
 
 export async function listRepositories(
   req: FastifyRequest,

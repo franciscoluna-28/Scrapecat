@@ -7,7 +7,7 @@ import { env } from "@/config/env";
 import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
-import { listRepositories, listBranches, listCommits, countCommits } from "@/repositories/routes";
+import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, updateReport, replyToReport } from "@/reports/routes";
 import { listProjects, listProjectCommits } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
@@ -25,7 +25,7 @@ import {
   RepositoriesQuery,
   RepositoriesResponse,
   BranchesResponse,
-} from "@/repositories/schemas";
+} from "@/gitRepositories/schemas";
 import {
   ReportInputBody,
   ReportCreatedResponse,

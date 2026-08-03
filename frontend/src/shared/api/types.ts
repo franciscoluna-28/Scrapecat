@@ -422,7 +422,6 @@ export interface paths {
                             /** Format: date */
                             endDate: string;
                             customInstructions?: string;
-                            quickMode?: boolean;
                             model?: string;
                             provider?: string;
                         };
@@ -511,7 +510,6 @@ export interface paths {
                             createdAt: string;
                             /** Format: date-time */
                             updatedAt: string;
-                            imageAssets?: unknown[];
                         };
                     };
                 };

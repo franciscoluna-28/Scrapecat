@@ -3,7 +3,6 @@
 import { useSearchParams } from "next/navigation";
 import { useReport } from "@/src/_features/reports/services/reports-api";
 import { useProjectCommits } from "@/src/_features/reports/services/projects-api";
-import type { ImageAsset } from "@/src/shared/types";
 import ReportClientPage from "./client-page";
 
 export default function ReportPage() {
@@ -68,7 +67,6 @@ export default function ReportPage() {
       branch={report.branch}
       report={report.editableMarkdown}
       reportId={reportId}
-      imageAssets={(report.imageAssets || []) as ImageAsset[]}
     />
   );
 }
