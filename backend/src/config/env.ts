@@ -3,9 +3,9 @@ import { z } from "zod";
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   HOST: z.string().default("0.0.0.0"),
-  DATABASE_URL: z.string().default("file:./dev.db"),
+  DATABASE_URL: z.string().default("postgres://scrapecat:scrapecat@localhost:5432/scrapecat"),
   OPENROUTER_API_KEY: z.string().default(""),
-  AI_MODEL: z.string().default("google/gemma-4-26b-a4b-it:free"),
+  AI_MODEL: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
   GITHUB_TOKEN: z.string().default(""),
@@ -16,6 +16,12 @@ const envSchema = z.object({
   R2_ENDPOINT: z.string().default(""),
   R2_BUCKET_NAME: z.string().default(""),
   R2_PUBLIC_URL: z.string().default(""),
+  EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(100),
+  EMBEDDING_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
 });
 

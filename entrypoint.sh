@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database migrations..."
-pnpm run db:push
+pnpm run db:migrate
 
 echo "Starting application..."
 exec "$@"

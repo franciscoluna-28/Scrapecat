@@ -2,22 +2,21 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { env } from "./config/env";
+import { env } from "@/config/env";
 
-import { health } from "./routes/health";
-import { listCommits, countCommits } from "./routes/commits";
-import { listRepositories } from "./routes/repositories";
-import { listBranches } from "./routes/branches";
-import { checkVerification } from "./routes/verification";
-import { listModels } from "./routes/models";
-import { createReport } from "./routes/generate-report";
-import { listReports, getReport, updateReport } from "./routes/reports";
-import { replyToReport } from "./routes/reply";
-import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "./routes/keys";
+import { health } from "@/health/routes";
+import { checkVerification } from "@/verification/routes";
+import { listModels } from "@/models/routes";
+import { listRepositories, listBranches, listCommits, countCommits } from "@/repositories/routes";
+import { createReport, listReports, getReport, updateReport, replyToReport } from "@/reports/routes";
+import { listProjects, listProjectCommits } from "@/projects/routes";
+import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
+import { ErrorResponse } from "@/shared/typebox";
+import { HealthResponse } from "@/health/schemas";
+import { VerificationOkResponse } from "@/verification/schemas";
+import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
-  ErrorResponse,
-  HealthResponse,
   RepoOwnerParams,
   CommitsQuery,
   CommitsResponse,
@@ -26,9 +25,8 @@ import {
   RepositoriesQuery,
   RepositoriesResponse,
   BranchesResponse,
-  VerificationOkResponse,
-  ModelsQuery,
-  ModelsResponse,
+} from "@/repositories/schemas";
+import {
   ReportInputBody,
   ReportCreatedResponse,
   ReportFallbackResponse,
@@ -40,17 +38,23 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
+} from "@/reports/schemas";
+import { ProjectIdParams, ProjectsResponse, ProjectCommitsQuery, ProjectCommitsResponse } from "@/projects/schemas";
+import {
   AddCredentialBody,
   CredentialListResponse,
   CredentialCreatedResponse,
   VerifyCredentialBody,
   VerifyCredentialResponse,
-} from "./schemas/json";
+} from "@/credentials/schemas";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: env.CORS_ORIGIN });
+  await app.register(cors, {
+    origin: env.CORS_ORIGIN,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+  });
 
   await app.register(swagger, {
     openapi: {
@@ -175,6 +179,24 @@ export async function buildApp() {
       response: { 200: ReportReplyResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse },
     },
   }, replyToReport);
+
+  app.get("/api/v1/projects", {
+    schema: {
+      description: "List synced GitHub projects",
+      tags: ["projects"],
+      response: { 200: ProjectsResponse },
+    },
+  }, listProjects);
+
+  app.get("/api/v1/projects/:projectId/commits", {
+    schema: {
+      description: "List normalized commits for a project within an optional date range",
+      tags: ["projects"],
+      params: ProjectIdParams,
+      querystring: ProjectCommitsQuery,
+      response: { 200: ProjectCommitsResponse, 400: ErrorResponse },
+    },
+  }, listProjectCommits);
 
   app.get("/api/v1/credentials", {
     schema: {

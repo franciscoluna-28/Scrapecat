@@ -1,0 +1,9 @@
+process.env.ENCRYPTION_KEY ??= "test-only-key-0123456789abcdef0123456789abcdef";
+process.env.DATABASE_URL ??= "postgres://postgres:postgres@localhost:5432/scrapecat_test";
+process.env.OPENROUTER_API_KEY ??= "";
+process.env.DEEPSEEK_API_KEY ??= "";
+process.env.OPENAI_API_KEY ??= "";
+process.env.GITHUB_TOKEN ??= "";
+process.env.HOST ??= "localhost";
+process.env.PORT ??= "4000";
+process.env.CORS_ORIGIN ??= "*";

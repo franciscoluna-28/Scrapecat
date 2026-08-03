@@ -1,12 +1,20 @@
 services:
-  surrealdb:
-    image: surrealdb/surrealdb:v2
-    user: root
-    command: ["start", "--log", "info", "--user", "root", "--pass", "root", "rocksdb:/data/scrapecat.db"]
+  db:
+    image: pgvector/pgvector:pg17-trixie
+    container_name: scrapecat-db
+    environment:
+      POSTGRES_USER: scrapecat
+      POSTGRES_PASSWORD: scrapecat
+      POSTGRES_DB: scrapecat
     ports:
-      - "8000:8000"
+      - "5432:5432"
     volumes:
-      - surrealdb_data:/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scrapecat -d scrapecat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend-dev:
     container_name: scrapecat-backend
@@ -27,7 +35,10 @@ services:
       - PORT=4000
       - HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000
-      - DATABASE_URL=file:./dev.db
+      - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend-dev:
     container_name: scrapecat-ui
@@ -47,4 +58,4 @@ services:
       - backend-dev
 
 volumes:
-  surrealdb_data:
+  postgres_data:

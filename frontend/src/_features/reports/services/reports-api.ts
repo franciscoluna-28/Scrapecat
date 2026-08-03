@@ -3,9 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
+import type { ReportDetail, ReportSummary } from "@/src/shared/types";
 
-export function useReports(projectId?: number) {
-  const query = projectId !== undefined ? { projectId: String(projectId) } : undefined;
+export function useReports(projectId?: string) {
+  const query = projectId ? { projectId } : undefined;
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.reports.list(projectId),
     queryFn: () =>
@@ -17,8 +18,7 @@ export function useReports(projectId?: number) {
   });
 
   return {
-    reports: data?.reports ?? [],
-    distinctProjects: data?.distinctProjects ?? [],
+    reports: (data?.reports ?? []) as ReportSummary[],
     isLoading,
     isValidating: isFetching,
     isFetching,
@@ -43,7 +43,7 @@ export function useReport(id: string) {
   });
 
   return {
-    report: data ?? null,
+    report: (data ?? null) as ReportDetail | null,
     isLoading,
     error: error ?? null,
   };

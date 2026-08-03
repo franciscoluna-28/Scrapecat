@@ -4,20 +4,10 @@ import Link from "next/link";
 import { Badge } from "@/src/components/ui/badge";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { FileText, ChevronRight } from "lucide-react";
-
-interface Report {
-  id: string;
-  githubRepositoryName: string;
-  githubProjectId: number;
-  startDate: string;
-  endDate: string;
-  branch: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { ReportSummary } from "@/src/shared/types";
 
 type Props = {
-  report: Report;
+  report: ReportSummary;
 };
 
 export function ReportCard({ report }: Props) {
@@ -29,7 +19,9 @@ export function ReportCard({ report }: Props) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <h3 className="font-semibold truncate">{report.githubRepositoryName}</h3>
+                <h3 className="font-semibold truncate">
+                  {report.title || report.repositoryName}
+                </h3>
                 <Badge variant="secondary" className="text-xs">
                   {report.branch}
                 </Badge>

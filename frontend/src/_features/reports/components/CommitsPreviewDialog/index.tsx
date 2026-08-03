@@ -44,13 +44,12 @@ export function CommitsPreviewDialog({
           <div className="p-6">
             <CommitCard
               commits={commits.map((c) => ({
-                sha: c.sha,
-                message: c.message || "No commit message",
-                author: c.author || "Unknown",
-                date: c.date
-                  ? new Date(c.date).toLocaleDateString("en-US")
-                  : "Unknown",
-                url: c.url,
+                id: c.sha,
+                commitSha: c.sha,
+                commitMessage: c.message || "No commit message",
+                author: c.author || null,
+                committedAt: c.date || new Date().toISOString(),
+                diffSummary: "",
               }))}
             />
           </div>
