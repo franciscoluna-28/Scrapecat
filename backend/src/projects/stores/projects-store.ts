@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, DbOrTx, Tx } from "@/db/client";
 import { githubProjects } from "@/db/schema";
 
 export type ProjectInput = {
@@ -9,8 +9,14 @@ export type ProjectInput = {
   defaultBranch?: string;
 };
 
-export async function upsertProject(input: ProjectInput) {
-  const [row] = await db
+export async function upsertProject({
+  input, 
+  tx
+}: {
+  input: ProjectInput;
+  tx?: Tx;
+}) {
+  const [row] = await (tx || db)
     .insert(githubProjects)
     .values({
       githubProjectId: input.githubProjectId,
@@ -30,21 +36,39 @@ export async function upsertProject(input: ProjectInput) {
   return row;
 }
 
-export async function listProjects() {
-  return db.select().from(githubProjects).orderBy(githubProjects.repositoryName);
+export async function listProjects(opts?: { tx?: DbOrTx }) {
+  const client = opts?.tx || db;
+  return client
+    .select()
+    .from(githubProjects)
+    .orderBy(githubProjects.repositoryName);
 }
 
-export async function getProjectById(id: string) {
-  const [row] = await db
+export async function getProjectById({
+  id,
+  tx,
+}: {
+  id: string;
+  tx?: DbOrTx;
+}) {
+  const [row] = await (tx || db)
     .select()
     .from(githubProjects)
     .where(eq(githubProjects.id, id))
     .limit(1);
+
   return row ?? null;
 }
 
-export async function getProjectByGithubId(githubProjectId: number) {
-  const [row] = await db
+export async function getProjectByGithubId({
+  githubProjectId,
+  tx
+}: {
+  githubProjectId: number,
+  tx?: DbOrTx
+}) {
+  const client = tx || db;
+  const [row] = await client
     .select()
     .from(githubProjects)
     .where(eq(githubProjects.githubProjectId, githubProjectId))
@@ -52,7 +76,14 @@ export async function getProjectByGithubId(githubProjectId: number) {
   return row ?? null;
 }
 
-export async function getProjectsByIds(ids: string[]) {
+export async function getProjectsByIds({
+  ids,
+  tx
+}: {
+  ids: string[],
+  tx?: DbOrTx
+}) {
   if (ids.length === 0) return [];
-  return db.select().from(githubProjects).where(inArray(githubProjects.id, ids));
+  const client = tx || db;
+  return client.select().from(githubProjects).where(inArray(githubProjects.id, ids));
 }

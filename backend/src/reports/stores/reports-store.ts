@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, DbOrTx, Tx } from "@/db/client";
 import { reports } from "@/db/schema";
 
 export type ReportInput = {
@@ -14,8 +14,15 @@ export type ReportInput = {
   customInstructions?: string | null;
 };
 
-export async function createReport(input: ReportInput) {
-  const [row] = await db
+export async function createReport({
+  input,
+  tx,
+}: {
+  input: ReportInput;
+  tx?: Tx;
+}) {
+  const client = tx || db;
+  const [row] = await client
     .insert(reports)
     .values({
       id: input.id,
@@ -32,16 +39,30 @@ export async function createReport(input: ReportInput) {
   return row;
 }
 
-export async function listReports(opts?: { projectId?: string }) {
-  const query = db.select().from(reports);
-  if (opts?.projectId) {
-    query.where(eq(reports.projectId, opts.projectId));
+export async function listReports({
+  projectId,
+  tx,
+}: {
+  projectId?: string;
+  tx?: DbOrTx;
+}) {
+  const client = tx || db;
+  const query = client.select().from(reports);
+  if (projectId) {
+    query.where(eq(reports.projectId, projectId));
   }
   return query.orderBy(desc(reports.updatedAt));
 }
 
-export async function getReport(id: string) {
-  const [row] = await db
+export async function getReport({
+  id,
+  tx,
+}: {
+  id: string;
+  tx?: DbOrTx;
+}) {
+  const client = tx || db;
+  const [row] = await client
     .select()
     .from(reports)
     .where(eq(reports.id, id))
@@ -49,8 +70,17 @@ export async function getReport(id: string) {
   return row ?? null;
 }
 
-export async function updateReportMarkdown(id: string, editableMarkdown: string) {
-  const [row] = await db
+export async function updateReportMarkdown({
+  id,
+  editableMarkdown,
+  tx,
+}: {
+  id: string;
+  editableMarkdown: string;
+  tx?: Tx;
+}) {
+  const client = tx || db;
+  const [row] = await client
     .update(reports)
     .set({ editableMarkdown, updatedAt: new Date() })
     .where(eq(reports.id, id))

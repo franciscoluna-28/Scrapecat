@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, DbOrTx, Tx } from "@/db/client";
 import { commitChunks, type CommitChunkMetadata } from "@/db/schema";
 
 export type CommitChunkInput = {
@@ -17,9 +17,16 @@ export function contentHashOf(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
-export async function upsertCommitChunks(inputs: CommitChunkInput[]) {
+export async function upsertCommitChunks({
+  inputs,
+  tx,
+}: {
+  inputs: CommitChunkInput[];
+  tx?: Tx;
+}) {
   if (inputs.length === 0) return;
-  await db
+  const client = tx || db;
+  await client
     .insert(commitChunks)
     .values(
       inputs.map((i) => ({
@@ -47,12 +54,18 @@ export async function upsertCommitChunks(inputs: CommitChunkInput[]) {
     });
 }
 
-export async function getChunksByShas(
-  projectId: string,
-  shas: string[],
-): Promise<Map<string, { commitSha: string; diffSummary: string; metadata: CommitChunkMetadata; contentHash: string | null }>> {
+export async function getChunksByShas({
+  projectId,
+  shas,
+  tx,
+}: {
+  projectId: string;
+  shas: string[];
+  tx?: DbOrTx;
+}): Promise<Map<string, { commitSha: string; diffSummary: string; metadata: CommitChunkMetadata; contentHash: string | null }>> {
   if (shas.length === 0) return new Map();
-  const rows = await db
+  const client = tx || db;
+  const rows = await client
     .select({
       commitSha: commitChunks.commitSha,
       diffSummary: commitChunks.diffSummary,
@@ -64,14 +77,22 @@ export async function getChunksByShas(
   return new Map(rows.map((r) => [r.commitSha, { ...r, metadata: r.metadata ?? {} }]));
 }
 
-export async function listCommitsForProject(
-  projectId: string,
-  opts?: { startDate?: Date; endDate?: Date },
-) {
+export async function listCommitsForProject({
+  projectId,
+  tx,
+  startDate,
+  endDate,
+}: {
+  projectId: string;
+  tx?: DbOrTx;
+  startDate?: Date;
+  endDate?: Date;
+}) {
+  const client = tx || db;
   const conditions = [eq(commitChunks.projectId, projectId)];
-  if (opts?.startDate) conditions.push(gte(commitChunks.committedAt, opts.startDate));
-  if (opts?.endDate) conditions.push(lte(commitChunks.committedAt, opts.endDate));
-  return db
+  if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));
+  if (endDate) conditions.push(lte(commitChunks.committedAt, endDate));
+  return client
     .select()
     .from(commitChunks)
     .where(and(...conditions))
