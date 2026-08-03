@@ -18,26 +18,25 @@ await app.close();
 
 | Module | Why |
 |---|---|
-| `src/shared/github.ts` | All routes hit GitHub API via Octokit |
-| `src/shared/ai.ts` | Report generation calls OpenRouter |
-| `src/shared/r2.ts` | Image uploads to Cloudflare R2 |
+| `src/shared/integrations/git-provider/` | All routes hit GitHub API via Octokit |
+| `src/reports/ai.ts` | Report generation calls OpenRouter |
+| `src/reports/r2.ts` | Image uploads to Cloudflare R2 (deprecated, unwired) |
 | `src/db/client.ts` | Postgres via postgres-js (lazy — importing it does not connect, so unit tests need no live DB) |
 | `src/config/env.ts` | Control GITHUB_TOKEN and other config |
 | `global.fetch` | `GET /api/v1/models` calls OpenRouter directly |
-| `src/shared/prompts.ts` | **Do not mock** — pure string functions, fast and deterministic |
+| `src/reports/prompts.ts` | **Do not mock** — pure string functions, fast and deterministic |
 | `src/shared/utils.ts` | **Do not mock** — pure regex functions, fast and deterministic |
 
 ## How to write a test
 
 ```ts
 // 1. Mock external modules at the top — vitest hoists this before imports
-vi.mock("../shared/github", () => ({
-  getRepositoryBranches: vi.fn(),
+vi.mock("../shared/integrations/git-provider", () => ({
+  getGitProvider: vi.fn(() => mockProvider),
 }));
 
 // 2. Imports come after vi.mock
 import { buildApp } from "../app";
-import { getRepositoryBranches } from "../shared/github";
 
 // 3. Standard describe/it with buildApp + inject + close
 describe("GET /api/v1/branches", () => {
@@ -47,7 +46,7 @@ describe("GET /api/v1/branches", () => {
   afterAll(async () => { await app.close(); });
 
   it("returns branches", async () => {
-    vi.mocked(getRepositoryBranches).mockResolvedValue(["main", "dev"]);
+    mockProvider.listBranches.mockResolvedValue(["main", "dev"]);
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner/repo/branches",
@@ -57,7 +56,7 @@ describe("GET /api/v1/branches", () => {
   });
 
   it("returns 500 when GitHub fails", async () => {
-    vi.mocked(getRepositoryBranches).mockRejectedValue(new Error("API error"));
+    mockProvider.listBranches.mockRejectedValue(new Error("API error"));
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner/repo/branches",
@@ -71,7 +70,7 @@ describe("GET /api/v1/branches", () => {
 
 When a test needs a different `process.env` / `env` value, create a **separate test file** with a distinct `vi.mock("../config/env")`. Vitest tears down modules between files but caches them within a file, so two describe blocks in the same file cannot remock the same module differently.
 
-See `verification.test.ts` (GITHUB_TOKEN set) and `verification.no-token.test.ts` (GITHUB_TOKEN empty) as the canonical example.
+See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/routes.no-token.test.ts` (GITHUB_TOKEN empty) as the canonical example.
 
 ## Integration tests (Postgres)
 
@@ -85,7 +84,7 @@ It targets `DATABASE_URL` (defaulting to `postgres://scrapecat:scrapecat@localho
 
 ## Conventions
 
-- Test files are **colocated** with source: `src/routes/health.test.ts` tests `src/routes/health.ts`
+- Test files are **colocated** with their domain source: `src/health/routes.test.ts` tests `src/health/routes.ts`
 - Suffix: `*.test.ts`
 - Reuse a single `buildApp()` instance per describe block when routes are stateless
 - Always call `app.close()` in `afterAll` / `afterEach`

@@ -3,6 +3,9 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
