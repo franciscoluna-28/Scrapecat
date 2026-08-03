@@ -10,7 +10,7 @@ vi.mock("../config/env", () => ({
   env: {
     PORT: 0,
     HOST: "localhost",
-    DATABASE_URL: "file:./test.db",
+    DATABASE_URL: "postgres://postgres:postgres@localhost:5432/scrapecat_test",
     GITHUB_TOKEN: "",
     GIT_PROVIDER: "github",
     CORS_ORIGIN: "*",

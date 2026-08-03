@@ -1,46 +1,41 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
-import { db } from "../db/client";
-import { reports } from "../db/schema";
 import { listReportsQuerySchema, reportIdParamsSchema, updateReportBodySchema } from "../schemas";
+import { formatDate } from "../shared/utils";
+import * as reportsStore from "../db/stores/reports-store";
+import * as projectsStore from "../db/stores/projects-store";
 
 export async function listReports(
-  req: FastifyRequest,
+  req: FastifyRequest<{ Querystring: { projectId?: string } }>,
   reply: FastifyReply,
 ) {
+  const query = listReportsQuerySchema.safeParse(req.query);
+  if (!query.success) {
+    return reply.status(400).send({ error: query.error.flatten() });
+  }
+
   try {
-    const parsed = listReportsQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.flatten() });
-    }
-
-    const projectIdParam = parsed.data.projectId;
-    const projectId = projectIdParam ? Number(projectIdParam) : undefined;
-
-    const [distinctProjects, allReports] = await Promise.all([
-      db
-        .select({ id: reports.githubProjectId, name: reports.githubRepositoryName })
-        .from(reports)
-        .groupBy(reports.githubProjectId)
-        .orderBy(reports.githubRepositoryName),
-      db.query.reports.findMany({
-        where: projectId ? eq(reports.githubProjectId, projectId) : undefined,
-        orderBy: (r, { desc }) => [desc(r.updatedAt)],
-      }),
-    ]);
+    const rows = await reportsStore.listReports(
+      query.data.projectId ? { projectId: query.data.projectId } : undefined,
+    );
+    const projectIds = [...new Set(rows.map((r) => r.projectId))];
+    const projects = await projectsStore.getProjectsByIds(projectIds);
+    const projectById = new Map(projects.map((p) => [p.id, p]));
 
     return reply.send({
-      reports: allReports.map((report) => ({
-        id: report.id,
-        githubRepositoryName: report.githubRepositoryName,
-        githubProjectId: report.githubProjectId,
-        startDate: report.startDate,
-        endDate: report.endDate,
-        branch: report.branch,
-        createdAt: report.createdAt,
-        updatedAt: report.updatedAt,
-      })),
-      distinctProjects,
+      reports: rows.map((report) => {
+        const project = projectById.get(report.projectId);
+        return {
+          id: report.id,
+          projectId: report.projectId,
+          title: report.title,
+          repositoryName: project?.repositoryName ?? "",
+          branch: report.branch,
+          startDate: formatDate(report.startDate),
+          endDate: formatDate(report.endDate),
+          createdAt: report.createdAt,
+          updatedAt: report.updatedAt,
+        };
+      }),
     });
   } catch (error) {
     console.error("Error fetching reports:", error);
@@ -49,39 +44,35 @@ export async function listReports(
 }
 
 export async function getReport(
-  req: FastifyRequest,
+  req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
+  const params = reportIdParamsSchema.safeParse(req.params);
+  if (!params.success) {
+    return reply.status(400).send({ error: params.error.flatten() });
+  }
+
   try {
-    const parsed = reportIdParamsSchema.safeParse(req.params);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "ID is required" });
-    }
-
-    const { id } = parsed.data;
-
-    const report = await db.query.reports.findFirst({
-      where: eq(reports.id, id),
-    });
-
+    const report = await reportsStore.getReport(params.data.id);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
 
+    const project = await projectsStore.getProjectById(report.projectId);
+
     return reply.send({
       id: report.id,
+      projectId: report.projectId,
+      title: report.title,
+      repositoryName: project?.repositoryName ?? "",
       originalMarkdown: report.originalMarkdown,
       editableMarkdown: report.editableMarkdown,
-      startDate: report.startDate,
-      endDate: report.endDate,
+      startDate: formatDate(report.startDate),
+      endDate: formatDate(report.endDate),
       branch: report.branch,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
-      githubProjectId: report.githubProjectId,
-      githubRepositoryName: report.githubRepositoryName,
-      sourceCommits: report.sourceCommits || [],
-      sourceCommitsUpdatedAt: report.sourceCommitsUpdatedAt || null,
-      imageAssets: report.imageAssets || [],
+      imageAssets: report.imageAssets ?? [],
     });
   } catch (error) {
     console.error("Error fetching report:", error);
@@ -90,37 +81,29 @@ export async function getReport(
 }
 
 export async function updateReport(
-  req: FastifyRequest,
+  req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
+  const params = reportIdParamsSchema.safeParse(req.params);
+  if (!params.success) {
+    return reply.status(400).send({ error: params.error.flatten() });
+  }
+
+  const body = updateReportBodySchema.safeParse(req.body);
+  if (!body.success) {
+    return reply.status(400).send({ error: body.error.flatten() });
+  }
+
   try {
-    const paramsParsed = reportIdParamsSchema.safeParse(req.params);
-    if (!paramsParsed.success) {
-      return reply.status(400).send({ error: "ID is required" });
-    }
-
-    const bodyParsed = updateReportBodySchema.safeParse(req.body);
-    if (!bodyParsed.success) {
-      return reply.status(400).send({ error: bodyParsed.error.flatten() });
-    }
-
-    const { id } = paramsParsed.data;
-    const { editableMarkdown } = bodyParsed.data;
-
-    const updated = await db
-      .update(reports)
-      .set({ editableMarkdown, updatedAt: new Date() })
-      .where(eq(reports.id, id))
-      .returning();
-
-    if (updated.length === 0) {
+    const updated = await reportsStore.updateReportMarkdown(params.data.id, body.data.editableMarkdown);
+    if (!updated) {
       return reply.status(404).send({ error: "Report not found" });
     }
 
     return reply.send({
-      id: updated[0].id,
-      editableMarkdown: updated[0].editableMarkdown,
-      updatedAt: updated[0].updatedAt,
+      id: updated.id,
+      editableMarkdown: updated.editableMarkdown,
+      updatedAt: updated.updatedAt,
     });
   } catch (error) {
     console.error("Error updating report:", error);

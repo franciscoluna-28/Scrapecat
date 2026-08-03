@@ -5,8 +5,16 @@ export const queryKeys = {
   },
   reports: {
     all: ["reports"] as const,
-    list: (projectId?: number) => ["reports", "list", { projectId }] as const,
+    list: (projectId?: string) => ["reports", "list", { projectId }] as const,
     detail: (id: string) => ["reports", "detail", id] as const,
+  },
+  projects: {
+    all: ["projects"] as const,
+    list: ["projects", "list"] as const,
+    commits: (
+      projectId: string,
+      params?: { startDate?: string; endDate?: string },
+    ) => ["projects", "commits", projectId, params] as const,
   },
   repositories: {
     all: ["repositories"] as const,

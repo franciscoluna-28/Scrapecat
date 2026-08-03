@@ -25,7 +25,7 @@ export function useAddCredential() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (body: { provider: string; key: string; name?: string }) =>
+    mutationFn: (body: { provider: string; key: string }) =>
       apiClient.POST("/api/v1/credentials", { body }).then((r) => {
         if (r.error) throw r.error;
         return r.data;

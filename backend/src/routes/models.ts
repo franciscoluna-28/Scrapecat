@@ -23,6 +23,11 @@ const OPENAI_FALLBACK = [
   { id: "o3-mini", name: "o3-mini", free: false, description: "" },
 ];
 
+const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
+  deepseek: DEEPSEEK_FALLBACK,
+  openai: OPENAI_FALLBACK,
+};
+
 export async function listModels(
   req: FastifyRequest<{ Querystring: { provider?: string } }>,
   reply: FastifyReply,
@@ -30,11 +35,7 @@ export async function listModels(
   const provider = req.query.provider;
 
   if (provider && provider !== "openrouter") {
-    const map: Record<string, typeof DEEPSEEK_FALLBACK> = {
-      deepseek: DEEPSEEK_FALLBACK,
-      openai: OPENAI_FALLBACK,
-    };
-    const list = map[provider];
+    const list = PROVIDER_FALLBACKS[provider];
     if (!list) return reply.status(400).send({ error: `Unknown provider: ${provider}` });
     return reply.send({ models: list.map((m) => ({ ...m, provider })) });
   }

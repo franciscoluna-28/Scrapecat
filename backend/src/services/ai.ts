@@ -19,6 +19,7 @@ export interface AIRequest {
 
 export interface AIResponse {
   content: string;
+  finishReason?: string | null;
 }
 
 async function callOpenRouter(
@@ -38,7 +39,10 @@ async function callOpenRouter(
       ? (result as any).choices[0].message.content
       : "") || "";
 
-  return { content: rawContent };
+  return {
+    content: rawContent,
+    finishReason: (result as any).choices?.[0]?.finish_reason ?? null,
+  };
 }
 
 async function callOpenAICompatible(
@@ -58,7 +62,10 @@ async function callOpenAICompatible(
     max_tokens: maxTokens,
   });
 
-  return { content: result.choices?.[0]?.message?.content ?? "" };
+  return {
+    content: result.choices?.[0]?.message?.content ?? "",
+    finishReason: result.choices?.[0]?.finish_reason ?? null,
+  };
 }
 
 export async function callAI(request: AIRequest): Promise<AIResponse> {
@@ -72,7 +79,7 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   const apiKey = request.apiKey || (env as unknown as Record<string, string>)[config.envKey] || "";
   const model = request.model || config.defaultModel;
   const temperature = request.temperature ?? 0.1;
-  const maxTokens = request.maxTokens ?? 1024;
+  const maxTokens = request.maxTokens ?? 4096;
 
   if (!apiKey) {
     throw new Error(`Missing API key for provider: ${provider}`);
@@ -97,8 +104,17 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
 }
 
 export function cleanResponse(rawContent: string): string {
-  return rawContent
-    .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+  const withoutThinking = rawContent
+    .replace(/<thinking[^>]*>[\s\S]*?<\/thinking\s*>/gi, "")
     .replace(/^-\s*\n+(?=[^\s-])/gm, "- ")
     .trim();
+
+  const titleMatch = withoutThinking.search(/^#\s+Product Update/m);
+  const anchor =
+    titleMatch >= 0 ? titleMatch : withoutThinking.search(/^# .+/m);
+
+  if (anchor > 0) {
+    return withoutThinking.slice(anchor).trim();
+  }
+  return withoutThinking;
 }

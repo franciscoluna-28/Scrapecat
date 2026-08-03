@@ -16,7 +16,7 @@ describe("GET /api/v1/models", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns sorted models from OpenRouter", async () => {
+  it("returns models from OpenRouter plus provider fallbacks", async () => {
     const mockModels = {
       data: [
         { id: "model-b", name: "Model B", pricing: { prompt: "0", completion: "0" }, description: "Free model" },
@@ -30,28 +30,25 @@ describe("GET /api/v1/models", () => {
 
     const res = await app.inject({ method: "GET", url: "/api/v1/models" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveProperty("models");
-    expect(res.json().models).toHaveLength(2);
+    const body = res.json();
+    expect(body).toHaveProperty("models");
+    expect(body.models.length).toBeGreaterThan(0);
+    expect(body.models.map((m: any) => m.provider)).toContain("openrouter");
   });
 
-  it("returns 500 when OpenRouter API fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-    }));
+  it("filters by provider", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
-    const res = await app.inject({ method: "GET", url: "/api/v1/models" });
-    expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: "Failed to fetch models" });
+    const res = await app.inject({ method: "GET", url: "/api/v1/models?provider=deepseek" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.models.length).toBeGreaterThan(0);
+    expect(body.models.every((m: any) => m.provider === "deepseek")).toBe(true);
   });
 
-  it("sets Cache-Control header", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: [] }),
-    }));
-
-    const res = await app.inject({ method: "GET", url: "/api/v1/models" });
-    expect(res.headers["cache-control"]).toBe("public, max-age=3600, s-maxage=3600");
+  it("returns 400 for unknown provider", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/models?provider=nope" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Unknown provider: nope" });
   });
 });

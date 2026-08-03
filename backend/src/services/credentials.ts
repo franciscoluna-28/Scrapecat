@@ -1,90 +1,47 @@
-import { eq, desc } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { db } from "../db/client";
-import { credentials } from "../db/schema";
+import { getProviderConfig, isProviderSupported } from "../providers/registry";
 import { encrypt, decrypt, maskApiKey } from "./encryption";
-import { isProviderSupported, getProviderConfig } from "../providers/registry";
+import type { CredentialProvider } from "../db/schema";
+import * as credentialsStore from "../db/stores/credentials-store";
 
-export const DEFAULT_MODALITIES = ["language"];
-
-export type CredentialRow = {
-  id: string;
-  provider: string;
-  name: string;
-  encryptedKey: string;
-  keyHint: string;
-  modalities: string[];
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export function toSafeCredential(row: typeof credentials.$inferSelect) {
+export function toSafeCredential(row: Awaited<ReturnType<typeof credentialsStore.listCredentials>>[number]) {
   return {
     id: row.id,
     provider: row.provider,
-    name: row.name,
     keyHint: row.keyHint,
-    modalities: (row.modalities ?? DEFAULT_MODALITIES) as string[],
     createdAt: row.createdAt,
   };
 }
 
-export async function listCredentials(provider?: string): Promise<ReturnType<typeof toSafeCredential>[]> {
-  const query = db
-    .select()
-    .from(credentials)
-    .orderBy(desc(credentials.createdAt));
-
-  if (provider) {
-    query.where(eq(credentials.provider, provider));
-  }
-
-  const rows = await query;
+export async function listCredentials(provider?: string) {
+  const rows = provider
+    ? await credentialsStore.listCredentials(provider as CredentialProvider)
+    : await credentialsStore.listCredentials();
   return rows.map(toSafeCredential);
 }
 
 export async function getCredential(id: string) {
-  const row = await db
-    .select()
-    .from(credentials)
-    .where(eq(credentials.id, id))
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
-  return row ?? null;
+  return credentialsStore.getCredentialById(id);
 }
 
 export async function createCredential(data: {
   provider: string;
-  name?: string;
   key: string;
 }): Promise<string> {
   if (!isProviderSupported(data.provider)) {
     throw new Error(`Unsupported provider: ${data.provider}`);
   }
 
-  const id = nanoid();
-  const now = new Date();
-
-  await db.insert(credentials).values({
-    id,
-    provider: data.provider,
-    name: data.name || "Default",
+  const row = await credentialsStore.upsertCredential({
+    provider: data.provider as CredentialProvider,
     encryptedKey: encrypt(data.key),
     keyHint: maskApiKey(data.key),
-    modalities: DEFAULT_MODALITIES,
-    createdAt: now,
-    updatedAt: now,
   });
 
-  return id;
+  return row.id;
 }
 
 export async function deleteCredential(id: string): Promise<boolean> {
-  const result = await db
-    .delete(credentials)
-    .where(eq(credentials.id, id))
-    .returning();
-  return result.length > 0;
+  return credentialsStore.deleteCredentialById(id);
 }
 
 export async function verifyCredential(provider: string, key: string): Promise<boolean> {
@@ -102,14 +59,9 @@ export async function verifyCredential(provider: string, key: string): Promise<b
 }
 
 export async function resolveApiKey(provider: string): Promise<string | null> {
-  const row = await db
-    .select({ encryptedKey: credentials.encryptedKey })
-    .from(credentials)
-    .where(eq(credentials.provider, provider))
-    .orderBy(desc(credentials.createdAt))
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
+  if (!isProviderSupported(provider)) return null;
 
+  const row = await credentialsStore.getLatestCredential(provider as CredentialProvider);
   if (!row) return null;
   return decrypt(row.encryptedKey);
 }

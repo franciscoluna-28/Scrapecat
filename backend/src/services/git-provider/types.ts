@@ -19,9 +19,22 @@ export interface Commit {
   url?: string;
 }
 
+export interface CommitFile {
+  filename: string;
+  additions: number;
+  deletions: number;
+  patch?: string | null;
+}
+
+export interface CommitDetail extends Commit {
+  stats: { additions: number; deletions: number; total: number };
+  files: CommitFile[];
+}
+
 export interface PullRequest {
   body: string | null;
   number: number;
+  title: string;
   url: string;
 }
 

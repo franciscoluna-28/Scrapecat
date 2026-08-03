@@ -20,6 +20,7 @@ import { Input } from "@/src/components/ui/input";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
 import { useRepositories } from "@/src/_features/reports/services/api";
 import { useReports } from "@/src/_features/reports/services/reports-api";
+import { useProjects } from "@/src/_features/reports/services/projects-api";
 import { GitHubRepository } from "@/src/shared/types";
 import { ReportCard } from "@/src/_features/reports/components/ReportCard";
 
@@ -40,8 +41,9 @@ function PageContent() {
     per_page: perPage,
   });
 
-  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(undefined);
-  const { reports, distinctProjects, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(selectedProjectId);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const { reports, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(selectedProjectId);
+  const { projects } = useProjects();
 
   return (
     <SectionLayout>
@@ -82,12 +84,12 @@ function PageContent() {
 
       {activeView === "reports" && (
         <>
-          {distinctProjects.length > 0 && (
+          {projects.length > 0 && (
             <div className="flex justify-center mb-4">
               <Select
-                value={String(selectedProjectId ?? "all")}
+                value={selectedProjectId ?? "all"}
                 onValueChange={(value) =>
-                  setSelectedProjectId(value === "all" ? undefined : Number(value))
+                  setSelectedProjectId(value === "all" ? undefined : value)
                 }
               >
                 <SelectTrigger className="w-48">
@@ -95,9 +97,9 @@ function PageContent() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  {distinctProjects.map((project) => (
-                    <SelectItem key={project.id} value={String(project.id)}>
-                      {project.name}
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.repositoryName}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,22 +1,22 @@
 import {
   customType,
   index,
-  integer as pgInteger,
+  integer,
   jsonb,
-  pgTable,
-  text as pgText,
-  timestamp,
-  uuid,
   pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 const AVAILABLE_CREDENTIAL_PROVIDERS = [
-  "ai_openai",
-  "ai_openrouter",
-  "ai_deepseek",
-  "git_github",
-  "git_gitlab",
+  "openai",
+  "openrouter",
+  "deepseek",
+  "github",
+  "gitlab",
 ] as const;
 
 const credentialProviderEnum = pgEnum(
@@ -29,7 +29,7 @@ export const vector = customType<{ data: number[]; driverData: string }>({
     return "vector(1536)";
   },
   toDriver(value: number[]): string {
-    return `[${value.join(",")}]`; // Formato string nativo de pgvector
+    return `[${value.join(",")}]`; 
   },
   fromDriver(value: string): number[] {
     return value
@@ -46,81 +46,49 @@ export type ImageAsset = {
   commitMessage: string;
 };
 
-export const reports = sqliteTable("reports", {
-  id: text("id").primaryKey(),
-  githubProjectId: integer("github_project_id").notNull(),
-  githubRepositoryName: text("github_repository_name").notNull(),
-  originalMarkdown: text("original_markdown").notNull(),
-  editableMarkdown: text("editable_markdown").notNull(),
-  startDate: text("start_date").notNull(),
-  endDate: text("end_date").notNull(),
-  branch: text("branch").notNull(),
-  sourceCommits: text("source_commits", { mode: "json" }).$type<any[]>(),
-  sourceCommitsUpdatedAt: integer("source_commits_updated_at", {
-    mode: "timestamp",
-  }).notNull(),
-  imageAssets: text("image_assets", { mode: "json" }).$type<ImageAsset[]>(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  customInstructions: text("custom_instructions"),
-});
+export type CommitChunkMetadata = {
+  filesChanged?: string[];
+  additions?: number;
+  deletions?: number;
+  commitUrl?: string;
+  prNumber?: number;
+  prTitle?: string;
+  prUrl?: string;
+};
 
-export const credentials = sqliteTable("credentials", {
-  id: text("id").primaryKey(),
-  provider: text("provider").notNull(),
-  name: text("name").notNull(),
-  encryptedKey: text("encrypted_key").notNull(),
-  keyHint: text("key_hint").notNull(),
-  modalities: text("modalities", { mode: "json" })
-    .$type<string[]>()
-    .default(["language"]),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
-export const pgGithubProjects = pgTable("github_projects", {
+export const githubProjects = pgTable("github_projects", {
   id: uuid("id").defaultRandom().primaryKey(),
-  githubProjectId: pgInteger("github_project_id").notNull().unique(),
-  repositoryName: pgText("repository_name").notNull(),
-  defaultBranch: pgText("default_branch").default("main").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  githubProjectId: integer("github_project_id").notNull().unique(),
+  repositoryName: text("repository_name").notNull(),
+  defaultBranch: text("default_branch").default("main").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const pgCommitChunks = pgTable(
+export const commitChunks = pgTable(
   "commit_chunks",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     projectId: uuid("project_id")
-      .references(() => pgGithubProjects.id, { onDelete: "cascade" })
+      .references(() => githubProjects.id, { onDelete: "cascade" })
       .notNull(),
-    commitSha: pgText("commit_sha").notNull(),
-    commitMessage: pgText("commit_message").notNull(),
-    author: pgText("author"),
-    diffSummary: pgText("diff_summary").notNull(),
+    commitSha: text("commit_sha").notNull(),
+    commitMessage: text("commit_message").notNull(),
+    author: text("author"),
+    diffSummary: text("diff_summary").notNull(),
     embedding: vector("embedding"),
+    contentHash: text("content_hash"),
+    embeddingHash: text("embedding_hash"),
     metadata: jsonb("metadata")
-      .$type<{
-        filesChanged?: string[];
-        additions?: number;
-        deletions?: number;
-      }>()
+      .$type<CommitChunkMetadata>()
       .default({}),
     committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => {
     return {
-      projectShaIdx: index("commit_project_sha_idx").on(
-        table.projectId,
-        table.commitSha,
-      ),
+      projectShaIdx: uniqueIndex("commit_project_sha_idx").on(table.projectId, table.commitSha),
       embeddingIdx: index("commit_embedding_hnsw_idx").using(
         "hnsw",
         table.embedding.op("vector_cosine_ops"),
@@ -129,46 +97,36 @@ export const pgCommitChunks = pgTable(
   },
 );
 
-export const pgReports = pgTable("reports", {
+export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")
-    .references(() => pgGithubProjects.id, { onDelete: "cascade" })
+    .references(() => githubProjects.id, { onDelete: "cascade" })
     .notNull(),
-  title: pgText("title").notNull(),
-  originalMarkdown: pgText("original_markdown").notNull(),
-  editableMarkdown: pgText("editable_markdown").notNull(),
+  title: text("title").notNull(),
+  originalMarkdown: text("original_markdown").notNull(),
+  editableMarkdown: text("editable_markdown").notNull(),
   startDate: timestamp("start_date", { withTimezone: true }).notNull(),
   endDate: timestamp("end_date", { withTimezone: true }).notNull(),
-  branch: pgText("branch").notNull(),
-  customInstructions: pgText("custom_instructions"),
-  imageAssets: jsonb("image_assets")
-    .$type<
-      {
-        originalUrl: string;
-        r2Url: string;
-        commitSha: string;
-        commitMessage: string;
-      }[]
-    >()
-    .default([]),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  branch: text("branch").notNull(),
+  customInstructions: text("custom_instructions"),
+  imageAssets: jsonb("image_assets").$type<ImageAsset[]>().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const pgCredentials = pgTable("credentials", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  provider: credentialProviderEnum("provider").notNull(),
-  name: pgText("name").notNull().unique(),
-  encryptedKey: pgText("encrypted_key").notNull(),
-  keyHint: pgText("key_hint").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const credentials = pgTable(
+  "credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: credentialProviderEnum("provider").notNull(),
+    encryptedKey: text("encrypted_key").notNull(),
+    keyHint: text("key_hint").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    providerUnique: uniqueIndex("credentials_provider_unique").on(table.provider),
+  }),
+);
+
+export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

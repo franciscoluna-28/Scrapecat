@@ -10,12 +10,13 @@ export const reportInputSchema = z.object({
   customInstructions: z.string().optional(),
   quickMode: z.boolean().optional(),
   model: z.string().optional(),
-  provider: z.enum(["openrouter", "deepseek"]).optional(),
+  provider: z
+    .enum(["openrouter", "deepseek", "openai"])
+    .optional(),
 });
 
 export const addCredentialSchema = z.object({
   provider: z.string().min(1),
-  name: z.string().min(1).default("Default"),
   key: z.string().min(1, "API key is required"),
 });
 
@@ -51,6 +52,15 @@ export const listKeysQuerySchema = z.object({
 
 export const listReportsQuerySchema = z.object({
   projectId: z.string().optional(),
+});
+
+export const projectIdParamsSchema = z.object({
+  projectId: z.string().min(1, "projectId is required"),
+});
+
+export const projectCommitsQuerySchema = z.object({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 export const reportIdParamsSchema = z.object({

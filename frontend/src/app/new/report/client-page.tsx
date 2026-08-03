@@ -26,9 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
-import { GitHubRepositoryClientPage } from "@/src/shared/types";
-import type { ProcessedCommit } from "@/src/shared/types";
-import type { ImageAsset } from "@/src/shared/types";
+import type { ImageAsset, StoredCommit } from "@/src/shared/types";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -36,8 +34,8 @@ import ReactMarkdown from "react-markdown";
 import { Components } from "react-markdown";
 
 type Props = {
-  commits: ProcessedCommit[];
-  repository: GitHubRepositoryClientPage;
+  commits: StoredCommit[];
+  repositoryName: string;
   startDate: string;
   endDate: string;
   branch: string;
@@ -88,7 +86,7 @@ const markdownComponents: Components = {
 };
 
 export default function ReportClientPage({
-  repository,
+  repositoryName,
   commits,
   startDate,
   endDate,
@@ -132,7 +130,7 @@ export default function ReportClientPage({
 
 
 
-  if (!repository) {
+  if (!repositoryName) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center space-y-4">
@@ -169,7 +167,7 @@ export default function ReportClientPage({
           <div className="p-4 space-y-4 border-b min-w-0">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Repository</Label>
-              <p className="text-sm font-semibold truncate">{repository.name}</p>
+              <p className="text-sm font-semibold truncate">{repositoryName}</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Branch</Label>

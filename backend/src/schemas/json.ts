@@ -102,7 +102,7 @@ export const ReportInputBody = Type.Object({
 
 export const ReportCreatedResponse = Type.Object({
   reportId: Type.String(),
-  report: Type.String(),
+  projectId: Type.String(),
 });
 
 export const ReportFallbackResponse = Type.Object({
@@ -115,8 +115,9 @@ export const ReportsListQuery = Type.Object({
 
 const ReportSummary = Type.Object({
   id: Type.String(),
-  githubRepositoryName: Type.String(),
-  githubProjectId: Type.Integer(),
+  projectId: Type.String(),
+  title: Type.String(),
+  repositoryName: Type.String(),
   startDate: Type.String(),
   endDate: Type.String(),
   branch: Type.String(),
@@ -124,14 +125,8 @@ const ReportSummary = Type.Object({
   updatedAt: Type.String({ format: "date-time" }),
 });
 
-const DistinctProject = Type.Object({
-  id: Type.Integer(),
-  name: Type.String(),
-});
-
 export const ReportsListResponse = Type.Object({
   reports: Type.Array(ReportSummary),
-  distinctProjects: Type.Array(DistinctProject),
 });
 
 export const ReportIdParams = Type.Object({
@@ -140,6 +135,9 @@ export const ReportIdParams = Type.Object({
 
 export const ReportGetResponse = Type.Object({
   id: Type.String(),
+  projectId: Type.String(),
+  title: Type.String(),
+  repositoryName: Type.String(),
   originalMarkdown: Type.String(),
   editableMarkdown: Type.String(),
   startDate: Type.String(),
@@ -147,10 +145,6 @@ export const ReportGetResponse = Type.Object({
   branch: Type.String(),
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
-  githubProjectId: Type.Integer(),
-  githubRepositoryName: Type.String(),
-  sourceCommits: Type.Optional(Type.Array(Type.Any())),
-  sourceCommitsUpdatedAt: Type.Optional(Type.Union([Type.String({ format: "date-time" }), Type.Null()])),
   imageAssets: Type.Optional(Type.Array(Type.Any())),
 });
 
@@ -167,15 +161,51 @@ export const ReportUpdateResponse = Type.Object({
 export const ReportReplyBody = Type.Object({
   reply: Type.String(),
   model: Type.Optional(Type.String()),
+  provider: Type.Optional(Type.String()),
 });
 
 export const ReportReplyResponse = Type.Object({
   report: Type.String(),
 });
 
+export const ProjectIdParams = Type.Object({
+  projectId: Type.String(),
+});
+
+export const ProjectsResponse = Type.Object({
+  projects: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      githubProjectId: Type.Integer(),
+      repositoryName: Type.String(),
+      defaultBranch: Type.String(),
+      createdAt: Type.String({ format: "date-time" }),
+      updatedAt: Type.String({ format: "date-time" }),
+    }),
+  ),
+});
+
+export const ProjectCommitsQuery = Type.Object({
+  startDate: Type.Optional(Type.String()),
+  endDate: Type.Optional(Type.String()),
+});
+
+export const ProjectCommitsResponse = Type.Object({
+  commits: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      commitSha: Type.String(),
+      commitMessage: Type.String(),
+      author: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+      diffSummary: Type.String(),
+      committedAt: Type.String({ format: "date-time" }),
+      metadata: Type.Optional(Type.Any()),
+    }),
+  ),
+});
+
 export const AddCredentialBody = Type.Object({
   provider: Type.String(),
-  name: Type.Optional(Type.String()),
   key: Type.String(),
 });
 

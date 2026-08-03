@@ -5,11 +5,12 @@
     "dev": "concurrently -n frontend,backend -c yellow,green \"pnpm --filter @scrapecat/frontend dev\" \"pnpm --filter @scrapecat/backend dev\"",
     "build": "pnpm --filter @scrapecat/frontend build && pnpm --filter @scrapecat/backend build",
     "lint": "pnpm --filter @scrapecat/frontend lint",
-    "codegen": "npx tsx scripts/codegen.ts"
+    "codegen": "npx tsx scripts/codegen.ts",
+    "db:generate": "pnpm --filter @scrapecat/backend db:generate",
+    "db:migrate": "pnpm --filter @scrapecat/backend db:migrate"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3",
       "esbuild",
       "sharp",
       "msw",
