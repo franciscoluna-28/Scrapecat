@@ -67,6 +67,7 @@ export const commitChunks = pgTable(
       .references(() => githubProjects.id, { onDelete: "cascade" })
       .notNull(),
     commitSha: text("commit_sha").notNull(),
+    branch: text("branch").notNull().default("main"),
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
     diffSummary: text("diff_summary").notNull(),
@@ -82,7 +83,11 @@ export const commitChunks = pgTable(
   },
   (table) => {
     return {
-      projectShaIdx: uniqueIndex("commit_project_sha_idx").on(table.projectId, table.commitSha),
+      projectShaIdx: uniqueIndex("commit_project_sha_branch_idx").on(
+        table.projectId,
+        table.commitSha,
+        table.branch,
+      ),
       embeddingIdx: index("commit_embedding_hnsw_idx").using(
         "hnsw",
         table.embedding.op("vector_cosine_ops"),
@@ -106,6 +111,25 @@ export const reports = pgTable("reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const reportCommits = pgTable(
+  "report_commits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reportId: uuid("report_id")
+      .references(() => reports.id, { onDelete: "cascade" })
+      .notNull(),
+    commitSha: text("commit_sha").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    reportCommitUnique: uniqueIndex("report_commit_unique_idx").on(
+      table.reportId,
+      table.commitSha,
+    ),
+    reportIdIdx: index("report_commits_report_id_idx").on(table.reportId),
+  }),
+);
 
 export const credentials = pgTable(
   "credentials",

@@ -6,6 +6,7 @@ import { githubProjects, credentials, commitChunks } from "@/db/schema";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
+import * as reportCommitsStore from "@/reports/stores/report-commits-store";
 import * as credentialsStore from "@/credentials/stores/credentials-store";
 import { buildApp } from "@/app";
 import { embedNewChunks } from "@/projects/embed-chunks";
@@ -290,6 +291,10 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
           committedAt: new Date("2026-01-10T00:00:00Z"),
         },
       ],
+    });
+    await reportCommitsStore.insertReportCommits({
+      reportId: report.id,
+      commitShas: ["report-commits-sha"],
     });
     const app = await buildApp();
     try {

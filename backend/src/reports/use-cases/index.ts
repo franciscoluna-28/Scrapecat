@@ -10,8 +10,8 @@ import {
   writeChunks,
 } from "@/projects/sync";
 import * as projectsStore from "@/projects/stores/projects-store";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
+import * as reportCommitsStore from "@/reports/stores/report-commits-store";
 import { reportInputSchema } from "@/reports/schemas";
 import {
   buildSystemPrompt,
@@ -134,9 +134,8 @@ export async function createReportUseCase(input: CreateReportInput) {
 
   const chunks = await buildMissingChunks({
     projectId: project.id,
-    owner: input.githubOwner,
-    repo: input.repository,
     commits,
+    branch: input.branch,
   });
 
   const generatedReport = await generateReport({
@@ -161,7 +160,7 @@ export async function createReportUseCase(input: CreateReportInput) {
       tx,
     });
 
-    await writeChunks({ projectId: project.id, chunks, tx });
+    await writeChunks({ projectId: project.id, chunks, branch: input.branch, tx });
 
     await reportsStore.createReport({
       input: {
@@ -175,6 +174,12 @@ export async function createReportUseCase(input: CreateReportInput) {
         branch: input.branch,
         customInstructions: input.customInstructions?.trim() || null,
       },
+      tx,
+    });
+
+    await reportCommitsStore.insertReportCommits({
+      reportId,
+      commitShas: commits.map((c) => c.sha),
       tx,
     });
   });
@@ -215,10 +220,10 @@ export async function replyToReportUseCase(input: {
     throw new ReportNotFoundError();
   }
 
-  const chunks = await commitChunksStore.listCommitsForProject({
+  const chunks = await reportCommitsStore.listCommitsForReport({
+    reportId: report.id,
     projectId: report.projectId,
-    startDate: report.startDate,
-    endDate: report.endDate,
+    branch: report.branch,
   });
   const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
 

@@ -5,8 +5,6 @@ export type { GitProvider } from "@/shared/integrations/git-provider/provider";
 export type {
   Repository,
   Commit,
-  CommitDetail,
-  PullRequest,
   RepositoryFilters,
   CommitParams,
   DateRangeParams,
