@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { reports, type ImageAsset } from "@/db/schema";
+import { reports } from "@/db/schema";
 
 export type ReportInput = {
   id?: string;
@@ -12,7 +12,6 @@ export type ReportInput = {
   endDate: Date;
   branch: string;
   customInstructions?: string | null;
-  imageAssets?: ImageAsset[];
 };
 
 export async function createReport(input: ReportInput) {
@@ -28,7 +27,6 @@ export async function createReport(input: ReportInput) {
       endDate: input.endDate,
       branch: input.branch,
       customInstructions: input.customInstructions ?? null,
-      imageAssets: input.imageAssets ?? [],
     })
     .returning();
   return row;

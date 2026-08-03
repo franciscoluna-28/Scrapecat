@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
-import type { GitHubProject, StoredCommit } from "@/src/shared/types";
+import type { GitHubProject } from "@/src/shared/types";
 
 export function useProjects() {
   const { data, error, isLoading, isFetching } = useQuery({
@@ -17,27 +17,5 @@ export function useProjects() {
     isFetching,
     error: error ?? null,
     hasError: !!error,
-  };
-}
-
-export function useProjectCommits(
-  projectId?: string,
-  params?: { startDate?: string; endDate?: string },
-) {
-  const { data, error, isLoading } = useQuery({
-    queryKey: queryKeys.projects.commits(projectId ?? "", params),
-    queryFn: () =>
-      apiClient
-        .GET("/api/v1/projects/{projectId}/commits", {
-          params: { path: { projectId: projectId! }, query: params },
-        })
-        .then((r) => r.data),
-    enabled: !!projectId,
-  });
-
-  return {
-    commits: (data?.commits ?? []) as StoredCommit[],
-    isLoading,
-    error: error ?? null,
   };
 }

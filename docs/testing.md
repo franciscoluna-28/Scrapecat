@@ -12,7 +12,7 @@ const res = await app.inject({ method, url, ... });
 await app.close();
 ```
 
-2. **No dependency injection.** Route handlers import services directly (`import { db } from "../db/client"`). To isolate tests from external services (GitHub API, OpenRouter, Postgres, R2), we use vitest's `vi.mock()` at the top of each test file, which is hoisted above imports and replaces modules before the app loads.
+2. **No dependency injection.** Route handlers import services directly (`import { db } from "../db/client"`). To isolate tests from external services (GitHub API, OpenRouter, Postgres), we use vitest's `vi.mock()` at the top of each test file, which is hoisted above imports and replaces modules before the app loads.
 
 ## What to mock
 
@@ -20,7 +20,6 @@ await app.close();
 |---|---|
 | `src/shared/integrations/git-provider/` | All routes hit GitHub API via Octokit |
 | `src/reports/ai.ts` | Report generation calls OpenRouter |
-| `src/reports/r2.ts` | Image uploads to Cloudflare R2 (deprecated, unwired) |
 | `src/db/client.ts` | Postgres via postgres-js (lazy — importing it does not connect, so unit tests need no live DB) |
 | `src/config/env.ts` | Control GITHUB_TOKEN and other config |
 | `global.fetch` | `GET /api/v1/models` calls OpenRouter directly |
@@ -74,7 +73,7 @@ See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/r
 
 ## Integration tests (Postgres)
 
-`src/db/integration.test.ts` exercises the store layer and the DB-backed routes (`GET /api/v1/projects`, `GET /api/v1/projects/{id}/commits`, `GET /api/v1/reports`) against a **live Postgres**. It is skipped by default and runs only under the integration config:
+`src/db/integration.test.ts` exercises the store layer and the DB-backed routes (`GET /api/v1/projects`, `GET /api/v1/reports/:id/commits`, `GET /api/v1/reports`) against a **live Postgres**. It is skipped by default and runs only under the integration config:
 
 ```bash
 pnpm test:integration   # requires a running Postgres (e.g. docker compose up -d db)
