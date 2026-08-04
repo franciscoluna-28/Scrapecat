@@ -2,9 +2,11 @@ import { Octokit } from "@octokit/core";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
+import { paginate } from "@/shared/integrations/git-provider/pagination";
 import type {
   Repository,
   Commit,
+  Page,
   RepositoryFilters,
   CommitParams,
   DateRangeParams,
@@ -58,6 +60,16 @@ function toCommit(raw: any): Commit {
   };
 }
 
+function hasNextPage(headers: Record<string, any>): boolean {
+  const link = headers?.link as string | undefined;
+  return !!link && /rel="?next"?/i.test(link);
+}
+
+function toPage<T>(items: T[], headers: Record<string, any>, page: number): Page<T> {
+  const hasMore = hasNextPage(headers);
+  return { items, hasMore, nextPage: hasMore ? page + 1 : null };
+}
+
 export class GithubAdapter implements GitProvider {
   private octokit: InstanceType<typeof MyOctokit>;
 
@@ -76,26 +88,51 @@ export class GithubAdapter implements GitProvider {
   }
 
   async listBranches(owner: string, repo: string): Promise<string[]> {
-    const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/branches", {
-      owner,
-      repo,
-      per_page: 100,
-    });
-    return data.map((branch: any) => branch.name);
+    return paginate(
+      async (page) => {
+        const { data, headers } = await this.octokit.request(
+          "GET /repos/{owner}/{repo}/branches",
+          {
+            owner,
+            repo,
+            per_page: 100,
+            page,
+          },
+        );
+        return toPage(data.map((branch: any) => branch.name), headers, page);
+      },
+      { pageSize: 100, dedupeKey: (name) => name },
+    );
+  }
+
+  async listCommitsPage(owner: string, repo: string, params?: CommitParams): Promise<Page<Commit>> {
+    const { data, headers } = await this.octokit.request(
+      "GET /repos/{owner}/{repo}/commits",
+      {
+        owner,
+        repo,
+        per_page: params?.perPage || 100,
+        page: params?.page ?? 1,
+        sort: "created",
+        direction: "desc",
+        sha: params?.branch,
+        since: params?.since,
+        until: params?.until,
+      },
+    );
+    return toPage(data.map(toCommit), headers, params?.page ?? 1);
   }
 
   async listCommits(owner: string, repo: string, params?: CommitParams): Promise<Commit[]> {
-    const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/commits", {
-      owner,
-      repo,
-      per_page: params?.perPage || 100,
-      sort: "created",
-      direction: "desc",
-      sha: params?.branch,
-      since: params?.since,
-      until: params?.until,
-    });
-    return data.map(toCommit);
+    return paginate(
+      (page) => this.listCommitsPage(owner, repo, { ...params, page }),
+      {
+        pageSize: params?.perPage || 100,
+        maxCommits: params?.maxCommits,
+        maxPages: params?.maxPages,
+        dedupeKey: (c) => c.sha,
+      },
+    );
   }
 
   async countCommits(owner: string, repo: string, params?: DateRangeParams): Promise<number> {
@@ -115,11 +152,15 @@ export class GithubAdapter implements GitProvider {
       });
       return data.total_count;
     } catch {
+      // Fallback: walk pages. Bounded so a rare search failure can't turn into
+      // a full-history enumeration; the search API is the primary path.
       try {
         const commits = await this.listCommits(owner, repo, {
           perPage: 100,
           since: params?.since,
           until: params?.until,
+          maxCommits: 1000,
+          maxPages: 10,
         });
         return commits.length;
       } catch {
