@@ -25,3 +25,13 @@ export type ReportSummary =
 
 export type ReportDetail =
   paths["/api/v1/reports/{id}"]["get"]["responses"]["200"]["content"]["application/json"];
+
+export type ChatSource =
+  paths["/api/v1/chat/ask"]["post"]["responses"]["200"]["content"]["application/json"]["sources"][number];
+
+export type ChatAskResponse =
+  paths["/api/v1/chat/ask"]["post"]["responses"]["200"]["content"]["application/json"];
+
+export type ChatAskBody = NonNullable<
+  paths["/api/v1/chat/ask"]["post"]["requestBody"]
+>["content"]["application/json"];

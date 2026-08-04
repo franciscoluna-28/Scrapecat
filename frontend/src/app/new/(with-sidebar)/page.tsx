@@ -6,6 +6,7 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitBranch, FileText } from "lucide-react";
 import { RepositoryCard } from "@/src/_features/reports/components/RepositoryCard";
+import { ChatPanel } from "@/src/_features/chat/components/ChatPanel";
 import { CredentialsManager } from "@/src/_features/credentials/components/CredentialsManager";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import {
@@ -138,6 +139,8 @@ function PageContent() {
           </Card>
         </>
       )}
+
+      {activeView === "chat" && <ChatPanel />}
 
       {activeView === "credentials" && (
         <Card>

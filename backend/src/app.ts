@@ -10,6 +10,7 @@ import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits, updateReport, replyToReport } from "@/reports/routes";
 import { listProjects } from "@/projects/routes";
+import { ask } from "@/chat/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
@@ -41,6 +42,7 @@ import {
   ReportCommitsResponse,
 } from "@/reports/schemas";
 import { ProjectsResponse } from "@/projects/schemas";
+import { AskBody, AskResponse } from "@/chat/schemas";
 import {
   AddCredentialBody,
   CredentialListResponse,
@@ -197,6 +199,15 @@ export async function buildApp() {
       response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
+
+  app.post("/api/v1/chat/ask", {
+    schema: {
+      description: "Ask a question about a project using RAG over commit vectors",
+      tags: ["chat"],
+      body: AskBody,
+      response: { 200: AskResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse, 500: ErrorResponse },
+    },
+  }, ask);
 
   app.get("/api/v1/credentials", {
     schema: {
