@@ -157,7 +157,7 @@ export interface paths {
                     type?: string;
                     sort?: string;
                     direction?: string;
-                    per_page?: string;
+                    per_page?: number;
                 };
                 header?: never;
                 path?: never;
@@ -271,7 +271,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    limit?: string;
+                    limit?: number;
                     startDate?: string;
                     endDate?: string;
                     branch?: string;
