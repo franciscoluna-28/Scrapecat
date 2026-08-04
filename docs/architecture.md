@@ -17,15 +17,25 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-## RAG (Vectors: partial, semantic search not shipped)
+## RAG (Vectors: shipped, ingestion not shipped)
 
-The commit corpus and embedding pipeline are real; semantic search over it is **not shipped yet**:
+The commit corpus and embedding pipeline are real, and an experimental semantic-search + RAG answer endpoint ships:
 
 - `commit_chunks.diff_summary` holds a structured commit doc per commit (commit message + PR title + PR body excerpt), with `pr_title`, `pr_url`, `commit_url`, `files_changed`, and `metrics` stored in the `metadata` jsonb. **Full patch/diff text is never stored.**
 - `content_hash` (SHA-256 of the doc) and `embedding_hash` gate re-embedding: a row's embedding is current iff `embedding_hash = content_hash`. `embedding vector(1536)` + the HNSW index (`commit_embedding_hnsw_idx`) are populated by the non-blocking `embedNewChunks()` (OpenRouter, `openai/text-embedding-3-small`, 1536 dims) invoked after report generation, plus the `embed:backfill` script for one-time catch-up. If no OpenRouter key is available the sync degrades gracefully and the backfill catches up later.
-- There is no semantic-search endpoint (`cosineDistance` over the HNSW index is the planned path) and no prompt-enrichment/retrieval in report generation yet.
+- `POST /api/v1/chat/ask` (`src/chat/`) answers questions over a project's commits: embeds the question, runs `searchChunks()` (cosine `<=>` over the HNSW index), applies a date range extracted from the question (`extractDateFilter`, `src/chat/date-filter.ts`) plus a similarity threshold, and answers with the retrieved commits as citable `sources`. If nothing is retrieved (or the project isn't indexed), it refuses deterministically instead of calling the LLM.
 
 The full strategy (why, corpus shape, cost/reliability properties) is documented in [`docs/embeddings.md`](embeddings.md).
+
+### RAG ingestion (not shipped) — technical debt
+
+The retrieval half works, but **there is no ingestion pipeline**. The corpus is only populated as a side effect of report generation (`createReportUseCase` → `syncProjectCommits`, `src/reports/use-cases/index.ts`), which is capped at `MAX_LIMIT=100` of the newest commits in the report window (`src/projects/sync.ts`). Consequences:
+
+- A project that has never had a report generated has **zero** indexed commits, so `ask` can only ever return "no commits indexed".
+- Even for reported projects, the corpus is a shallow window (≤100 commits); old-history questions ("when did we change auth", 2 years ago) are unreachable.
+- There is no cold-start full backfill, no watermark-based incremental sync (steady-state cost ∝ new commits), and no explicit empty-repo handling.
+
+**Fix direction (when we build it):** a `POST /api/v1/projects/:id/ingest` route that (1) cold-starts with a paginated, idempotent full backfill of GitHub history (resumable across calls via a `hasMore`/cursor), (2) warms up to incremental sync once a watermark exists, (3) treats an empty repo as a no-op, and (4) runs embeddings inline for accurate counts. Everything it needs is already in place: `getChunksByShas` dedupe, the `content_hash`/`embedding_hash` staleness gate, and `writeChunks` idempotency.
 
 ## Tech Debt
 
@@ -66,7 +76,7 @@ One ~160-line handler does validation, GitHub fetch, chunk building, AI retry lo
 Decouple in three phases, no big-bang rewrites:
 
 1. **Git provider interface** — extract an adapter behind a single interface so routes don't know or care whether data comes from GitHub, GitLab, or Bitbucket
-2. **Data access layer** — store layer extracted into per-domain stores under each domain folder (`src/projects/stores/`, etc.); Postgres + pgvector provides the connected data model. The vector-search half of this (HNSW on `commit_chunks.embedding`) is infrastructure-ready but **WIP** — embeddings are populated, the `cosineDistance` search endpoint is not — see "RAG (Vectors: partial, semantic search not shipped)" above
+2. **Data access layer** — store layer extracted into per-domain stores under each domain folder (`src/projects/stores/`, etc.); Postgres + pgvector provides the connected data model. The vector-search half of this (HNSW on `commit_chunks.embedding`) is shipped for the experimental `ask` endpoint; the missing half is the **ingestion pipeline** — see "RAG ingestion (not shipped)" above
 3. **Dependency injection** — wire providers and stores into the app via Fastify's decorate mechanism so routes receive their dependencies instead of importing them
 
 Each migration follows the same pattern: extract interface, write new implementation behind it, run both in parallel, flip the default, remove the old one.

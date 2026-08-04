@@ -57,7 +57,18 @@ A row's embedding is **current** iff `embedding_hash = content_hash`. The embed 
 - **Graceful degradation:** enrichment failures produce a valid, degraded doc (message + author + URL) rather than poisoning a row; embedding failures leave the row pending for later.
 - **Resumable:** every step is idempotent and can be re-run safely.
 
+## Retrieval (experimental)
+
+`POST /api/v1/chat/ask` answers natural-language questions over a project's indexed commits:
+
+1. The question is embedded with the same model (`openai/text-embedding-3-small`, 1536 dims).
+2. `searchChunks()` (`src/projects/retrieval.ts`) runs a cosine query (`<=>` distance, ascending) over `commit_chunks.embedding` using the HNSW index, filtered to the project and rows with a non-null embedding.
+3. Temporal constraints are extracted from the question (`extractDateFilter` in `src/chat/date-filter.ts` — months/years, "since/before/between", "last N days", "this year", etc.) and applied as a `committed_at` range so "what was built in august 2026" only retrieves commits dated in August 2026. Dates are also included in the LLM context (`buildAskPrompt`), so the model can reason about *when* and cite dates.
+4. Only hits above a similarity threshold (`MIN_SIMILARITY`, currently 0.3) are surfaced. If nothing qualifies — or the project has no chunks / no embeddings — the endpoint returns a deterministic refusal message instead of calling the LLM, so it never fabricates an answer from an empty or mismatched corpus.
+
+The retrieved commits are returned alongside the answer as `sources` (sha, author, date, message, similarity) so answers can be verified.
+
 ## Status
 
-- **Shipped:** commit-doc corpus, deduped enrichment, staleness gate, inline non-blocking embed, batch backfill, OpenRouter provider wiring.
-- **Not shipped (future):** the semantic-search endpoint (`cosineDistance` over the HNSW index), RAG prompt enrichment, and any retrieval consumer. See `docs/architecture.md` → "RAG (Vectors: partial, semantic search not shipped)".
+- **Shipped:** commit-doc corpus, deduped enrichment, staleness gate, inline non-blocking embed, batch backfill, OpenRouter provider wiring, experimental semantic-search + RAG answer endpoint (`POST /api/v1/chat/ask`) with temporal filtering, similarity threshold, and no-evidence refusal.
+- **Not shipped (future):** a dedicated ingestion route/pipeline. Today the corpus is populated only as a side effect of report generation (`createReportUseCase` → `syncProjectCommits`, capped at `MAX_LIMIT=100` per window), so a project with no report has no indexed commits. There is no cold-start full backfill, no watermark-based incremental sync, and no empty-repo handling. This is tracked as technical debt in `docs/architecture.md` — see "RAG ingestion (not shipped)".
