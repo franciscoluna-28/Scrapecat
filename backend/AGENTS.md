@@ -54,7 +54,7 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
 2. Upsert the project (`githubProjects` via `projects-store`, storing `github_owner`)
-3. Sync commits via `syncProjectCommits()` (`src/projects/sync.ts`): fetch from GitHub (max 100), enrich only SHAs not already in `commitChunks` via `buildCommitChunks`, upsert them, fire-and-forget `embedNewChunks`
+3. Sync commits via `syncCommitsForProject()` (`src/projects/sync.ts`): paginated, unlimited fetch (per_page is a page size, GitHub caps it at 100 — there is no hard system cap), run inside a per-project `pg_advisory_xact_lock` transaction, deduped against stored SHAs via `buildCommitChunks`, watermark advanced to the newest synced commit per `(project, branch)` in `project_sync_state`; fire-and-forget `embedNewChunks`
 4. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
 5. Call AI with up to 2 retries if structure validation fails
 6. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
@@ -65,9 +65,9 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 The DB is the read model for commits once a project exists. GitHub is only consulted to sync **new** commits; a full GitHub fetch is the fallback only when nothing is stored.
 
-- **Discovery** (repos/branches, pre-sync commit preview) hits GitHub live: `src/gitRepositories/routes.ts`
-- **Report commits** (`GET /api/v1/reports/:id/commits`): loads the report + project, calls `syncProjectCommits()` to pull new commits, then serves the stored rows from `commitChunks` (`listCommitsForProject`). If the GitHub sync fails it logs and still serves stored commits.
-- **Report generation** (`POST /api/v1/reports`) is the single sync point — it shares `syncProjectCommits()` with the read path.
+- **Discovery** (repos/branches, pre-sync commit preview) hits GitHub live: `src/gitRepositories/routes.ts` (`/commits` returns a bounded single page; `limit`/`per_page` are validated ints 1–100)
+- **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
+- **Report generation** (`POST /api/v1/reports`) is the single sync point — `syncCommitsForProject()` fetches the requested window (paginated, advisory-locked, watermark-advanced) and returns the window's commits for the prompt.
 
 Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
 
@@ -99,7 +99,9 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `listCommits`, `getCommitDetails`, `countCommits`, `getPullRequestForCommit`, `verifyConnection`.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `listCommitsPage`, `listCommits`, `countCommits`, `verifyConnection`.
+
+Pagination is provider-agnostic: adapters implement the page primitive `listCommitsPage(...) → Page<T>` (GitHub reads the `Link` header for `hasMore`); the shared driver in `pagination.ts` owns the loop — early-stop predicates, `maxPages`/`maxCommits`/deadline guards, bounded retry with backoff on transient failures (5xx/429/network), fail-fast on permanent errors (4xx), and SHA dedupe across page boundaries. `listCommits` is a bounded collector over the driver. `per_page` is a page size (GitHub max 100) — it is **not** a system limit.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 
