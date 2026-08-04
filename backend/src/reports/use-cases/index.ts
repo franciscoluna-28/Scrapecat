@@ -3,12 +3,7 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { resolveApiKey } from "@/credentials/services";
 import { embedNewChunks } from "@/projects/embed-chunks";
-import {
-  MAX_LIMIT,
-  fetchProjectCommits,
-  buildMissingChunks,
-  writeChunks,
-} from "@/projects/sync";
+import { syncCommitsForProject } from "@/projects/sync";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
@@ -24,6 +19,12 @@ import { callAI, cleanResponse } from "@/reports/ai";
 import { extractReportTitle } from "@/shared/utils";
 
 export type CreateReportInput = z.infer<typeof reportInputSchema>;
+
+/**
+ * Cap on how many commit messages are fed into an LLM prompt. This is a
+ * token-budget concern, NOT a data cap — the sync itself is unlimited.
+ */
+const PROMPT_MAX_COMMITS = 60;
 
 export class NoCommitsError extends Error {
   readonly status = 400;
@@ -142,20 +143,6 @@ export async function createReportUseCase(input: CreateReportInput) {
   const provider = input.provider;
   const apiKey = provider ? await resolveApiKey(provider) : undefined;
 
-  const commits = await fetchProjectCommits({
-    owner: input.githubOwner,
-    repo: input.repository,
-    branch: input.branch,
-    startDate: input.startDate,
-    endDate: input.endDate,
-  });
-
-  if (commits.length === 0) {
-    throw new NoCommitsError();
-  }
-
-  // Upsert outside the tx to learn project.id — buildMissingChunks needs it to
-  // dedupe chunks, and we can't know the uuid without persisting the row first.
   const project = await projectsStore.upsertProject({
     input: {
       githubProjectId: input.githubProjectId,
@@ -165,11 +152,19 @@ export async function createReportUseCase(input: CreateReportInput) {
     },
   });
 
-  const chunks = await buildMissingChunks({
+  // Sync (paginated, watermark-based, advisory-locked) and get the window's
+  // commits. Chunks are written by the sync transaction.
+  const commits = await syncCommitsForProject({
     projectId: project.id,
-    commits,
+    owner: input.githubOwner,
+    repo: input.repository,
     branch: input.branch,
+    window: { startDate: input.startDate, endDate: input.endDate },
   });
+
+  if (commits.length === 0) {
+    throw new NoCommitsError();
+  }
 
   const generatedReport = await generateReport({
     input,
@@ -182,7 +177,7 @@ export async function createReportUseCase(input: CreateReportInput) {
 
   await db.transaction(async (tx) => {
     // Re-upsert inside the tx (idempotent via onConflictDoUpdate) so the project
-    // write is part of the atomic commit alongside chunks + report.
+    // write is part of the atomic commit alongside the report.
     await projectsStore.upsertProject({
       input: {
         githubProjectId: input.githubProjectId,
@@ -192,8 +187,6 @@ export async function createReportUseCase(input: CreateReportInput) {
       },
       tx,
     });
-
-    await writeChunks({ projectId: project.id, chunks, branch: input.branch, tx });
 
     await reportsStore.createReport({
       input: {
@@ -258,7 +251,7 @@ export async function replyToReportUseCase(input: {
     projectId: report.projectId,
     branch: report.branch,
   });
-  const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
+  const limitedCommits = chunks.slice(0, PROMPT_MAX_COMMITS).map((c) => ({ message: c.commitMessage }));
 
   const cleanMarkdown = (report.originalMarkdown || "").trim();
 

@@ -7,3 +7,6 @@ process.env.GITHUB_TOKEN ??= "";
 process.env.HOST ??= "localhost";
 process.env.PORT ??= "4000";
 process.env.CORS_ORIGIN ??= "*";
+process.env.SYNC_MAX_COMMITS ??= "0";
+process.env.SYNC_MAX_PAGES ??= "0";
+process.env.SYNC_DEADLINE_MS ??= "0";

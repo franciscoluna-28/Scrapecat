@@ -17,6 +17,9 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
+  SYNC_MAX_COMMITS: z.coerce.number().int().min(0).default(0),
+  SYNC_MAX_PAGES: z.coerce.number().int().min(0).default(0),
+  SYNC_DEADLINE_MS: z.coerce.number().int().min(0).default(0),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
 });
 

@@ -5,6 +5,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -94,6 +95,22 @@ export const commitChunks = pgTable(
       ),
     };
   },
+);
+
+export const projectSyncState = pgTable(
+  "project_sync_state",
+  {
+    projectId: uuid("project_id")
+      .references(() => githubProjects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    lastSyncedCommitSha: text("last_synced_commit_sha").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.projectId, table.branch] }),
+  }),
 );
 
 export const reports = pgTable("reports", {
