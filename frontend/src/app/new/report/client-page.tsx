@@ -3,7 +3,6 @@
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
 import { useState, useTransition } from "react";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
 import {
@@ -14,7 +13,7 @@ import {
   DialogTrigger,
 } from "@/src/components/ui/dialog";
 import { CopyButton } from "@/src/components/ui/copy-button";
-import { CommitCard } from "@/src/_features/reports/components/CommitCard";
+import { VirtualCommitList } from "@/src/_features/reports/components/VirtualCommitList";
 import {
   ArrowLeft,
   GitCommit,
@@ -26,7 +25,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
-import type { StoredCommit } from "@/src/shared/types";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -34,7 +32,6 @@ import ReactMarkdown from "react-markdown";
 import { Components } from "react-markdown";
 
 type Props = {
-  commits: StoredCommit[];
   repositoryName: string;
   startDate: string;
   endDate: string;
@@ -86,7 +83,6 @@ const markdownComponents: Components = {
 
 export default function ReportClientPage({
   repositoryName,
-  commits,
   startDate,
   endDate,
   branch,
@@ -182,23 +178,10 @@ export default function ReportClientPage({
                 </p>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Commits</Label>
-              <Badge variant="secondary" className="text-xs">
-                {commits.length} audited
-              </Badge>
-            </div>
           </div>
 
           <div className="flex-1 overflow-hidden min-w-0">
-            <ScrollArea className="h-full">
-              <div className="p-6">
-                <h3 className="text-xs font-semibold text-muted-foreground mb-4">
-                  Source Commits
-                </h3>
-                <CommitCard commits={commits} />
-              </div>
-            </ScrollArea>
+            <VirtualCommitList reportId={reportId ?? ""} />
           </div>
         </div>
 

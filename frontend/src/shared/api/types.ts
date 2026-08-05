@@ -641,10 +641,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List commits for a report, syncing new commits from GitHub */
+        /** @description Cursor-paginated commits for a report (searchable by commit message) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    q?: string;
+                    cursor?: string;
+                    limit?: number;
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -670,6 +674,19 @@ export interface paths {
                                 committedAt: string;
                                 metadata?: unknown;
                             }[];
+                            nextCursor: null | string;
+                            total: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
