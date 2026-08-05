@@ -2,29 +2,17 @@
 
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/src/components/ui/button";
-import { Textarea } from "@/src/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/src/components/ui/dialog";
 import { CopyButton } from "@/src/components/ui/copy-button";
 import { VirtualCommitList } from "@/src/_features/reports/components/VirtualCommitList";
 import {
   ArrowLeft,
   GitCommit,
-  WandSparkles,
-  Loader2,
   PanelLeftClose,
   PanelLeft,
   Calendar,
 } from "lucide-react";
-import { toast } from "sonner";
-import { apiClient } from "@/src/shared/api/client";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
 import { format, parseISO } from "date-fns";
@@ -89,38 +77,10 @@ export default function ReportClientPage({
   report,
   reportId,
 }: Props) {
-  const [isReplying, startReplyTransition] = useTransition();
-  const [replyText, setReplyText] = useState("");
-  const [currentReport, setCurrentReport] = useState(report);
+  const currentReport = report;
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [refineOpen, setRefineOpen] = useState(false);
 
   const handleBack = () => window.history.back();
-
-  const handleSendReply = async () => {
-    if (!replyText.trim() || !reportId) return;
-
-    startReplyTransition(async () => {
-      try {
-        const { data, error } = await apiClient.POST("/api/v1/reports/{id}/replies", {
-          params: { path: { id: reportId! } },
-          body: { reply: replyText },
-        });
-
-        if (error || !data) {
-          toast.error("Failed to refine report");
-          return;
-        }
-
-        setCurrentReport(data.report);
-        setReplyText("");
-        setRefineOpen(false);
-        toast.success("Report refined successfully");
-      } catch {
-        toast.error("Failed to refine report");
-      }
-    });
-  };
 
 
 
@@ -207,46 +167,6 @@ export default function ReportClientPage({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {reportId && (
-                <Dialog open={refineOpen} onOpenChange={setRefineOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <WandSparkles className="h-4 w-4 mr-2" />
-                      Refine
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-xl">
-                    <DialogHeader>
-                      <DialogTitle>Refine Report</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Send follow-up instructions to refine the generated
-                        report.
-                      </p>
-                      <Textarea
-                        placeholder="e.g., Make it more technical, add more detail to infrastructure changes..."
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        className="min-h-30 text-sm"
-                      />
-                      <Button
-                        onClick={handleSendReply}
-                        disabled={isReplying || !replyText.trim()}
-                        size="default"
-                        className="w-full"
-                      >
-                        {isReplying ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <WandSparkles className="h-4 w-4 mr-2" />
-                        )}
-                        Refine
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
               <CopyButton text={currentReport} />
             </div>
           </div>

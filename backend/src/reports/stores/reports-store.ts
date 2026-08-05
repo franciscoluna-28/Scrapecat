@@ -7,7 +7,6 @@ export type ReportInput = {
   projectId: string;
   title: string;
   originalMarkdown: string;
-  editableMarkdown: string;
   startDate: Date;
   endDate: Date;
   branch: string;
@@ -29,7 +28,6 @@ export async function createReport({
       projectId: input.projectId,
       title: input.title,
       originalMarkdown: input.originalMarkdown,
-      editableMarkdown: input.editableMarkdown,
       startDate: input.startDate,
       endDate: input.endDate,
       branch: input.branch,
@@ -67,23 +65,5 @@ export async function getReport({
     .from(reports)
     .where(eq(reports.id, id))
     .limit(1);
-  return row ?? null;
-}
-
-export async function updateReportMarkdown({
-  id,
-  editableMarkdown,
-  tx,
-}: {
-  id: string;
-  editableMarkdown: string;
-  tx?: Tx;
-}) {
-  const client = tx || db;
-  const [row] = await client
-    .update(reports)
-    .set({ editableMarkdown, updatedAt: new Date() })
-    .where(eq(reports.id, id))
-    .returning();
   return row ?? null;
 }

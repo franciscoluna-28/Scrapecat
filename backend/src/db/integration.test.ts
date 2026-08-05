@@ -229,7 +229,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         projectId: project.id,
         title: "Integration Test Report",
         originalMarkdown: "# Integration Test Report",
-        editableMarkdown: "# Integration Test Report",
         startDate: new Date("2026-01-01T00:00:00Z"),
         endDate: new Date("2026-01-31T00:00:00Z"),
         branch: "main",
@@ -274,7 +273,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         projectId: project.id,
         title: "Project Commits Report",
         originalMarkdown: "# Project Commits Report",
-        editableMarkdown: "# Project Commits Report",
         startDate: new Date("2026-01-01T00:00:00Z"),
         endDate: new Date("2026-01-31T00:00:00Z"),
         branch: "main",
@@ -325,7 +323,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         projectId: project.id,
         title: "Pagination Report",
         originalMarkdown: "# Pagination",
-        editableMarkdown: "# Pagination",
         startDate: new Date("2026-01-01T00:00:00Z"),
         endDate: new Date("2026-01-31T00:00:00Z"),
         branch: "main",
@@ -411,7 +408,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         projectId: project.id,
         title: "Integration Test Report",
         originalMarkdown: "# Integration Test Report",
-        editableMarkdown: "# Integration Test Report",
         startDate: new Date("2026-01-01T00:00:00Z"),
         endDate: new Date("2026-01-31T00:00:00Z"),
         branch: "main",
@@ -429,30 +425,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     } finally {
       await app.close();
     }
-  });
-
-  it("reports-store updates markdown and bumps updatedAt", async () => {
-    const { project } = await projectsStore.upsertProject({
-      input: { gitProvider: "github", providerProjectId, providerOwner: "test-owner", repositoryName },
-    });
-    const report = await reportsStore.createReport({
-      input: {
-        id: randomUUID(),
-        projectId: project.id,
-        title: "Update Me",
-        originalMarkdown: "# Original",
-        editableMarkdown: "# Original",
-        startDate: new Date("2026-01-01T00:00:00Z"),
-        endDate: new Date("2026-01-31T00:00:00Z"),
-        branch: "main",
-      },
-    });
-    const updated = await reportsStore.updateReportMarkdown({
-      id: report.id,
-      editableMarkdown: "# Edited",
-    });
-    expect(updated?.editableMarkdown).toBe("# Edited");
-    expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(report.updatedAt.getTime());
   });
 
   it("deletes a project and cascades to its chunks and reports", async () => {

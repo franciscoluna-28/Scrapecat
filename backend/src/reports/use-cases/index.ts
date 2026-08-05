@@ -14,7 +14,6 @@ import {
   buildSystemPrompt,
   getLanguageInstruction,
   buildReportPrompt,
-  buildRefinePrompt,
 } from "@/reports/prompts";
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
@@ -29,12 +28,6 @@ function startOfDayUtc(dateStr: string): Date {
 function endOfDayUtc(dateStr: string): Date {
   return new Date(`${dateStr}T23:59:59.999Z`);
 }
-
-/**
- * Cap on how many commit messages are fed into an LLM prompt. This is a
- * token-budget concern, NOT a data cap — the sync itself is unlimited.
- */
-const PROMPT_MAX_COMMITS = 60;
 
 export class NoCommitsError extends Error {
   readonly status = 400;
@@ -72,13 +65,6 @@ export class AIGenerationError extends Error {
       "AI report generation failed. Please try again.",
       500,
     );
-  }
-}
-
-export class ReportNotFoundError extends Error {
-  readonly status = 404;
-  constructor() {
-    super("Report not found");
   }
 }
 
@@ -232,7 +218,6 @@ export async function createReportUseCase(input: CreateReportInput) {
         projectId: project.id,
         title: extractReportTitle(generatedReport, input.repository),
         originalMarkdown: generatedReport,
-        editableMarkdown: generatedReport,
         startDate: new Date(input.startDate),
         endDate: new Date(input.endDate),
         branch: input.branch,
@@ -249,140 +234,4 @@ export async function createReportUseCase(input: CreateReportInput) {
   });
 
   return { reportId, projectId: project.id };
-}
-
-export async function updateReportUseCase(input: {
-  reportId: string;
-  editableMarkdown: string;
-}) {
-  const updated = await reportsStore.updateReportMarkdown({
-    id: input.reportId,
-    editableMarkdown: input.editableMarkdown,
-  });
-  if (!updated) {
-    throw new ReportNotFoundError();
-  }
-  return {
-    id: updated.id,
-    editableMarkdown: updated.editableMarkdown,
-    updatedAt: updated.updatedAt,
-  };
-}
-
-// TODO: Deprecate this in favor of future RAG implementation that can handle multiple reports at once, and/or a more generic "comment" system for reports.
-export async function replyToReportUseCase(input: {
-  reportId: string;
-  reply: string;
-  model?: string;
-  provider?: string;
-}) {
-  const report = await reportsStore.getReport({ id: input.reportId });
-  if (!report) {
-    throw new ReportNotFoundError();
-  }
-
-  const { rows: chunks } = await reportCommitsStore.listCommitsForReport({
-    reportId: report.id,
-    projectId: report.projectId,
-    branch: report.branch,
-  });
-  const limitedCommits = chunks.slice(0, PROMPT_MAX_COMMITS).map((c) => ({ message: c.commitMessage }));
-
-  const cleanMarkdown = (report.originalMarkdown || "").trim();
-
-  const customInstructions = report.customInstructions?.trim();
-  const languageInstruction = getLanguageInstruction(customInstructions);
-  const systemPrompt = buildSystemPrompt(customInstructions);
-
-  const apiKey = input.provider ? await resolveApiKey(input.provider) : undefined;
-
-  const project = await projectsStore.getProjectById({ id: report.projectId });
-
-  const originalPrompt = buildReportPrompt({
-    repository: project?.repositoryName ?? report.title,
-    branch: report.branch,
-    startDate: report.startDate.toISOString().slice(0, 10),
-    endDate: report.endDate.toISOString().slice(0, 10),
-    commits: limitedCommits,
-    languageInstruction,
-  });
-
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: originalPrompt },
-  ];
-
-  if (cleanMarkdown) {
-    messages.push({ role: "assistant", content: cleanMarkdown });
-  }
-
-  messages.push({
-    role: "user",
-    content: buildRefinePrompt(input.reply),
-  });
-
-  let attempts = 0;
-  const maxAttempts = 2;
-  let lastError: unknown = null;
-  let lastMarkdown = "";
-
-  while (attempts < maxAttempts) {
-    attempts++;
-
-    const messagesWithRetry = attempts > 1
-      ? [...messages, { role: "user" as const, content: `Your previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` }]
-      : messages;
-
-    let content: string;
-    let finishReason: string | null | undefined;
-    try {
-      const result = await callAI({
-        model: input.model || undefined,
-        provider: input.provider,
-        apiKey: apiKey || undefined,
-        maxTokens: 4096,
-        messages: messagesWithRetry,
-      });
-      content = result.content;
-      finishReason = result.finishReason;
-    } catch (error) {
-      lastError = error;
-      console.error(`AI reply call failed (attempt ${attempts}/${maxAttempts}):`, error);
-      continue;
-    }
-
-    if (finishReason === "length") {
-      console.warn(`Reply truncated by token limit (attempt ${attempts}/${maxAttempts})`);
-      continue;
-    }
-
-    lastMarkdown = cleanResponse(content).trim();
-
-    if (lastMarkdown.length > 50) {
-      const validation = validateReportStructure(lastMarkdown);
-      if (validation.valid) break;
-      console.warn(`Reply structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
-    }
-
-    if (attempts >= maxAttempts) {
-      console.warn("Max retry attempts reached for reply");
-    }
-  }
-
-  if (lastMarkdown.length <= 50) {
-    if (lastError) {
-      throw AIGenerationError.from(lastError);
-    }
-    throw new AIGenerationError(
-      "AI failed to produce a valid reply after retries. Please try again.",
-      500,
-    );
-  }
-
-  await reportsStore.updateReportMarkdown({
-    id: input.reportId,
-    editableMarkdown: lastMarkdown,
-  });
-
-  return lastMarkdown;
 }

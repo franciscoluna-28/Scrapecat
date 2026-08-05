@@ -71,6 +71,13 @@
       "when": 1785890190753,
       "tag": "0009_chemical_sunset_bain",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785973238349,
+      "tag": "0010_easy_malcolm_colcord",
+      "breakpoints": true
     }
   ]
 }

@@ -71,8 +71,6 @@ The DB is the materialized read model for commits. The background worker owns in
 - **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
 - **Report generation** (`POST /api/v1/reports`): delegates to the sync worker via `ensureSynced`, then reads the window from `commit_chunks`.
 
-Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
-
 ## Database (`src/db/`)
 
 Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvector (`pgvector/pgvector` in docker-compose, extension `vector`).

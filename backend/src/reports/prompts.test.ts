@@ -3,7 +3,6 @@ import {
   buildSystemPrompt,
   getLanguageInstruction,
   buildReportPrompt,
-  buildRefinePrompt,
 } from "@/reports/prompts";
 
 describe("buildSystemPrompt", () => {
@@ -54,14 +53,5 @@ describe("buildReportPrompt", () => {
   it("includes commit messages", () => {
     const result = buildReportPrompt(base);
     expect(result).toContain("fix: bug");
-  });
-});
-
-describe("buildRefinePrompt", () => {
-  it("wraps user reply in refinement prompt", () => {
-    const result = buildRefinePrompt("Make it shorter");
-    expect(result).toContain("Make it shorter");
-    expect(result).toContain("Refine the report");
-    expect(result).toContain("template");
   });
 });

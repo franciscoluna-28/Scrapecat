@@ -36,16 +36,6 @@ export const reportIdParamsSchema = z.object({
   id: z.string().min(1, "id is required"),
 });
 
-export const updateReportBodySchema = z.object({
-  editableMarkdown: z.string().min(1, "editableMarkdown is required"),
-});
-
-export const replyBodySchema = z.object({
-  reply: z.string().min(1, "reply is required"),
-  model: z.string().optional(),
-  provider: z.string().optional(),
-});
-
 const ReportDataInput = Type.Object({
   repository: Type.String(),
   gitProvider: Type.Optional(Type.Union([Type.Literal("github"), Type.Literal("gitlab")])),
@@ -102,32 +92,11 @@ export const ReportGetResponse = Type.Object({
   title: Type.String(),
   repositoryName: Type.String(),
   originalMarkdown: Type.String(),
-  editableMarkdown: Type.String(),
   startDate: Type.String(),
   endDate: Type.String(),
   branch: Type.String(),
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
-});
-
-export const ReportUpdateBody = Type.Object({
-  editableMarkdown: Type.String(),
-});
-
-export const ReportUpdateResponse = Type.Object({
-  id: Type.String(),
-  editableMarkdown: Type.String(),
-  updatedAt: Type.String({ format: "date-time" }),
-});
-
-export const ReportReplyBody = Type.Object({
-  reply: Type.String(),
-  model: Type.Optional(Type.String()),
-  provider: Type.Optional(Type.String()),
-});
-
-export const ReportReplyResponse = Type.Object({
-  report: Type.String(),
 });
 
 export const ReportCommitsQuery = Type.Object({

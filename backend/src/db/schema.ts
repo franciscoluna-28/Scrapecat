@@ -169,7 +169,6 @@ export const reports = pgTable("reports", {
     .notNull(),
   title: text("title").notNull(),
   originalMarkdown: text("original_markdown").notNull(),
-  editableMarkdown: text("editable_markdown").notNull(),
   startDate: timestamp("start_date", { withTimezone: true }).notNull(),
   endDate: timestamp("end_date", { withTimezone: true }).notNull(),
   branch: text("branch").notNull(),

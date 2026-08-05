@@ -59,7 +59,7 @@ export default function ReportPage() {
       startDate={report.startDate}
       endDate={report.endDate}
       branch={report.branch}
-      report={report.editableMarkdown}
+      report={report.originalMarkdown}
     />
   );
 }

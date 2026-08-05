@@ -4,15 +4,10 @@ import {
   listReportsQuerySchema,
   listReportCommitsQuerySchema,
   reportIdParamsSchema,
-  updateReportBodySchema,
-  replyBodySchema,
 } from "@/reports/schemas";
 import {
   createReportUseCase,
-  updateReportUseCase,
-  replyToReportUseCase,
   NoCommitsError,
-  ReportNotFoundError,
   AIGenerationError,
   ProviderKeyError,
 } from "@/reports/use-cases";
@@ -119,7 +114,6 @@ export async function getReport(
       title: report.title,
       repositoryName: project?.repositoryName ?? "",
       originalMarkdown: report.originalMarkdown,
-      editableMarkdown: report.editableMarkdown,
       startDate: formatDate(report.startDate),
       endDate: formatDate(report.endDate),
       branch: report.branch,
@@ -192,80 +186,5 @@ export async function getReportCommits(
   } catch (error) {
     console.error("Error fetching report commits:", error);
     return reply.status(500).send({ error: "Failed to fetch report commits" });
-  }
-}
-
-export async function updateReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
-  reply: FastifyReply,
-) {
-  const params = reportIdParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    return reply.status(400).send({ error: params.error.flatten() });
-  }
-
-  const body = updateReportBodySchema.safeParse(req.body);
-  if (!body.success) {
-    return reply.status(400).send({ error: body.error.flatten() });
-  }
-
-  try {
-    const updated = await updateReportUseCase({
-      reportId: params.data.id,
-      editableMarkdown: body.data.editableMarkdown,
-    });
-
-    return reply.send({
-      id: updated.id,
-      editableMarkdown: updated.editableMarkdown,
-      updatedAt: updated.updatedAt,
-    });
-  } catch (error) {
-    console.error("Error updating report:", error);
-    if (error instanceof ReportNotFoundError) {
-      return reply.status(404).send({ error: error.message });
-    }
-    return reply.status(500).send({ error: "Failed to update report" });
-  }
-}
-
-export async function replyToReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
-  reply: FastifyReply,
-) {
-  const params = reportIdParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    return reply.status(400).send({ error: params.error.flatten() });
-  }
-
-  const body = replyBodySchema.safeParse(req.body);
-  if (!body.success) {
-    return reply.status(400).send({ error: body.error.flatten() });
-  }
-
-  const { reply: userReply, model, provider } = body.data;
-
-  if (!userReply || userReply.trim().length === 0) {
-    return reply.status(400).send({ error: "reply is required" });
-  }
-
-  try {
-    const report = await replyToReportUseCase({
-      reportId: params.data.id,
-      reply: userReply,
-      model,
-      provider,
-    });
-
-    return reply.send({ report });
-  } catch (error: any) {
-    console.error("Error replying to report:", error);
-    if (error instanceof ReportNotFoundError) {
-      return reply.status(404).send({ error: error.message });
-    }
-    if (error?.status === 429) {
-      return reply.status(429).send({ error: "Rate limit reached. Please try again later." });
-    }
-    return reply.status(500).send({ error: "Failed to process reply" });
   }
 }
