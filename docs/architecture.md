@@ -71,7 +71,7 @@ All external data flows through `src/shared/integrations/git-provider/` — an O
 
 ### Database coupling
 
-The DB client is initialized at module load in `src/db/client.ts`. Access goes through per-domain stores (`src/projects/stores/`, `src/reports/stores/`, `src/credentials/stores/`) — routes never import `db` directly. The schema is a normalized model in `src/db/schema.ts`: `github_projects`, `commit_chunks` (per-commit diffs + pgvector embedding), `project_sync_state` (per-branch sync watermark), `sync_jobs` (background sync queue), `reports`, `report_commits`, and `credentials`.
+The DB client is initialized at module load in `src/db/client.ts`. Access goes through per-domain stores (`src/projects/stores/`, `src/reports/stores/`, `src/credentials/stores/`) — routes never import `db` directly. The schema is a normalized model in `src/db/schema.ts`: `projects` (provider-generic: `git_provider` enum + `provider_project_id`/`provider_owner`, unique on `(git_provider, provider_project_id)`), `commit_chunks` (per-commit diffs + pgvector embedding), `project_sync_state` (per-branch sync watermark), `sync_jobs` (background sync queue), `reports`, `report_commits`, and `credentials`.
 
 ### No dependency injection
 

@@ -54,7 +54,7 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
 2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
-3. Upsert the project (`githubProjects` via `projects-store`); on a new row, enqueue an eager full backfill
+3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`); on a new row, enqueue an eager full backfill
 4. Delegate to the sync worker and wait: `ensureSynced()` (`src/projects/sync-service.ts`) blocks until the store covers the report window (UTC) or a catch-up reached the branch tip
 5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
 6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
@@ -78,7 +78,7 @@ Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but re
 Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvector (`pgvector/pgvector` in docker-compose, extension `vector`).
 
 Tables defined in `src/db/schema.ts`:
-- **github_projects** — normalized projects (uuid PK, unique GitHub project id, owner, repo name, default branch)
+- **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
 - **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
 - **project_sync_state** — per-`(project_id, branch)` sync watermark (`last_synced_commit_sha` + `last_synced_at`); the read-model frontier for ingestion
 - **sync_jobs** — the background sync queue: `status` enum (`pending` | `running` | `succeeded` | `failed`), `attempts`, `last_error`, `scheduled_at` (backoff reschedules); indexed on `(status, scheduled_at)`
