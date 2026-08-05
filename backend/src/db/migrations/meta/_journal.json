@@ -64,6 +64,13 @@
       "when": 1785885480454,
       "tag": "0008_public_crystal",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785890190753,
+      "tag": "0009_chemical_sunset_bain",
+      "breakpoints": true
     }
   ]
 }

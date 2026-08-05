@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { Type } from "@sinclair/typebox";
 
+export const gitProviderSchema = z.enum(["github", "gitlab"]);
+
 export const reportInputSchema = z.object({
   repository: z.string(),
-  githubOwner: z.string(),
-  githubProjectId: z.number(),
+  gitProvider: gitProviderSchema.optional().default("github"),
+  providerProjectId: z.number(),
+  providerOwner: z.string(),
   branch: z.string(),
   startDate: z.string(),
   endDate: z.string(),
@@ -39,8 +42,9 @@ export const replyBodySchema = z.object({
 
 const ReportDataInput = Type.Object({
   repository: Type.String(),
-  githubOwner: Type.String(),
-  githubProjectId: Type.Integer(),
+  gitProvider: Type.Optional(Type.Union([Type.Literal("github"), Type.Literal("gitlab")])),
+  providerProjectId: Type.Integer(),
+  providerOwner: Type.String(),
   branch: Type.String(),
   startDate: Type.String({ format: "date" }),
   endDate: Type.String({ format: "date" }),

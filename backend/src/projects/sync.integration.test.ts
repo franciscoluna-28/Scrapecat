@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { githubProjects } from "@/db/schema";
+import { projects } from "@/db/schema";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as syncStateStore from "@/projects/stores/sync-state-store";
@@ -34,20 +34,20 @@ vi.mock("@/projects/embeddings", () => ({
 const enabled = process.env.DB_INTEGRATION === "1";
 
 describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", () => {
-  const githubProjectId = 999_999_006;
+  const providerProjectId = 999_999_006;
   const repositoryName = "worker-integration-repo";
 
   beforeAll(async () => {
-    const existing = await projectsStore.getProjectByGithubId({ githubProjectId });
+    const existing = await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId });
     if (existing) {
-      await db.delete(githubProjects).where(eq(githubProjects.id, existing.id));
+      await db.delete(projects).where(eq(projects.id, existing.id));
     }
   });
 
   afterAll(async () => {
-    const existing = await projectsStore.getProjectByGithubId({ githubProjectId });
+    const existing = await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId });
     if (existing) {
-      await db.delete(githubProjects).where(eq(githubProjects.id, existing.id));
+      await db.delete(projects).where(eq(projects.id, existing.id));
     }
   });
 
@@ -60,7 +60,7 @@ describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", (
     );
 
     const { project } = await projectsStore.upsertProject({
-      input: { githubProjectId, githubOwner: "test-owner", repositoryName, defaultBranch: "main" },
+      input: { gitProvider: "github", providerProjectId, providerOwner: "test-owner", repositoryName, defaultBranch: "main" },
     });
 
     const enqueued = await syncJobsStore.enqueueSyncJob({ projectId: project.id, branch: "main" });
@@ -82,7 +82,7 @@ describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", (
   });
 
   it("runProjectSync is idempotent: re-running writes nothing and never regresses the watermark", async () => {
-    const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
+    const project = (await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId }))!;
     const before = await syncStateStore.getSyncState({ projectId: project.id, branch: "main" });
 
     mockProvider.listCommitsPage.mockClear();
@@ -102,7 +102,7 @@ describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", (
   });
 
   it("catch-up only fetches commits strictly newer than the watermark", async () => {
-    const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
+    const project = (await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId }))!;
     remoteCommits.push({ sha: "c4", message: "feat: four", author: "tester", date: "2026-02-05T10:00:00Z" });
 
     const result = await runProjectSync({ projectId: project.id, branch: "main" });
@@ -115,7 +115,7 @@ describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", (
   });
 
   it("a failed job is rescheduled and then marked failed permanently past maxAttempts", async () => {
-    const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
+    const project = (await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId }))!;
     await syncJobsStore.enqueueSyncJob({ projectId: project.id, branch: "feature-x" });
 
     // Simulate a job that fails: claim it, then fail it with attempts = maxAttempts.

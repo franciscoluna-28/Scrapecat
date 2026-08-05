@@ -178,8 +178,9 @@ export async function createReportUseCase(input: CreateReportInput) {
 
   const { project, created } = await projectsStore.upsertProject({
     input: {
-      githubProjectId: input.githubProjectId,
-      githubOwner: input.githubOwner,
+      gitProvider: input.gitProvider,
+      providerProjectId: input.providerProjectId,
+      providerOwner: input.providerOwner,
       repositoryName: input.repository,
       defaultBranch: input.branch,
     },

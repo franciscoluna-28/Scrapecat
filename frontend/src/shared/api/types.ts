@@ -458,8 +458,9 @@ export interface paths {
                     "application/json": {
                         data: {
                             repository: string;
-                            githubOwner: string;
-                            githubProjectId: number;
+                            gitProvider?: "github" | "gitlab";
+                            providerProjectId: number;
+                            providerOwner: string;
                             branch: string;
                             /** Format: date */
                             startDate: string;
@@ -800,8 +801,9 @@ export interface paths {
                         "application/json": {
                             projects: {
                                 id: string;
-                                githubProjectId: number;
-                                githubOwner: string;
+                                gitProvider: string;
+                                providerProjectId: number;
+                                providerOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
                                 /** Format: date-time */

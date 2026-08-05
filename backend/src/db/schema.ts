@@ -25,6 +25,12 @@ const credentialProviderEnum = pgEnum(
   AVAILABLE_CREDENTIAL_PROVIDERS,
 );
 
+const AVAILABLE_GIT_PROVIDERS = ["github", "gitlab"] as const;
+
+const gitProviderEnum = pgEnum("git_provider", AVAILABLE_GIT_PROVIDERS);
+
+export type GitProvider = (typeof gitProviderEnum)["enumValues"][number];
+
 export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
     return "vector(1536)";
@@ -50,22 +56,33 @@ export type CommitChunkMetadata = {
   prUrl?: string;
 };
 
-export const githubProjects = pgTable("github_projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  githubProjectId: integer("github_project_id").notNull().unique(),
-  githubOwner: text("github_owner").default("").notNull(),
-  repositoryName: text("repository_name").notNull(),
-  defaultBranch: text("default_branch").default("main").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    gitProvider: gitProviderEnum("git_provider").default("github").notNull(),
+    providerProjectId: integer("provider_project_id").notNull(),
+    providerOwner: text("provider_owner").default("").notNull(),
+    repositoryName: text("repository_name").notNull(),
+    defaultBranch: text("default_branch").default("main").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    // The same external id can exist across providers (GitHub 123 vs GitLab 123).
+    providerExternalIdIdx: uniqueIndex("projects_git_provider_project_id_idx").on(
+      table.gitProvider,
+      table.providerProjectId,
+    ),
+  }),
+);
 
 export const commitChunks = pgTable(
   "commit_chunks",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     projectId: uuid("project_id")
-      .references(() => githubProjects.id, { onDelete: "cascade" })
+      .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     commitSha: text("commit_sha").notNull(),
     branch: text("branch").notNull().default("main"),
@@ -101,7 +118,7 @@ export const projectSyncState = pgTable(
   "project_sync_state",
   {
     projectId: uuid("project_id")
-      .references(() => githubProjects.id, { onDelete: "cascade" })
+      .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     branch: text("branch").notNull(),
     lastSyncedCommitSha: text("last_synced_commit_sha").notNull(),
@@ -125,7 +142,7 @@ export const syncJobs = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     projectId: uuid("project_id")
-      .references(() => githubProjects.id, { onDelete: "cascade" })
+      .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     branch: text("branch").notNull(),
     status: syncJobStatus("status").default("pending").notNull(),
@@ -148,7 +165,7 @@ export const syncJobs = pgTable(
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")
-    .references(() => githubProjects.id, { onDelete: "cascade" })
+    .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
   title: text("title").notNull(),
   originalMarkdown: text("original_markdown").notNull(),

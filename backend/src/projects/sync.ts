@@ -78,7 +78,7 @@ export async function runProjectSync(opts: {
     const since = state ? state.lastSyncedAt.toISOString() : undefined;
 
     const fetchPage: FetchPage<Commit> = (page) =>
-      provider.listCommitsPage(project.githubOwner, project.repositoryName, {
+      provider.listCommitsPage(project.providerOwner, project.repositoryName, {
         branch: opts.branch,
         since,
         page,
