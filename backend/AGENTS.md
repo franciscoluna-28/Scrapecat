@@ -53,21 +53,23 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 ## Report generation flow (`src/reports/routes.ts`)
 
 1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
-2. Upsert the project (`githubProjects` via `projects-store`, storing `github_owner`)
-3. Sync commits via `syncCommitsForProject()` (`src/projects/sync.ts`): paginated, unlimited fetch (per_page is a page size, GitHub caps it at 100 — there is no hard system cap), run inside a per-project `pg_advisory_xact_lock` transaction, deduped against stored SHAs via `buildCommitChunks`, watermark advanced to the newest synced commit per `(project, branch)` in `project_sync_state`; fire-and-forget `embedNewChunks`
-4. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
-5. Call AI with up to 2 retries if structure validation fails
-6. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
-7. Store in Postgres via Drizzle ORM
-8. Return `{ reportId, projectId }`
+2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
+3. Upsert the project (`githubProjects` via `projects-store`); on a new row, enqueue an eager full backfill
+4. Delegate to the sync worker and wait: `ensureSynced()` (`src/projects/sync-service.ts`) blocks until the store covers the report window (UTC) or a catch-up reached the branch tip
+5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
+6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
+7. Call AI with up to 2 retries if structure validation fails
+8. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
+9. Store report + `report_commits` snapshot in Postgres via Drizzle ORM
+10. Return `{ reportId, projectId }`
 
 ### Read-path model
 
-The DB is the read model for commits once a project exists. GitHub is only consulted to sync **new** commits; a full GitHub fetch is the fallback only when nothing is stored.
+The DB is the materialized read model for commits. The background worker owns ingestion; GitHub is only consulted for the delta past the watermark.
 
 - **Discovery** (repos/branches, pre-sync commit preview) hits GitHub live: `src/gitRepositories/routes.ts` (`/commits` returns a bounded single page; `limit`/`per_page` are validated ints 1–100)
 - **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
-- **Report generation** (`POST /api/v1/reports`) is the single sync point — `syncCommitsForProject()` fetches the requested window (paginated, advisory-locked, watermark-advanced) and returns the window's commits for the prompt.
+- **Report generation** (`POST /api/v1/reports`): delegates to the sync worker via `ensureSynced`, then reads the window from `commit_chunks`.
 
 Report refinement (`replyToReport` in `src/reports/routes.ts`): same flow but reads the report's commits from `commitChunks` (project + date range) instead of a stored blob, prepends the existing report as assistant context and appends the user's follow-up as a refine prompt.
 
@@ -77,13 +79,25 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **github_projects** — normalized projects (uuid PK, unique GitHub project id, owner, repo name, default branch)
-- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha)` + HNSW index on embedding
-
-> **RAG is WIP.** The `embedding` column and HNSW index are infrastructure only — no embedding provider or backfill job exists, so embeddings are always NULL. Do not write queries that assume vectors are populated.
+- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
+- **project_sync_state** — per-`(project_id, branch)` sync watermark (`last_synced_commit_sha` + `last_synced_at`); the read-model frontier for ingestion
+- **sync_jobs** — the background sync queue: `status` enum (`pending` | `running` | `succeeded` | `failed`), `attempts`, `last_error`, `scheduled_at` (backoff reschedules); indexed on `(status, scheduled_at)`
 - **reports** — generated reports linked to a project (uuid PK, title, markdown)
+- **report_commits** — snapshot of the SHAs a report was generated from (unique `(report_id, commit_sha)`)
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts` + `commit-chunks-store.ts`, `src/reports/stores/reports-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `sync-state-store.ts`, `sync-jobs-store.ts`, `src/reports/stores/reports-store.ts` + `report-commits-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+
+## Sync worker (commit ingestion)
+
+One background worker owns ALL commit ingestion. Reports and RAG never touch the git provider — they delegate through `src/projects/sync-service.ts` and read from Postgres.
+
+- **Queue** (`sync_jobs`): `enqueueSyncJob` (idempotent while a pending/running job exists for a project+branch), `claimNextSyncJob` (`FOR UPDATE SKIP LOCKED` so concurrent workers never double-run), `completeSyncJob`, `failSyncJob` (reschedules with exponential backoff up to `SYNC_MAX_ATTEMPTS`).
+- **Worker** (`src/projects/worker/sync-worker.ts`): `startSyncWorker()` polls the queue on `SYNC_POLL_INTERVAL_MS`, claims a job, runs `runProjectSync` (advisory-locked transaction), then fires `embedNewChunks`, and logs structured pino events (`sync.job.start/complete/failed`, `sync.enqueued`, `sync.caught-up`, `sync.embed.*`). Started from `src/index.ts` when `SYNC_WORKER_ENABLED`.
+- **Sync** (`runProjectSync` in `src/projects/sync.ts`): inside a per-project `pg_advisory_xact_lock` transaction, fetches commits newer than the watermark (full paginated backfill on first sync — no hard cap; `per_page` is a page size), dedupes against stored SHAs, advances the watermark (composite `(committed_at, commit_sha)` keyset, never regressing). The watermark only advances when the transaction commits, so a run that dies mid-pagination restarts from the same watermark (re-fetched commits are deduped).
+- **Delegation** (`sync-service.ts`): `enqueueSync`, `ensureSynced` (blocks until the store covers `needByUtc` OR a recent catch-up reached the branch tip — the watermark can never exceed GitHub's newest commit, so a successful catch-up IS synced), `getSyncStatus`.
+- **Status API**: `GET /api/v1/projects/:id/sync` returns watermark, latest job, and chunk/embedding totals.
+- **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any sync or LLM work — `ProviderKeyError` otherwise. `ensureSynced` awaits the worker (blocking), then the window is read from `commit_chunks`.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
 

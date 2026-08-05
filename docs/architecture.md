@@ -27,6 +27,40 @@ The commit corpus and embedding pipeline are real; semantic search over it is **
 
 The full strategy (why, corpus shape, cost/reliability properties) is documented in [`docs/embeddings.md`](embeddings.md).
 
+## Commit sync (background worker + DB-backed queue)
+
+One background worker owns **all** commit ingestion. Reports (and future RAG) never touch the git provider — they delegate through `src/projects/sync-service.ts` and read from Postgres, which acts as a materialized view of each branch.
+
+```
+report generation / RAG      ──delegate──►  sync-service (enqueueSync / ensureSynced)
+                                                │
+                                                ▼
+                                   sync_jobs queue (Postgres)
+                                   status: pending → running → succeeded | failed
+                                                │  claim (FOR UPDATE SKIP LOCKED)
+                                                ▼
+                                   sync worker (startSyncWorker)
+                                   runProjectSync: advisory lock → paginate from
+                                   watermark → dedupe → write chunks → advance watermark
+                                   → embedNewChunks
+                                                │
+                                   read-only ▼
+                                   report/RAG query commit_chunks from Postgres
+```
+
+**Two tables, two jobs:**
+
+- `project_sync_state` — the **watermark**: per `(project_id, branch)` it stores `last_synced_commit_sha` + `last_synced_at`. This is the ingestion frontier. It only advances inside the sync transaction, so a run that dies mid-pagination restarts from the same watermark (re-fetched commits are deduped by SHA).
+- `sync_jobs` — the **queue**: rows with `status` (`pending`/`running`/`succeeded`/`failed`), `attempts`, `last_error`, `scheduled_at`. `enqueueSyncJob` is idempotent (no duplicate while a pending/running job exists); `claimNextSyncJob` uses `FOR UPDATE SKIP LOCKED` so concurrent workers never double-run; `failSyncJob` reschedules with exponential backoff up to `SYNC_MAX_ATTEMPTS`.
+
+**The freshness rule:** `ensureSynced` blocks until the watermark covers the needed point (report window end, in UTC) **or** a recent catch-up job reached the branch tip. The second condition matters because the watermark can never exceed GitHub's newest commit — if the branch simply has nothing after the requested date, a successful catch-up *is* synced. Without it, a report window ending after the last commit would enqueue jobs forever.
+
+**Failure handling:** every step is idempotent. A failure on page N leaves the watermark where it was (transaction rollback), so the next attempt resumes from the watermark — no page index is persisted. Retries back off; permanent failures are recorded on the job row and surfaced via `ensureSynced` → `SyncError` (503).
+
+**Status endpoint:** `GET /api/v1/projects/:id/sync` returns the watermark, latest job, and chunk/embedding totals — this drives the frontend "indexing…" state.
+
+**Report generation guard:** never starts (not even the sync) without a valid AI provider key — stored credential or env fallback — otherwise `ProviderKeyError` (400).
+
 ## Tech Debt
 
 The MVP solved one concrete problem as fast as possible. Every shortcut was intentional but now needs addressing.
@@ -37,7 +71,7 @@ All external data flows through `src/shared/integrations/git-provider/` — an O
 
 ### Database coupling
 
-The DB client is initialized at module load in `src/db/client.ts`. Access goes through per-domain stores (`src/projects/stores/`, `src/reports/stores/`, `src/credentials/stores/`) — routes never import `db` directly. The schema is a normalized model in `src/db/schema.ts`: `github_projects`, `commit_chunks` (per-commit diffs + pgvector embedding), `project_sync_state` (per-branch sync watermark), `reports`, `report_commits`, and `credentials`.
+The DB client is initialized at module load in `src/db/client.ts`. Access goes through per-domain stores (`src/projects/stores/`, `src/reports/stores/`, `src/credentials/stores/`) — routes never import `db` directly. The schema is a normalized model in `src/db/schema.ts`: `github_projects`, `commit_chunks` (per-commit diffs + pgvector embedding), `project_sync_state` (per-branch sync watermark), `sync_jobs` (background sync queue), `reports`, `report_commits`, and `credentials`.
 
 ### No dependency injection
 
@@ -49,10 +83,10 @@ The API has zero authentication. Fine for the MVP's trusted deployments. Impossi
 
 ### Report generation (`src/reports/routes.ts`)
 
-One ~160-line handler does validation, commit sync, chunk building, AI retry loop, and report persistence. Should be extracted into a service.
+One ~160-line handler does validation, key resolution, sync delegation, AI retry loop, and report persistence. Should be extracted into a service.
 
-- Commit sync is `syncCommitsForProject()` (`src/projects/sync.ts`): paginated and unlimited (per_page is a page size; GitHub caps it at 100), runs inside a per-project `pg_advisory_xact_lock` transaction, dedupes against stored SHAs, and advances a per-`(project, branch)` watermark in `project_sync_state` (composite `(committed_at, commit_sha)` keyset, never regressing). The future ingestion pipeline reuses this same function with no window (catch-up from the watermark).
-- Commit reads are store-first: `GET /api/v1/reports/:id/commits` serves stored rows from `report_commits` + `commit_chunks`; `POST /api/v1/reports` syncs the requested window via `syncCommitsForProject()`.
+- Commit sync is fully owned by the background worker (`runProjectSync` in `src/projects/sync.ts`, driven by the `sync_jobs` queue): paginated and unlimited (per_page is a page size; GitHub caps it at 100), advisory-locked, deduped against stored SHAs, watermark-advanced per `(project, branch)`. Report generation just calls `ensureSynced` and reads the window from `commit_chunks`.
+- Commit reads are store-first: `GET /api/v1/reports/:id/commits` serves stored rows from `report_commits` + `commit_chunks`; `POST /api/v1/reports` waits on the worker, then reads the window from Postgres.
 
 ### Validation & data-integrity gaps
 
