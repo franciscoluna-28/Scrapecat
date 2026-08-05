@@ -1,10 +1,12 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { db } from "@/db/client";
+import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
-import { embedNewChunks } from "@/projects/embed-chunks";
-import { syncCommitsForProject } from "@/projects/sync";
+import { getProviderConfig } from "@/shared/integrations/providers/registry";
+import { enqueueSync, ensureSynced } from "@/projects/sync-service";
 import * as projectsStore from "@/projects/stores/projects-store";
+import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
 import { reportInputSchema } from "@/reports/schemas";
@@ -20,6 +22,14 @@ import { extractReportTitle } from "@/shared/utils";
 
 export type CreateReportInput = z.infer<typeof reportInputSchema>;
 
+function startOfDayUtc(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
+function endOfDayUtc(dateStr: string): Date {
+  return new Date(`${dateStr}T23:59:59.999Z`);
+}
+
 /**
  * Cap on how many commit messages are fed into an LLM prompt. This is a
  * token-budget concern, NOT a data cap — the sync itself is unlimited.
@@ -30,6 +40,16 @@ export class NoCommitsError extends Error {
   readonly status = 400;
   constructor() {
     super("Cannot generate report: no commits found in the selected date range");
+  }
+}
+
+export class ProviderKeyError extends Error {
+  readonly status = 400;
+  constructor(provider: string) {
+    const envKey = getProviderConfig(provider)?.envKey ?? "the provider's env key";
+    super(
+      `No API key configured for AI provider "${provider}". Add one in Settings or set ${envKey}.`,
+    );
   }
 }
 
@@ -140,10 +160,23 @@ async function generateReport(opts: {
 }
 
 export async function createReportUseCase(input: CreateReportInput) {
-  const provider = input.provider;
-  const apiKey = provider ? await resolveApiKey(provider) : undefined;
+  // Never start report generation (not even the sync) without a valid AI key.
+  // Fail fast with a clear error instead of burning sync work + AI retries.
+  const provider = input.provider || "openrouter";
+  const providerConfig = getProviderConfig(provider);
+  if (!providerConfig) {
+    throw new ProviderKeyError(provider);
+  }
+  const storedKey = await resolveApiKey(provider);
+  const apiKey =
+    storedKey ||
+    (env as unknown as Record<string, string>)[providerConfig.envKey] ||
+    "";
+  if (!apiKey) {
+    throw new ProviderKeyError(provider);
+  }
 
-  const project = await projectsStore.upsertProject({
+  const { project, created } = await projectsStore.upsertProject({
     input: {
       githubProjectId: input.githubProjectId,
       githubOwner: input.githubOwner,
@@ -152,15 +185,31 @@ export async function createReportUseCase(input: CreateReportInput) {
     },
   });
 
-  // Sync (paginated, watermark-based, advisory-locked) and get the window's
-  // commits. Chunks are written by the sync transaction.
-  const commits = await syncCommitsForProject({
+  // Eager full backfill on project creation — the worker owns it from here.
+  if (created) {
+    await enqueueSync({ projectId: project.id, branch: input.branch });
+  }
+
+  // Delegate to the sync worker and wait until the store covers the report
+  // window (in UTC), then read the window's commits straight from Postgres.
+  await ensureSynced({
     projectId: project.id,
-    owner: input.githubOwner,
-    repo: input.repository,
     branch: input.branch,
-    window: { startDate: input.startDate, endDate: input.endDate },
+    needByUtc: endOfDayUtc(input.endDate),
   });
+
+  const storedRows = await commitChunksStore.listCommitsForProject({
+    projectId: project.id,
+    branch: input.branch,
+    startDate: startOfDayUtc(input.startDate),
+    endDate: endOfDayUtc(input.endDate),
+  });
+  const commits = storedRows.map((r) => ({
+    sha: r.commitSha,
+    message: r.commitMessage,
+    author: r.author ?? "",
+    date: r.committedAt.toISOString(),
+  }));
 
   if (commits.length === 0) {
     throw new NoCommitsError();
@@ -176,18 +225,6 @@ export async function createReportUseCase(input: CreateReportInput) {
   const reportId = randomUUID();
 
   await db.transaction(async (tx) => {
-    // Re-upsert inside the tx (idempotent via onConflictDoUpdate) so the project
-    // write is part of the atomic commit alongside the report.
-    await projectsStore.upsertProject({
-      input: {
-        githubProjectId: input.githubProjectId,
-        githubOwner: input.githubOwner,
-        repositoryName: input.repository,
-        defaultBranch: input.branch,
-      },
-      tx,
-    });
-
     await reportsStore.createReport({
       input: {
         id: reportId,
@@ -208,10 +245,6 @@ export async function createReportUseCase(input: CreateReportInput) {
       commitShas: commits.map((c) => c.sha),
       tx,
     });
-  });
-
-  void embedNewChunks(project.id).catch((err: any) => {
-    console.warn("Embedding sync failed (will be retried by backfill):", err?.message ?? err);
   });
 
   return { reportId, projectId: project.id };
@@ -235,6 +268,7 @@ export async function updateReportUseCase(input: {
   };
 }
 
+// TODO: Deprecate this in favor of future RAG implementation that can handle multiple reports at once, and/or a more generic "comment" system for reports.
 export async function replyToReportUseCase(input: {
   reportId: string;
   reply: string;

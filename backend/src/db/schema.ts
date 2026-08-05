@@ -113,6 +113,38 @@ export const projectSyncState = pgTable(
   }),
 );
 
+export const syncJobStatus = pgEnum("sync_job_status", [
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+export const syncJobs = pgTable(
+  "sync_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => githubProjects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    status: syncJobStatus("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    statusScheduledIdx: index("sync_jobs_status_scheduled_idx").on(
+      table.status,
+      table.scheduledAt,
+    ),
+  }),
+);
+
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")

@@ -33,7 +33,11 @@ export async function upsertProject({
       },
     })
     .returning();
-  return row;
+
+  // On a fresh insert both columns get the same now(); on an update only
+  // updatedAt is bumped, so equality reliably means the row was created.
+  const created = row.createdAt.getTime() === row.updatedAt.getTime();
+  return { project: row, created };
 }
 
 export async function listProjects(opts?: { tx?: DbOrTx }) {

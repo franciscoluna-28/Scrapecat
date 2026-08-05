@@ -4,6 +4,7 @@ import { getGitProvider } from "@/shared/integrations/git-provider";
 import { paginate, type FetchPage } from "@/shared/integrations/git-provider/pagination";
 import { buildCommitChunks, type CommitChunk } from "@/projects/chunks";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
+import * as projectsStore from "@/projects/stores/projects-store";
 import * as syncStateStore from "@/projects/stores/sync-state-store";
 import { env } from "@/config/env";
 import type { DbOrTx, Tx } from "@/db/client";
@@ -28,38 +29,34 @@ export function isNewerThanWatermark(
   return sha > wmSha;
 }
 
-function startOfDayUtc(dateStr: string): Date {
-  return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function endOfDayUtc(dateStr: string): Date {
-  return new Date(`${dateStr}T23:59:59.999Z`);
-}
+export type SyncResult = {
+  fetched: number;
+  newChunks: number;
+  watermarkFrom: { sha: string; at: Date } | null;
+  watermarkTo: { sha: string; at: Date } | null;
+};
 
 /**
- * Shared commit sync used by both report generation and the ingestion path.
+ * The single commit-sync entry point, owned by the sync worker.
  *
- * Runs inside a transaction that takes a per-project advisory lock
- * (`pg_advisory_xact_lock`) so concurrent syncs for the same project serialize.
+ * Runs inside a transaction that takes a per-project advisory lock so
+ * concurrent syncs for the same project serialize. On the first sync (no
+ * watermark) it fetches the full history, newest-first; afterwards it resumes
+ * from the watermark and fetches only what is strictly newer (the composite
+ * `(committed_at, commit_sha)` keyset rule).
  *
- * Two call shapes:
- * - **Window mode** (`window` set, used by report generation): fetches the
- *   whole window, newest-first, paginated without any hard cap. Overlap with
- *   already-synced commits is deduped to zero writes. Returns the window's
- *   commits for the report prompt.
- * - **Catch-up** (no window, used by ingestion): fetches only what is strictly
- *   newer than the per-(project, branch) watermark, resuming from it.
- *
- * The watermark is advanced to the newest commit now known to be synced and
- * never regresses.
+ * Failure is inherently safe: the watermark only advances when this
+ * transaction commits, so a run that dies mid-pagination restarts from the
+ * same watermark next time (re-fetched commits are deduped by SHA).
  */
-export async function syncCommitsForProject(opts: {
+export async function runProjectSync(opts: {
   projectId: string;
-  owner: string;
-  repo: string;
   branch: string;
-  window?: { startDate?: string; endDate?: string };
-}): Promise<Commit[]> {
+}): Promise<SyncResult> {
+  const project = await projectsStore.getProjectById({ id: opts.projectId });
+  if (!project) {
+    throw new Error(`Project ${opts.projectId} not found`);
+  }
   const provider = getGitProvider();
 
   return db.transaction(async (tx) => {
@@ -75,33 +72,25 @@ export async function syncCommitsForProject(opts: {
       tx,
     });
 
-    const catchUp = !opts.window;
-    const windowStart = opts.window?.startDate
-      ? startOfDayUtc(opts.window.startDate).toISOString()
-      : undefined;
-    const windowEnd = opts.window?.endDate
-      ? endOfDayUtc(opts.window.endDate).toISOString()
-      : undefined;
-
-    // Window mode starts at the window start; catch-up resumes from the
-    // watermark. GitHub `since`/`until` filter by committer date.
-    const since = windowStart ?? (state ? state.lastSyncedAt.toISOString() : undefined);
+    const watermarkFrom = state
+      ? { sha: state.lastSyncedCommitSha, at: state.lastSyncedAt }
+      : null;
+    const since = state ? state.lastSyncedAt.toISOString() : undefined;
 
     const fetchPage: FetchPage<Commit> = (page) =>
-      provider.listCommitsPage(opts.owner, opts.repo, {
+      provider.listCommitsPage(project.githubOwner, project.repositoryName, {
         branch: opts.branch,
         since,
-        until: windowEnd,
         page,
         perPage: 100,
       });
 
-    // In catch-up mode, drop anything at or below the watermark. Because
-    // GitHub returns newest-first, a page that filters to empty means every
-    // later page is older still — paginate stops there.
+    // Drop anything at or below the watermark. Because GitHub returns
+    // newest-first, a page that filters to empty means every later page is
+    // older still — paginate stops there.
     const filteredFetch: FetchPage<Commit> = async (page) => {
       const result = await fetchPage(page);
-      if (catchUp && state) {
+      if (state) {
         const items = result.items.filter((c) =>
           isNewerThanWatermark(
             c.date,
@@ -138,7 +127,7 @@ export async function syncCommitsForProject(opts: {
       });
     }
 
-    // Advance the watermark to the newest commit we now know is synced, never
+    // Advance the watermark to the newest commit now known to be synced, never
     // regressing below the current watermark.
     const head = fetched.reduce<{ date: number; sha: string } | null>(
       (best, c) => {
@@ -151,6 +140,7 @@ export async function syncCommitsForProject(opts: {
       null,
     );
 
+    let watermarkTo: SyncResult["watermarkTo"] = null;
     if (head) {
       const headDate = new Date(head.date);
       const regresses =
@@ -166,25 +156,16 @@ export async function syncCommitsForProject(opts: {
           lastSyncedAt: headDate,
           tx,
         });
+        watermarkTo = { sha: head.sha, at: headDate };
       }
     }
 
-    // Window mode returns exactly the window's commits (the fetch may have
-    // extended into already-synced territory for overlap); catch-up returns
-    // the newly-fetched commits.
-    if (opts.window) {
-      const startT = opts.window.startDate
-        ? startOfDayUtc(opts.window.startDate).getTime()
-        : -Infinity;
-      const endT = opts.window.endDate
-        ? endOfDayUtc(opts.window.endDate).getTime()
-        : Infinity;
-      return fetched.filter((c) => {
-        const t = new Date(c.date).getTime();
-        return t >= startT && t <= endT;
-      });
-    }
-    return fetched;
+    return {
+      fetched: fetched.length,
+      newChunks: chunks.length,
+      watermarkFrom,
+      watermarkTo,
+    };
   });
 }
 

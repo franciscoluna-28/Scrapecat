@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { commitChunks, type CommitChunkMetadata } from "@/db/schema";
 
@@ -54,6 +54,28 @@ export async function upsertCommitChunks({
         updatedAt: sql`now()`,
       },
     });
+}
+
+export async function countChunksForProject({
+  projectId,
+  branch,
+  embeddedOnly,
+  tx,
+}: {
+  projectId: string;
+  branch?: string;
+  embeddedOnly?: boolean;
+  tx?: DbOrTx;
+}): Promise<number> {
+  const client = tx || db;
+  const conditions = [eq(commitChunks.projectId, projectId)];
+  if (branch) conditions.push(eq(commitChunks.branch, branch));
+  if (embeddedOnly) conditions.push(isNotNull(commitChunks.embedding));
+  const [row] = await client
+    .select({ count: sql<number>`count(*)::int` })
+    .from(commitChunks)
+    .where(and(...conditions));
+  return row?.count ?? 0;
 }
 
 export async function getChunksByShas({

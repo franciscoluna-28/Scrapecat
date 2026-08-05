@@ -59,13 +59,13 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("projects-store upserts idempotently and lists", async () => {
-    const p = await projectsStore.upsertProject({
+    const { project: p } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName, defaultBranch: "main" },
     });
     expect(p.repositoryName).toBe(repositoryName);
     expect(p.defaultBranch).toBe("main");
 
-    const p2 = await projectsStore.upsertProject({
+    const { project: p2 } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName: `${repositoryName}-v2` },
     });
     expect(p2.id).toBe(p.id);
@@ -76,7 +76,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("commit-chunks-store upserts with dedupe and filters by date range", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
     const chunk = {
@@ -111,7 +111,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("getChunksByShas returns stored shas and sets content_hash on upsert", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId: chunkProjectId, githubOwner: "test-owner", repositoryName },
     });
     await commitChunksStore.upsertCommitChunks({
@@ -138,7 +138,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("embedding pipeline embeds pending chunks and is idempotent", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId: embedProjectId, githubOwner: "test-owner", repositoryName },
     });
     await commitChunksStore.upsertCommitChunks({
@@ -187,7 +187,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("embedding pipeline normalizes legacy rows with null content_hash", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId: legacyProjectId, githubOwner: "test-owner", repositoryName },
     });
     const [row] = await db
@@ -219,7 +219,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("reports-store creates and lists reports linked to a project", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
     const reportId = randomUUID();
@@ -265,7 +265,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("GET /api/v1/projects and report commits hit postgres", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
     const report = await reportsStore.createReport({
@@ -315,7 +315,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("GET /api/v1/reports returns reports stored in postgres", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
     const report = await reportsStore.createReport({
@@ -345,7 +345,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("reports-store updates markdown and bumps updatedAt", async () => {
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName },
     });
     const report = await reportsStore.createReport({

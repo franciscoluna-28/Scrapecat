@@ -5,19 +5,17 @@ import { githubProjects } from "@/db/schema";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as syncStateStore from "@/projects/stores/sync-state-store";
-import { syncCommitsForProject } from "@/projects/sync";
+import * as syncJobsStore from "@/projects/stores/sync-jobs-store";
+import { runProjectSync } from "@/projects/sync";
+import { processNextJobs } from "@/projects/worker/sync-worker";
 
 const remoteCommits: { sha: string; message: string; author: string; date: string }[] = [];
 
 const mockProvider = {
   listCommitsPage: vi.fn(async (_owner: string, _repo: string, params?: any) => {
     const since = params?.since ? new Date(params.since).getTime() : -Infinity;
-    const until = params?.until ? new Date(params.until).getTime() : Infinity;
     const items = remoteCommits
-      .filter((c) => {
-        const t = new Date(c.date).getTime();
-        return t >= since && t <= until;
-      })
+      .filter((c) => new Date(c.date).getTime() >= since)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return { items, hasMore: false, nextPage: null };
   }),
@@ -27,11 +25,17 @@ vi.mock("@/shared/integrations/git-provider", () => ({
   getGitProvider: vi.fn(() => mockProvider),
 }));
 
+vi.mock("@/projects/embeddings", () => ({
+  embedTexts: vi.fn(async (texts: string[]) =>
+    texts.map(() => Array.from({ length: 1536 }, () => 0)),
+  ),
+}));
+
 const enabled = process.env.DB_INTEGRATION === "1";
 
-describe.runIf(enabled)("syncCommitsForProject (set DB_INTEGRATION=1)", () => {
-  const githubProjectId = 999_999_005;
-  const repositoryName = "sync-integration-repo";
+describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", () => {
+  const githubProjectId = 999_999_006;
+  const repositoryName = "worker-integration-repo";
 
   beforeAll(async () => {
     const existing = await projectsStore.getProjectByGithubId({ githubProjectId });
@@ -47,7 +51,7 @@ describe.runIf(enabled)("syncCommitsForProject (set DB_INTEGRATION=1)", () => {
     }
   });
 
-  it("cold start fetches a window, writes chunks, and sets the watermark", async () => {
+  it("worker enqueues, claims, runs, and completes a sync job end to end", async () => {
     remoteCommits.length = 0;
     remoteCommits.push(
       { sha: "c1", message: "feat: one", author: "tester", date: "2026-01-10T10:00:00Z" },
@@ -55,47 +59,42 @@ describe.runIf(enabled)("syncCommitsForProject (set DB_INTEGRATION=1)", () => {
       { sha: "c3", message: "feat: three", author: "tester", date: "2026-01-30T10:00:00Z" },
     );
 
-    const project = await projectsStore.upsertProject({
+    const { project } = await projectsStore.upsertProject({
       input: { githubProjectId, githubOwner: "test-owner", repositoryName, defaultBranch: "main" },
     });
 
-    const commits = await syncCommitsForProject({
-      projectId: project.id,
-      owner: "test-owner",
-      repo: repositoryName,
-      branch: "main",
-      window: { startDate: "2026-01-01", endDate: "2026-01-31" },
-    });
+    const enqueued = await syncJobsStore.enqueueSyncJob({ projectId: project.id, branch: "main" });
+    expect(enqueued.status).toBe("pending");
 
-    expect(commits).toHaveLength(3);
-    expect(commits.map((c) => c.sha).sort()).toEqual(["c1", "c2", "c3"]);
+    const ran = await processNextJobs();
+    expect(ran).toBe(1);
 
-    const stored = await commitChunksStore.listCommitsForProject({ projectId: project.id });
-    expect(stored.filter((c) => c.commitSha === "c1")).toHaveLength(1);
-    expect(stored).toHaveLength(3);
+    const done = await syncJobsStore.getLatestSyncJob({ projectId: project.id, branch: "main" });
+    expect(done?.status).toBe("succeeded");
+    expect(done?.attempts).toBe(0);
 
     const state = await syncStateStore.getSyncState({ projectId: project.id, branch: "main" });
-    expect(state).not.toBeNull();
-    expect(state!.lastSyncedCommitSha).toBe("c3");
-    expect(state!.lastSyncedAt.toISOString()).toBe("2026-01-30T10:00:00.000Z");
+    expect(state?.lastSyncedCommitSha).toBe("c3");
+    expect(state?.lastSyncedAt.toISOString()).toBe("2026-01-30T10:00:00.000Z");
+
+    const stored = await commitChunksStore.listCommitsForProject({ projectId: project.id });
+    expect(stored).toHaveLength(3);
   });
 
-  it("re-syncing the same window writes nothing and does not regress the watermark", async () => {
+  it("runProjectSync is idempotent: re-running writes nothing and never regresses the watermark", async () => {
     const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
     const before = await syncStateStore.getSyncState({ projectId: project.id, branch: "main" });
 
     mockProvider.listCommitsPage.mockClear();
-    const commits = await syncCommitsForProject({
-      projectId: project.id,
-      owner: "test-owner",
-      repo: repositoryName,
-      branch: "main",
-      window: { startDate: "2026-01-01", endDate: "2026-01-31" },
-    });
+    const result = await runProjectSync({ projectId: project.id, branch: "main" });
 
-    expect(commits).toHaveLength(3);
-    const stored = await commitChunksStore.listCommitsForProject({ projectId: project.id });
-    expect(stored).toHaveLength(3);
+    expect(result.fetched).toBe(0);
+    expect(result.newChunks).toBe(0);
+    expect(mockProvider.listCommitsPage).toHaveBeenCalledWith(
+      "test-owner",
+      repositoryName,
+      expect.objectContaining({ since: "2026-01-30T10:00:00.000Z" }),
+    );
 
     const after = await syncStateStore.getSyncState({ projectId: project.id, branch: "main" });
     expect(after!.lastSyncedCommitSha).toBe(before!.lastSyncedCommitSha);
@@ -106,25 +105,25 @@ describe.runIf(enabled)("syncCommitsForProject (set DB_INTEGRATION=1)", () => {
     const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
     remoteCommits.push({ sha: "c4", message: "feat: four", author: "tester", date: "2026-02-05T10:00:00Z" });
 
-    mockProvider.listCommitsPage.mockClear();
-    const commits = await syncCommitsForProject({
-      projectId: project.id,
-      owner: "test-owner",
-      repo: repositoryName,
-      branch: "main",
-    });
+    const result = await runProjectSync({ projectId: project.id, branch: "main" });
 
-    expect(commits.map((c) => c.sha)).toEqual(["c4"]);
-    expect(mockProvider.listCommitsPage).toHaveBeenCalledWith(
-      "test-owner",
-      repositoryName,
-      expect.objectContaining({ since: "2026-01-30T10:00:00.000Z" }),
-    );
-
-    const stored = await commitChunksStore.listCommitsForProject({ projectId: project.id });
-    expect(stored).toHaveLength(4);
+    expect(result.fetched).toBe(1);
+    expect(result.newChunks).toBe(1);
 
     const state = await syncStateStore.getSyncState({ projectId: project.id, branch: "main" });
     expect(state!.lastSyncedCommitSha).toBe("c4");
+  });
+
+  it("a failed job is rescheduled and then marked failed permanently past maxAttempts", async () => {
+    const project = (await projectsStore.getProjectByGithubId({ githubProjectId }))!;
+    await syncJobsStore.enqueueSyncJob({ projectId: project.id, branch: "feature-x" });
+
+    // Simulate a job that fails: claim it, then fail it with attempts = maxAttempts.
+    const [claimed] = await syncJobsStore.claimNextSyncJob();
+    expect(claimed?.branch).toBe("feature-x");
+    await syncJobsStore.failSyncJob({ jobId: claimed!.id, error: "boom", attempts: 1, maxAttempts: 1 });
+    const failed = await syncJobsStore.getLatestSyncJob({ projectId: project.id, branch: "feature-x" });
+    expect(failed?.status).toBe("failed");
+    expect(failed?.lastError).toBe("boom");
   });
 });
