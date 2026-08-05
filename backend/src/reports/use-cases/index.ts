@@ -281,7 +281,7 @@ export async function replyToReportUseCase(input: {
     throw new ReportNotFoundError();
   }
 
-  const chunks = await reportCommitsStore.listCommitsForReport({
+  const { rows: chunks } = await reportCommitsStore.listCommitsForReport({
     reportId: report.id,
     projectId: report.projectId,
     branch: report.branch,

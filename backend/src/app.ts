@@ -38,6 +38,7 @@ import {
   ReportUpdateResponse,
   ReportReplyBody,
   ReportReplyResponse,
+  ReportCommitsQuery,
   ReportCommitsResponse,
 } from "@/reports/schemas";
 import {
@@ -168,10 +169,11 @@ export async function buildApp() {
 
   app.get("/api/v1/reports/:id/commits", {
     schema: {
-      description: "List commits for a report, syncing new commits from GitHub",
+      description: "Cursor-paginated commits for a report (searchable by commit message)",
       tags: ["reports"],
       params: ReportIdParams,
-      response: { 200: ReportCommitsResponse, 404: ErrorResponse },
+      querystring: ReportCommitsQuery,
+      response: { 200: ReportCommitsResponse, 400: ErrorResponse, 404: ErrorResponse },
     },
   }, getReportCommits);
 

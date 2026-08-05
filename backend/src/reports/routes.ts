@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import {
   reportInputBodySchema,
   listReportsQuerySchema,
+  listReportCommitsQuerySchema,
   reportIdParamsSchema,
   updateReportBodySchema,
   replyBodySchema,
@@ -19,6 +20,11 @@ import { SyncError } from "@/projects/sync-service";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
+import {
+  encodeReportCommitsCursor,
+  decodeReportCommitsCursor,
+  type ReportCommitsCursor,
+} from "@/reports/stores/report-commits-store";
 import { formatDate } from "@/shared/utils";
 
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
@@ -134,6 +140,19 @@ export async function getReportCommits(
   if (!params.success) {
     return reply.status(400).send({ error: params.error.flatten() });
   }
+  const query = listReportCommitsQuerySchema.safeParse(req.query);
+  if (!query.success) {
+    return reply.status(400).send({ error: query.error.flatten() });
+  }
+
+  let cursor: ReportCommitsCursor | undefined;
+  if (query.data.cursor) {
+    try {
+      cursor = decodeReportCommitsCursor(query.data.cursor);
+    } catch {
+      return reply.status(400).send({ error: "Invalid cursor" });
+    }
+  }
 
   try {
     const report = await reportsStore.getReport({ id: params.data.id });
@@ -141,14 +160,24 @@ export async function getReportCommits(
       return reply.status(404).send({ error: "Report not found" });
     }
 
-    const commits = await reportCommitsStore.listCommitsForReport({
+    const { rows, nextCursor } = await reportCommitsStore.listCommitsForReport({
       reportId: report.id,
       projectId: report.projectId,
       branch: report.branch,
+      q: query.data.q,
+      cursor,
+      limit: query.data.limit,
+    });
+
+    const total = await reportCommitsStore.countCommitsForReport({
+      reportId: report.id,
+      projectId: report.projectId,
+      branch: report.branch,
+      q: query.data.q,
     });
 
     return reply.send({
-      commits: commits.map((c) => ({
+      commits: rows.map((c) => ({
         id: c.id,
         commitSha: c.commitSha,
         commitMessage: c.commitMessage,
@@ -157,6 +186,8 @@ export async function getReportCommits(
         committedAt: c.committedAt,
         metadata: c.metadata,
       })),
+      nextCursor: nextCursor ? encodeReportCommitsCursor(nextCursor) : null,
+      total,
     });
   } catch (error) {
     console.error("Error fetching report commits:", error);

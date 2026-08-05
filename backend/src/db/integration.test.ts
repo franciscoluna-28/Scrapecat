@@ -314,6 +314,93 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
     }
   });
 
+  it("GET /api/v1/reports/:id/commits paginates with a cursor and searches", async () => {
+    const pid = 999_999_010;
+    const { project } = await projectsStore.upsertProject({
+      input: { gitProvider: "github", providerProjectId: pid, providerOwner: "test-owner", repositoryName: `${repositoryName}-paginated` },
+    });
+    const report = await reportsStore.createReport({
+      input: {
+        id: randomUUID(),
+        projectId: project.id,
+        title: "Pagination Report",
+        originalMarkdown: "# Pagination",
+        editableMarkdown: "# Pagination",
+        startDate: new Date("2026-01-01T00:00:00Z"),
+        endDate: new Date("2026-01-31T00:00:00Z"),
+        branch: "main",
+      },
+    });
+    const seed = [
+      { sha: "p-1", msg: "feat: pagination one", date: "2026-01-05T00:00:00Z" },
+      { sha: "p-2", msg: "feat: pagination two", date: "2026-01-10T00:00:00Z" },
+      { sha: "p-3", msg: "fix: pagination three", date: "2026-01-15T00:00:00Z" },
+      { sha: "p-4", msg: "chore: pagination four", date: "2026-01-20T00:00:00Z" },
+      { sha: "p-5", msg: "docs: pagination five", date: "2026-01-25T00:00:00Z" },
+    ];
+    await commitChunksStore.upsertCommitChunks({
+      inputs: seed.map((c) => ({
+        projectId: project.id,
+        commitSha: c.sha,
+        commitMessage: c.msg,
+        author: "tester",
+        diffSummary: c.msg,
+        committedAt: new Date(c.date),
+      })),
+    });
+    await reportCommitsStore.insertReportCommits({
+      reportId: report.id,
+      commitShas: seed.map((c) => c.sha),
+    });
+
+    const app = await buildApp();
+    try {
+      const page1 = await app.inject({
+        method: "GET",
+        url: `/api/v1/reports/${report.id}/commits?limit=2`,
+      });
+      expect(page1.statusCode).toBe(200);
+      const b1 = page1.json();
+      expect(b1.commits).toHaveLength(2);
+      expect(b1.commits[0].commitSha).toBe("p-5"); // newest first
+      expect(b1.nextCursor).toBeTruthy();
+      expect(b1.total).toBe(5);
+
+      const page2 = await app.inject({
+        method: "GET",
+        url: `/api/v1/reports/${report.id}/commits?limit=2&cursor=${b1.nextCursor}`,
+      });
+      const b2 = page2.json();
+      expect(b2.commits.map((c: any) => c.commitSha)).toEqual(["p-3", "p-2"]);
+      expect(b2.nextCursor).toBeTruthy();
+
+      const page3 = await app.inject({
+        method: "GET",
+        url: `/api/v1/reports/${report.id}/commits?limit=2&cursor=${b2.nextCursor}`,
+      });
+      const b3 = page3.json();
+      expect(b3.commits.map((c: any) => c.commitSha)).toEqual(["p-1"]);
+      expect(b3.nextCursor).toBeNull();
+
+      const search = await app.inject({
+        method: "GET",
+        url: `/api/v1/reports/${report.id}/commits?q=fix`,
+      });
+      const bs = search.json();
+      expect(bs.total).toBe(1);
+      expect(bs.commits.map((c: any) => c.commitSha)).toEqual(["p-3"]);
+
+      const bad = await app.inject({
+        method: "GET",
+        url: `/api/v1/reports/${report.id}/commits?cursor=%%%bad%%%`,
+      });
+      expect(bad.statusCode).toBe(400);
+    } finally {
+      await app.close();
+      await cleanupProject(pid);
+    }
+  });
+
   it("GET /api/v1/reports returns reports stored in postgres", async () => {
     const { project } = await projectsStore.upsertProject({
       input: { gitProvider: "github", providerProjectId, providerOwner: "test-owner", repositoryName },

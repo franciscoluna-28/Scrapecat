@@ -26,6 +26,12 @@ export const listReportsQuerySchema = z.object({
   projectId: z.string().optional(),
 });
 
+export const listReportCommitsQuerySchema = z.object({
+  q: z.string().optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
 export const reportIdParamsSchema = z.object({
   id: z.string().min(1, "id is required"),
 });
@@ -124,6 +130,12 @@ export const ReportReplyResponse = Type.Object({
   report: Type.String(),
 });
 
+export const ReportCommitsQuery = Type.Object({
+  q: Type.Optional(Type.String()),
+  cursor: Type.Optional(Type.String()),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 50 })),
+});
+
 export const ReportCommitsResponse = Type.Object({
   commits: Type.Array(
     Type.Object({
@@ -136,4 +148,6 @@ export const ReportCommitsResponse = Type.Object({
       metadata: Type.Optional(Type.Any()),
     }),
   ),
+  nextCursor: Type.Union([Type.Null(), Type.String()]),
+  total: Type.Integer(),
 });
