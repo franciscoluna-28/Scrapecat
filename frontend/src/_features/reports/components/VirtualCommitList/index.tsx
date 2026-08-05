@@ -28,7 +28,7 @@ function CommitRow({ commit }: { commit: StoredCommit }) {
         <div className="flex items-start gap-2 mb-1.5">
           <GitCommit className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs leading-relaxed line-clamp-3 [overflow-wrap:anywhere]">
+            <p className="text-xs leading-relaxed line-clamp-3 [wrap:anywhere]">
               {commit.commitMessage}
             </p>
             {commit.commitSha && (
@@ -161,9 +161,12 @@ export function VirtualCommitList({ reportId }: { reportId: string }) {
                       position: "absolute",
                       top: 0,
                       left: 0,
-                      width: "100%",
+                      width: "100%",  
                       transform: `translateY(${item.start}px)`,
-                      paddingBottom: 12,
+                      paddingBottom: 6,
+                      paddingLeft: 6,
+                      paddingRight: 6,
+                      paddingTop: 6,
                     }}
                   >
                     <CommitRow commit={commits[item.index]} />
