@@ -19,11 +19,12 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import { Separator } from "@/src/components/ui/separator";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
-import { GitBranch, FileText, Settings, Key } from "lucide-react";
+import { GitBranch, FileText, Settings, Key, FlaskConical } from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
   { id: "reports", label: "Reports", icon: FileText },
+  { id: "demo", label: "Demo", icon: FlaskConical, route: "/new/demo" },
   { id: "credentials", label: "API Keys", icon: Key },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
@@ -62,7 +63,11 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
                   <SidebarMenuItem className="py-1" key={item.id}>
                     <SidebarMenuButton
                       isActive={activeView === item.id}
-                      onClick={() => router.push(`/new?view=${item.id}`)}
+                      onClick={() =>
+                        "route" in item
+                          ? router.push(item.route)
+                          : router.push(`/new?view=${item.id}`)
+                      }
                       tooltip={item.label}
                     >
                       <item.icon className="size-4" />
