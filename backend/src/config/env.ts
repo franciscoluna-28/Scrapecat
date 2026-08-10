@@ -17,6 +17,17 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
+  SYNC_MAX_COMMITS: z.coerce.number().int().min(0).default(0),
+  SYNC_MAX_PAGES: z.coerce.number().int().min(0).default(0),
+  SYNC_DEADLINE_MS: z.coerce.number().int().min(0).default(0),
+  SYNC_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
+  SYNC_STALENESS_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+  SYNC_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  SYNC_JOB_AWAIT_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
+  SYNC_WORKER_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
 });
 

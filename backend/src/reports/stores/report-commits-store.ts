@@ -1,6 +1,47 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
-import { reportCommits, commitChunks } from "@/db/schema";
+import { reportCommits, commitChunks, type CommitChunkMetadata } from "@/db/schema";
+
+export type ReportCommitRow = {
+  id: string;
+  projectId: string;
+  commitSha: string;
+  branch: string;
+  commitMessage: string;
+  author: string | null;
+  diffSummary: string;
+  committedAt: Date;
+  metadata: CommitChunkMetadata | null;
+};
+
+export type ReportCommitsCursor = { at: string; id: string };
+
+export function encodeReportCommitsCursor(cursor: ReportCommitsCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+export function decodeReportCommitsCursor(raw: string): ReportCommitsCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as {
+      at?: unknown;
+      id?: unknown;
+    };
+    if (
+      typeof parsed.at !== "string" ||
+      typeof parsed.id !== "string" ||
+      Number.isNaN(new Date(parsed.at).getTime())
+    ) {
+      throw new Error("invalid cursor");
+    }
+    return { at: parsed.at, id: parsed.id };
+  } catch {
+    throw new Error("invalid cursor");
+  }
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
 
 export async function insertReportCommits({
   reportId,
@@ -19,20 +60,67 @@ export async function insertReportCommits({
     .onConflictDoNothing();
 }
 
+function commitConditions({
+  reportId,
+  projectId,
+  branch,
+  q,
+  cursor,
+}: {
+  reportId: string;
+  projectId: string;
+  branch: string;
+  q?: string;
+  cursor?: ReportCommitsCursor;
+}) {
+  const conditions = [
+    eq(reportCommits.reportId, reportId),
+    eq(commitChunks.projectId, projectId),
+    eq(commitChunks.branch, branch),
+  ];
+  if (q) {
+    conditions.push(ilike(commitChunks.commitMessage, `%${escapeLike(q)}%`));
+  }
+  if (cursor) {
+    conditions.push(
+      sql`(${commitChunks.committedAt}, ${commitChunks.id}) < (${cursor.at}, ${cursor.id})`,
+    );
+  }
+  return conditions;
+}
+
 export async function listCommitsForReport({
   reportId,
   projectId,
   branch,
+  q,
+  cursor,
+  limit = 50,
   tx,
 }: {
   reportId: string;
   projectId: string;
   branch: string;
+  q?: string;
+  cursor?: ReportCommitsCursor;
+  limit?: number;
   tx?: DbOrTx;
-}) {
+}): Promise<{ rows: ReportCommitRow[]; nextCursor: ReportCommitsCursor | null }> {
   const client = tx || db;
+  const conditions = commitConditions({ reportId, projectId, branch, q, cursor });
+
   const rows = await client
-    .select({ chunk: commitChunks })
+    .select({
+      id: commitChunks.id,
+      projectId: commitChunks.projectId,
+      commitSha: commitChunks.commitSha,
+      branch: commitChunks.branch,
+      commitMessage: commitChunks.commitMessage,
+      author: commitChunks.author,
+      diffSummary: commitChunks.diffSummary,
+      committedAt: commitChunks.committedAt,
+      metadata: commitChunks.metadata,
+    })
     .from(reportCommits)
     .innerJoin(
       commitChunks,
@@ -42,7 +130,45 @@ export async function listCommitsForReport({
         eq(commitChunks.branch, branch),
       ),
     )
-    .where(eq(reportCommits.reportId, reportId))
-    .orderBy(desc(commitChunks.committedAt));
-  return rows.map((r) => r.chunk);
+    .where(and(...conditions))
+    .orderBy(desc(commitChunks.committedAt), desc(commitChunks.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    rows: page,
+    nextCursor: hasMore && last ? { at: last.committedAt.toISOString(), id: last.id } : null,
+  };
+}
+
+export async function countCommitsForReport({
+  reportId,
+  projectId,
+  branch,
+  q,
+  tx,
+}: {
+  reportId: string;
+  projectId: string;
+  branch: string;
+  q?: string;
+  tx?: DbOrTx;
+}): Promise<number> {
+  const client = tx || db;
+  const conditions = commitConditions({ reportId, projectId, branch, q });
+  const [row] = await client
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reportCommits)
+    .innerJoin(
+      commitChunks,
+      and(
+        eq(commitChunks.commitSha, reportCommits.commitSha),
+        eq(commitChunks.projectId, projectId),
+        eq(commitChunks.branch, branch),
+      ),
+    )
+    .where(and(...conditions));
+  return row?.count ?? 0;
 }

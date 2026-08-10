@@ -157,7 +157,7 @@ export interface paths {
                     type?: string;
                     sort?: string;
                     direction?: string;
-                    per_page?: string;
+                    per_page?: number;
                 };
                 header?: never;
                 path?: never;
@@ -271,7 +271,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    limit?: string;
+                    limit?: number;
                     startDate?: string;
                     endDate?: string;
                     branch?: string;
@@ -458,8 +458,9 @@ export interface paths {
                     "application/json": {
                         data: {
                             repository: string;
-                            githubOwner: string;
-                            githubProjectId: number;
+                            gitProvider?: "github" | "gitlab";
+                            providerProjectId: number;
+                            providerOwner: string;
                             branch: string;
                             /** Format: date */
                             startDate: string;
@@ -546,7 +547,6 @@ export interface paths {
                             title: string;
                             repositoryName: string;
                             originalMarkdown: string;
-                            editableMarkdown: string;
                             startDate: string;
                             endDate: string;
                             branch: string;
@@ -570,62 +570,7 @@ export interface paths {
                 };
             };
         };
-        /** @description Update a report's editable markdown content */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        editableMarkdown: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: string;
-                            editableMarkdown: string;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        };
-                    };
-                };
-                /** @description Default Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-                /** @description Default Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-            };
-        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -640,10 +585,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List commits for a report, syncing new commits from GitHub */
+        /** @description Cursor-paginated commits for a report (searchable by commit message) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    q?: string;
+                    cursor?: string;
+                    limit?: number;
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -669,67 +618,8 @@ export interface paths {
                                 committedAt: string;
                                 metadata?: unknown;
                             }[];
-                        };
-                    };
-                };
-                /** @description Default Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reports/{id}/replies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Send a follow-up instruction to refine a report */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        reply: string;
-                        model?: string;
-                        provider?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            report: string;
+                            nextCursor: null | string;
+                            total: number;
                         };
                     };
                 };
@@ -755,19 +645,10 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Default Response */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
             };
         };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -800,8 +681,9 @@ export interface paths {
                         "application/json": {
                             projects: {
                                 id: string;
-                                githubProjectId: number;
-                                githubOwner: string;
+                                gitProvider: string;
+                                providerProjectId: number;
+                                providerOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
                                 /** Format: date-time */
@@ -809,6 +691,90 @@ export interface paths {
                                 /** Format: date-time */
                                 updatedAt: string;
                             }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Sync status (watermark, latest job, totals) for a project branch */
+        get: {
+            parameters: {
+                query?: {
+                    branch?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            projectId: string;
+                            branch: string;
+                            watermark: null | {
+                                sha: string;
+                                /** Format: date-time */
+                                at: string;
+                            };
+                            latestJob: null | {
+                                id: string;
+                                status: string;
+                                attempts: number;
+                                error: null | string;
+                                /** Format: date-time */
+                                scheduledAt: string;
+                                startedAt: null | string;
+                                finishedAt: null | string;
+                            };
+                            totals: {
+                                chunks: number;
+                                embedded: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };

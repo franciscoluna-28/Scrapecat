@@ -22,7 +22,7 @@ export async function listRepositories(
       type: type || "all",
       sort: sort || "updated",
       direction: direction || "desc",
-      perPage: parseInt(per_page || "10"),
+      perPage: per_page,
     });
     return reply.send(repositories);
   } catch (error) {
@@ -67,13 +67,14 @@ export async function listCommits(
   const { limit, startDate, endDate, branch } = queryParsed.data;
 
   try {
-    const commits = await getGitProvider().listCommits(owner, repo, {
-      perPage: parseInt(limit || "100"),
+    const page = await getGitProvider().listCommitsPage(owner, repo, {
+      perPage: limit,
+      page: 1,
       branch: branch || undefined,
       since: startDate || undefined,
       until: endDate || undefined,
     });
-    return reply.send({ commits });
+    return reply.send({ commits: page.items });
   } catch (error: any) {
     console.error("Error fetching commits:", error);
     if (error?.status === 404 || error?.status === 422) {

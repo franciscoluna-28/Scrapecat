@@ -50,6 +50,34 @@
       "when": 1785782977719,
       "tag": "0006_ordinary_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785883273727,
+      "tag": "0007_harsh_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785885480454,
+      "tag": "0008_public_crystal",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785890190753,
+      "tag": "0009_chemical_sunset_bain",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785973238349,
+      "tag": "0010_easy_malcolm_colcord",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,7 @@ type Props = {
   selectedBranch: string;
   startDate?: string;
   endDate?: string;
+  basePath?: string;
 };
 
 export function SettingsForm({
@@ -42,6 +43,7 @@ export function SettingsForm({
   selectedBranch,
   startDate,
   endDate,
+  basePath = "/new/settings",
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -75,7 +77,7 @@ export function SettingsForm({
     } else {
       params.delete(key);
     }
-    router.push(`/new/settings?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   };
 
   const handleGenerate = async () => {
@@ -91,8 +93,9 @@ export function SettingsForm({
         body: {
           data: {
             repository: repository.name,
-            githubOwner: repository.owner.login,
-            githubProjectId: repository.id,
+            gitProvider: "github",
+            providerOwner: repository.owner.login,
+            providerProjectId: repository.id,
             branch: selectedBranch,
             startDate,
             endDate: finalEndDate,

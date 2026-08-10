@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useReport, useReportCommits } from "@/src/_features/reports/services/reports-api";
+import { useReport } from "@/src/_features/reports/services/reports-api";
 import ReportClientPage from "./client-page";
 
 export default function ReportPage() {
@@ -9,8 +9,6 @@ export default function ReportPage() {
   const reportId = searchParams.get("reportId");
 
   const { report, isLoading } = useReport(reportId ?? "");
-
-  const { commits, isLoading: isLoadingCommits } = useReportCommits(reportId ?? "");
 
   if (!reportId) {
     return (
@@ -27,7 +25,7 @@ export default function ReportPage() {
     );
   }
 
-  if (isLoading || isLoadingCommits) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -56,13 +54,12 @@ export default function ReportPage() {
 
   return (
     <ReportClientPage
-      commits={commits}
+      reportId={reportId}
       repositoryName={report.repositoryName || report.title}
       startDate={report.startDate}
       endDate={report.endDate}
       branch={report.branch}
-      report={report.editableMarkdown}
-      reportId={reportId}
+      report={report.originalMarkdown}
     />
   );
 }

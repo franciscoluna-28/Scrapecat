@@ -28,7 +28,7 @@ export function useCommits({
           params: {
             path: { owner, repo },
             query: {
-              limit: "100",
+              limit: 100,
               startDate: startDate!,
               endDate: endDate || format(new Date(), "yyyy-MM-dd"),
               branch,
@@ -71,7 +71,7 @@ export function useRepositories(filters: {
               type: filters.type,
               sort: filters.sort,
               direction: filters.direction,
-              per_page: String(filters.per_page),
+              per_page: filters.per_page,
             },
           },
         })

@@ -8,6 +8,7 @@
     "build": "tsc",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:reset": "tsx scripts/reset-db.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -26,6 +27,7 @@
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.2",
     "openai": "^7.1.0",
+    "pino": "^10.3.1",
     "postgres": "^3.4.5",
     "zod": "^4.4.3"
   },

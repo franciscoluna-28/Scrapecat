@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ReportDetail, ReportSummary, StoredCommit } from "@/src/shared/types";
@@ -52,24 +52,46 @@ export function useReport(id: string) {
   };
 }
 
-export function useReportCommits(id: string) {
-  const { data, error, isLoading } = useQuery({
-    queryKey: queryKeys.reports.commits(id),
-    queryFn: () =>
+export function useReportCommitsInfinite(id: string, q?: string) {
+  const {
+    data,
+    error,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: queryKeys.reports.commits(id, q),
+    queryFn: ({ pageParam }) =>
       apiClient
         .GET("/api/v1/reports/{id}/commits", {
-          params: { path: { id } },
+          params: {
+            path: { id },
+            query: {
+              limit: 50,
+              ...(q ? { q } : {}),
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
         })
         .then((r) => {
           if (r.error) throw r.error;
           return r.data;
         }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: !!id,
   });
 
   return {
-    commits: (data?.commits ?? []) as StoredCommit[],
+    commits: (data?.pages.flatMap((p) => p.commits) ?? []) as StoredCommit[],
+    total: data?.pages[0]?.total ?? null,
     isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
     error: error ?? null,
   };
 }
