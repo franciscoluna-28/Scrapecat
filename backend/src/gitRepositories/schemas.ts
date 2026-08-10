@@ -7,7 +7,7 @@ export const ownerRepoParamsSchema = z.object({
 });
 
 export const listCommitsQuerySchema = z.object({
-  limit: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   branch: z.string().optional(),
@@ -22,7 +22,7 @@ export const listReposQuerySchema = z.object({
   type: z.string().optional(),
   sort: z.string().optional(),
   direction: z.string().optional(),
-  per_page: z.string().optional(),
+  per_page: z.coerce.number().int().min(1).max(100).default(10),
 });
 
 export const RepoOwnerParams = Type.Object({
@@ -31,7 +31,7 @@ export const RepoOwnerParams = Type.Object({
 });
 
 export const CommitsQuery = Type.Object({
-  limit: Type.Optional(Type.String({ default: "100" })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 100 })),
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
   branch: Type.Optional(Type.String()),
@@ -62,7 +62,7 @@ export const RepositoriesQuery = Type.Object({
   type: Type.Optional(Type.String({ default: "all" })),
   sort: Type.Optional(Type.String({ default: "updated" })),
   direction: Type.Optional(Type.String({ default: "desc" })),
-  per_page: Type.Optional(Type.String({ default: "10" })),
+  per_page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 10 })),
 });
 
 export const RepositoriesResponse = Type.Array(

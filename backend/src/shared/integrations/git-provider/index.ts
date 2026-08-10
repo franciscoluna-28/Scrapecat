@@ -8,6 +8,7 @@ export type {
   RepositoryFilters,
   CommitParams,
   DateRangeParams,
+  Page,
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
 

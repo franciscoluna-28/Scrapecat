@@ -48,13 +48,3 @@ export function buildReportPrompt(params: ReportPromptParams): string {
   ].join("\n");
 }
 
-export function buildRefinePrompt(reply: string): string {
-  return [
-    `Refine the report based on this feedback:`,
-    reply,
-    "",
-    "Follow the same markdown template provided in the system instructions.",
-    "Output ONLY the updated markdown report, nothing else.",
-  ].join("\n");
-}
-

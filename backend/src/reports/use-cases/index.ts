@@ -1,15 +1,12 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { db } from "@/db/client";
+import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
-import { embedNewChunks } from "@/projects/embed-chunks";
-import {
-  MAX_LIMIT,
-  fetchProjectCommits,
-  buildMissingChunks,
-  writeChunks,
-} from "@/projects/sync";
+import { getProviderConfig } from "@/shared/integrations/providers/registry";
+import { enqueueSync, ensureSynced } from "@/projects/sync-service";
 import * as projectsStore from "@/projects/stores/projects-store";
+import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
 import { reportInputSchema } from "@/reports/schemas";
@@ -17,7 +14,6 @@ import {
   buildSystemPrompt,
   getLanguageInstruction,
   buildReportPrompt,
-  buildRefinePrompt,
 } from "@/reports/prompts";
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
@@ -25,10 +21,28 @@ import { extractReportTitle } from "@/shared/utils";
 
 export type CreateReportInput = z.infer<typeof reportInputSchema>;
 
+function startOfDayUtc(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
+function endOfDayUtc(dateStr: string): Date {
+  return new Date(`${dateStr}T23:59:59.999Z`);
+}
+
 export class NoCommitsError extends Error {
   readonly status = 400;
   constructor() {
     super("Cannot generate report: no commits found in the selected date range");
+  }
+}
+
+export class ProviderKeyError extends Error {
+  readonly status = 400;
+  constructor(provider: string) {
+    const envKey = getProviderConfig(provider)?.envKey ?? "the provider's env key";
+    super(
+      `No API key configured for AI provider "${provider}". Add one in Settings or set ${envKey}.`,
+    );
   }
 }
 
@@ -51,13 +65,6 @@ export class AIGenerationError extends Error {
       "AI report generation failed. Please try again.",
       500,
     );
-  }
-}
-
-export class ReportNotFoundError extends Error {
-  readonly status = 404;
-  constructor() {
-    super("Report not found");
   }
 }
 
@@ -139,37 +146,61 @@ async function generateReport(opts: {
 }
 
 export async function createReportUseCase(input: CreateReportInput) {
-  const provider = input.provider;
-  const apiKey = provider ? await resolveApiKey(provider) : undefined;
-
-  const commits = await fetchProjectCommits({
-    owner: input.githubOwner,
-    repo: input.repository,
-    branch: input.branch,
-    startDate: input.startDate,
-    endDate: input.endDate,
-  });
-
-  if (commits.length === 0) {
-    throw new NoCommitsError();
+  // Never start report generation (not even the sync) without a valid AI key.
+  // Fail fast with a clear error instead of burning sync work + AI retries.
+  const provider = input.provider || "openrouter";
+  const providerConfig = getProviderConfig(provider);
+  if (!providerConfig) {
+    throw new ProviderKeyError(provider);
+  }
+  const storedKey = await resolveApiKey(provider);
+  const apiKey =
+    storedKey ||
+    (env as unknown as Record<string, string>)[providerConfig.envKey] ||
+    "";
+  if (!apiKey) {
+    throw new ProviderKeyError(provider);
   }
 
-  // Upsert outside the tx to learn project.id — buildMissingChunks needs it to
-  // dedupe chunks, and we can't know the uuid without persisting the row first.
-  const project = await projectsStore.upsertProject({
+  const { project, created } = await projectsStore.upsertProject({
     input: {
-      githubProjectId: input.githubProjectId,
-      githubOwner: input.githubOwner,
+      gitProvider: input.gitProvider,
+      providerProjectId: input.providerProjectId,
+      providerOwner: input.providerOwner,
       repositoryName: input.repository,
       defaultBranch: input.branch,
     },
   });
 
-  const chunks = await buildMissingChunks({
+  // Eager full backfill on project creation — the worker owns it from here.
+  if (created) {
+    await enqueueSync({ projectId: project.id, branch: input.branch });
+  }
+
+  // Delegate to the sync worker and wait until the store covers the report
+  // window (in UTC), then read the window's commits straight from Postgres.
+  await ensureSynced({
     projectId: project.id,
-    commits,
     branch: input.branch,
+    needByUtc: endOfDayUtc(input.endDate),
   });
+
+  const storedRows = await commitChunksStore.listCommitsForProject({
+    projectId: project.id,
+    branch: input.branch,
+    startDate: startOfDayUtc(input.startDate),
+    endDate: endOfDayUtc(input.endDate),
+  });
+  const commits = storedRows.map((r) => ({
+    sha: r.commitSha,
+    message: r.commitMessage,
+    author: r.author ?? "",
+    date: r.committedAt.toISOString(),
+  }));
+
+  if (commits.length === 0) {
+    throw new NoCommitsError();
+  }
 
   const generatedReport = await generateReport({
     input,
@@ -181,27 +212,12 @@ export async function createReportUseCase(input: CreateReportInput) {
   const reportId = randomUUID();
 
   await db.transaction(async (tx) => {
-    // Re-upsert inside the tx (idempotent via onConflictDoUpdate) so the project
-    // write is part of the atomic commit alongside chunks + report.
-    await projectsStore.upsertProject({
-      input: {
-        githubProjectId: input.githubProjectId,
-        githubOwner: input.githubOwner,
-        repositoryName: input.repository,
-        defaultBranch: input.branch,
-      },
-      tx,
-    });
-
-    await writeChunks({ projectId: project.id, chunks, branch: input.branch, tx });
-
     await reportsStore.createReport({
       input: {
         id: reportId,
         projectId: project.id,
         title: extractReportTitle(generatedReport, input.repository),
         originalMarkdown: generatedReport,
-        editableMarkdown: generatedReport,
         startDate: new Date(input.startDate),
         endDate: new Date(input.endDate),
         branch: input.branch,
@@ -217,144 +233,5 @@ export async function createReportUseCase(input: CreateReportInput) {
     });
   });
 
-  void embedNewChunks(project.id).catch((err: any) => {
-    console.warn("Embedding sync failed (will be retried by backfill):", err?.message ?? err);
-  });
-
   return { reportId, projectId: project.id };
-}
-
-export async function updateReportUseCase(input: {
-  reportId: string;
-  editableMarkdown: string;
-}) {
-  const updated = await reportsStore.updateReportMarkdown({
-    id: input.reportId,
-    editableMarkdown: input.editableMarkdown,
-  });
-  if (!updated) {
-    throw new ReportNotFoundError();
-  }
-  return {
-    id: updated.id,
-    editableMarkdown: updated.editableMarkdown,
-    updatedAt: updated.updatedAt,
-  };
-}
-
-export async function replyToReportUseCase(input: {
-  reportId: string;
-  reply: string;
-  model?: string;
-  provider?: string;
-}) {
-  const report = await reportsStore.getReport({ id: input.reportId });
-  if (!report) {
-    throw new ReportNotFoundError();
-  }
-
-  const chunks = await reportCommitsStore.listCommitsForReport({
-    reportId: report.id,
-    projectId: report.projectId,
-    branch: report.branch,
-  });
-  const limitedCommits = chunks.slice(0, MAX_LIMIT).map((c) => ({ message: c.commitMessage }));
-
-  const cleanMarkdown = (report.originalMarkdown || "").trim();
-
-  const customInstructions = report.customInstructions?.trim();
-  const languageInstruction = getLanguageInstruction(customInstructions);
-  const systemPrompt = buildSystemPrompt(customInstructions);
-
-  const apiKey = input.provider ? await resolveApiKey(input.provider) : undefined;
-
-  const project = await projectsStore.getProjectById({ id: report.projectId });
-
-  const originalPrompt = buildReportPrompt({
-    repository: project?.repositoryName ?? report.title,
-    branch: report.branch,
-    startDate: report.startDate.toISOString().slice(0, 10),
-    endDate: report.endDate.toISOString().slice(0, 10),
-    commits: limitedCommits,
-    languageInstruction,
-  });
-
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: originalPrompt },
-  ];
-
-  if (cleanMarkdown) {
-    messages.push({ role: "assistant", content: cleanMarkdown });
-  }
-
-  messages.push({
-    role: "user",
-    content: buildRefinePrompt(input.reply),
-  });
-
-  let attempts = 0;
-  const maxAttempts = 2;
-  let lastError: unknown = null;
-  let lastMarkdown = "";
-
-  while (attempts < maxAttempts) {
-    attempts++;
-
-    const messagesWithRetry = attempts > 1
-      ? [...messages, { role: "user" as const, content: `Your previous response did not follow the required structure. Follow the template exactly:\n\n${buildTemplateInstruction()}` }]
-      : messages;
-
-    let content: string;
-    let finishReason: string | null | undefined;
-    try {
-      const result = await callAI({
-        model: input.model || undefined,
-        provider: input.provider,
-        apiKey: apiKey || undefined,
-        maxTokens: 4096,
-        messages: messagesWithRetry,
-      });
-      content = result.content;
-      finishReason = result.finishReason;
-    } catch (error) {
-      lastError = error;
-      console.error(`AI reply call failed (attempt ${attempts}/${maxAttempts}):`, error);
-      continue;
-    }
-
-    if (finishReason === "length") {
-      console.warn(`Reply truncated by token limit (attempt ${attempts}/${maxAttempts})`);
-      continue;
-    }
-
-    lastMarkdown = cleanResponse(content).trim();
-
-    if (lastMarkdown.length > 50) {
-      const validation = validateReportStructure(lastMarkdown);
-      if (validation.valid) break;
-      console.warn(`Reply structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
-    }
-
-    if (attempts >= maxAttempts) {
-      console.warn("Max retry attempts reached for reply");
-    }
-  }
-
-  if (lastMarkdown.length <= 50) {
-    if (lastError) {
-      throw AIGenerationError.from(lastError);
-    }
-    throw new AIGenerationError(
-      "AI failed to produce a valid reply after retries. Please try again.",
-      500,
-    );
-  }
-
-  await reportsStore.updateReportMarkdown({
-    id: input.reportId,
-    editableMarkdown: lastMarkdown,
-  });
-
-  return lastMarkdown;
 }

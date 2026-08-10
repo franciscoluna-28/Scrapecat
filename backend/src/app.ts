@@ -8,8 +8,8 @@ import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
-import { createReport, listReports, getReport, getReportCommits, updateReport, replyToReport } from "@/reports/routes";
-import { listProjects } from "@/projects/routes";
+import { createReport, listReports, getReport, getReportCommits } from "@/reports/routes";
+import { listProjects, getProjectSyncStatus } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
@@ -34,13 +34,15 @@ import {
   ReportsListResponse,
   ReportIdParams,
   ReportGetResponse,
-  ReportUpdateBody,
-  ReportUpdateResponse,
-  ReportReplyBody,
-  ReportReplyResponse,
+  ReportCommitsQuery,
   ReportCommitsResponse,
 } from "@/reports/schemas";
-import { ProjectsResponse } from "@/projects/schemas";
+import {
+  ProjectsResponse,
+  ProjectIdParams,
+  SyncStatusQuery,
+  ProjectSyncStatusResponse,
+} from "@/projects/schemas";
 import {
   AddCredentialBody,
   CredentialListResponse,
@@ -163,32 +165,13 @@ export async function buildApp() {
 
   app.get("/api/v1/reports/:id/commits", {
     schema: {
-      description: "List commits for a report, syncing new commits from GitHub",
+      description: "Cursor-paginated commits for a report (searchable by commit message)",
       tags: ["reports"],
       params: ReportIdParams,
-      response: { 200: ReportCommitsResponse, 404: ErrorResponse },
+      querystring: ReportCommitsQuery,
+      response: { 200: ReportCommitsResponse, 400: ErrorResponse, 404: ErrorResponse },
     },
   }, getReportCommits);
-
-  app.put("/api/v1/reports/:id", {
-    schema: {
-      description: "Update a report's editable markdown content",
-      tags: ["reports"],
-      params: ReportIdParams,
-      body: ReportUpdateBody,
-      response: { 200: ReportUpdateResponse, 400: ErrorResponse, 404: ErrorResponse },
-    },
-  }, updateReport);
-
-  app.post("/api/v1/reports/:id/replies", {
-    schema: {
-      description: "Send a follow-up instruction to refine a report",
-      tags: ["reports"],
-      params: ReportIdParams,
-      body: ReportReplyBody,
-      response: { 200: ReportReplyResponse, 400: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse },
-    },
-  }, replyToReport);
 
   app.get("/api/v1/projects", {
     schema: {
@@ -197,6 +180,16 @@ export async function buildApp() {
       response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
+
+  app.get("/api/v1/projects/:id/sync", {
+    schema: {
+      description: "Sync status (watermark, latest job, totals) for a project branch",
+      tags: ["projects"],
+      params: ProjectIdParams,
+      querystring: SyncStatusQuery,
+      response: { 200: ProjectSyncStatusResponse, 400: ErrorResponse, 500: ErrorResponse },
+    },
+  }, getProjectSyncStatus);
 
   app.get("/api/v1/credentials", {
     schema: {

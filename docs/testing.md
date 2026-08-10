@@ -79,7 +79,7 @@ See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/r
 pnpm test:integration   # requires a running Postgres (e.g. docker compose up -d db)
 ```
 
-It targets `DATABASE_URL` (defaulting to `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`, overridable via the shell). Test rows use a fixed `github_project_id` marker and a marked credential name, and both `afterAll` and the final cascade test remove them, so real dev data is untouched.
+It targets `DATABASE_URL` (defaulting to `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`, overridable via the shell). Test rows use a fixed `(git_provider, provider_project_id)` marker and a marked credential name, and both `afterAll` and the final cascade test remove them, so real dev data is untouched.
 
 ## Conventions
 

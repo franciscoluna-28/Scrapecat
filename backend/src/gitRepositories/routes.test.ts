@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 const mockProvider = {
   listRepositories: vi.fn(),
   listBranches: vi.fn(),
+  listCommitsPage: vi.fn(),
   listCommits: vi.fn(),
   countCommits: vi.fn(),
 };
@@ -116,7 +117,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
 
   it("returns commits list", async () => {
     const commits: any = [{ sha: "abc", message: "fix", author: "dev", date: "2024-01-15" }];
-    mockProvider.listCommits.mockResolvedValue(commits);
+    mockProvider.listCommitsPage.mockResolvedValue({ items: commits, hasMore: false, nextPage: null });
 
     const res = await app.inject({
       method: "GET",
@@ -127,15 +128,16 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   });
 
   it("passes query parameters", async () => {
-    mockProvider.listCommits.mockResolvedValue([]);
+    mockProvider.listCommitsPage.mockResolvedValue({ items: [], hasMore: false, nextPage: null });
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/commits?limit=50&branch=main&startDate=2024-01-01&endDate=2024-01-31",
     });
 
-    expect(mockProvider.listCommits).toHaveBeenCalledWith("owner1", "repo1", {
+    expect(mockProvider.listCommitsPage).toHaveBeenCalledWith("owner1", "repo1", {
       perPage: 50,
+      page: 1,
       branch: "main",
       since: "2024-01-01",
       until: "2024-01-31",
@@ -143,7 +145,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   });
 
   it("returns 500 on error", async () => {
-    mockProvider.listCommits.mockRejectedValue(new Error("API error"));
+    mockProvider.listCommitsPage.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({
       method: "GET",
@@ -151,6 +153,14 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json()).toEqual({ error: "Failed to fetch commits" });
+  });
+
+  it("rejects an invalid limit", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/commits?limit=not-a-number",
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 
