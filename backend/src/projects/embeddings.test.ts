@@ -15,6 +15,15 @@ vi.mock("@/credentials/services", () => ({
   resolveApiKey: vi.fn(async () => "sk-test"),
 }));
 
+vi.mock("@/settings/services", () => ({
+  getAISettings: vi.fn(async () => ({
+    reportProvider: "openrouter",
+    reportModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
+    embeddingProvider: "openrouter",
+    embeddingModel: "openai/text-embedding-3-small",
+  })),
+}));
+
 import OpenAI from "openai";
 import { embedTexts } from "@/projects/embeddings";
 import { resolveApiKey } from "@/credentials/services";

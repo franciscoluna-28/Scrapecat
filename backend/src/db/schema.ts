@@ -211,4 +211,13 @@ export const credentials = pgTable(
   }),
 );
 
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey(),
+  reportProvider: text("report_provider").default("openrouter").notNull(),
+  reportModel: text("report_model").default("nvidia/nemotron-3-ultra-550b-a55b:free").notNull(),
+  embeddingProvider: text("embedding_provider").default("openrouter").notNull(),
+  embeddingModel: text("embedding_model").default("openai/text-embedding-3-small").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

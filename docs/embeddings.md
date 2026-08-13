@@ -43,8 +43,9 @@ A row's embedding is **current** iff `embedding_hash = content_hash`. The embed 
 ## Provider and dimensions
 
 - **Provider:** OpenRouter's OpenAI-compatible embeddings endpoint (`https://openrouter.ai/api/v1/embeddings`), reusing the existing OpenRouter API key (`resolveApiKey("openrouter")` → `OPENROUTER_API_KEY`).
-- **Model:** `openai/text-embedding-3-small` (env `EMBEDDING_MODEL`), 1536 dimensions — matches the pre-existing `vector(1536)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine).
+- **Model:** the global AI setting `embeddingModel` (Settings → AI Settings, stored in `app_settings`), defaulting to `openai/text-embedding-3-small` (env `EMBEDDING_MODEL` fallback), 1536 dimensions — matches the pre-existing `vector(1536)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine). The Settings UI only offers 1536-dim OpenRouter embedding models.
 - **Guarding:** if the model ever returns a vector of the wrong length, the batch fails loudly instead of writing corrupt vectors.
+- **Model changes:** changing the embedding model only applies to newly embedded rows. Existing vectors keep their model until a full re-embed (the staleness gate is content-based, not model-based).
 
 ## When embeddings happen
 

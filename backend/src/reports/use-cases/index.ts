@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
 import { getProviderConfig } from "@/shared/integrations/providers/registry";
+import { getAISettings } from "@/settings/services";
 import { enqueueSync, ensureSynced } from "@/projects/sync-service";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
@@ -73,6 +74,7 @@ async function generateReport(opts: {
   commits: { message: string }[];
   apiKey?: string | null;
   provider?: string;
+  model?: string;
 }): Promise<string> {
   const customInstructions = opts.input.customInstructions?.trim();
   const languageInstruction = getLanguageInstruction(customInstructions);
@@ -96,7 +98,7 @@ async function generateReport(opts: {
     let finishReason: string | null | undefined;
     try {
       const result = await callAI({
-        model: opts.input.model,
+        model: opts.input.model || opts.model,
         provider: opts.provider,
         apiKey: opts.apiKey || undefined,
         maxTokens: 4096,
@@ -148,7 +150,9 @@ async function generateReport(opts: {
 export async function createReportUseCase(input: CreateReportInput) {
   // Never start report generation (not even the sync) without a valid AI key.
   // Fail fast with a clear error instead of burning sync work + AI retries.
-  const provider = input.provider || "openrouter";
+  const settings = await getAISettings();
+  const provider = input.provider || settings.reportProvider;
+  const model = input.model || settings.reportModel;
   const providerConfig = getProviderConfig(provider);
   if (!providerConfig) {
     throw new ProviderKeyError(provider);
@@ -207,6 +211,7 @@ export async function createReportUseCase(input: CreateReportInput) {
     commits,
     apiKey,
     provider,
+    model,
   });
 
   const reportId = randomUUID();

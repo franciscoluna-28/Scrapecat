@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import { modelsQuerySchema } from "@/models/schemas";
 
 const OPENROUTER_FALLBACK = [
   { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B", free: true, description: "" },
@@ -28,11 +29,55 @@ const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
   openai: OPENAI_FALLBACK,
 };
 
+// MVP embedding models constrained to the vector(1536) column. OpenRouter's
+// embedding list does not expose output dimensions, so this allowlist is the
+// source of truth. All three support a 1536-dim output.
+const EMBEDDING_MODEL_ALLOWLIST = new Set([
+  "openai/text-embedding-3-small",
+  "openai/text-embedding-3-large",
+  "openai/text-embedding-ada-002",
+]);
+
+function isFree(pricing: any): boolean {
+  return !pricing || (pricing?.prompt == 0 && pricing?.completion == 0);
+}
+
+async function fetchOpenRouterEmbeddingModels() {
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models?output_modalities=embeddings", {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.data || [])
+      .filter((m: any) => EMBEDDING_MODEL_ALLOWLIST.has(m.id))
+      .map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        free: isFree(m.pricing),
+        description: m.description || "",
+        provider: "openrouter",
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function listModels(
-  req: FastifyRequest<{ Querystring: { provider?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const provider = req.query.provider;
+  const parsed = modelsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return reply.status(400).send({ error: parsed.error.flatten() });
+  }
+
+  const { provider, modality = "chat" } = parsed.data;
+
+  if (modality === "embeddings") {
+    const models = await fetchOpenRouterEmbeddingModels();
+    return reply.send({ models });
+  }
 
   if (provider && provider !== "openrouter") {
     const list = PROVIDER_FALLBACKS[provider];
@@ -48,11 +93,11 @@ export async function listModels(
     if (res.ok) {
       const data = await res.json();
       openrouterModels = (data?.data || [])
-        .filter((m: any) => !m.pricing || (m.pricing?.prompt == 0 && m.pricing?.completion == 0))
+        .filter((m: any) => isFree(m.pricing))
         .map((m: any) => ({
           id: m.id,
           name: m.name,
-          free: !m.pricing || (m.pricing?.prompt == 0 && m.pricing?.completion == 0),
+          free: isFree(m.pricing),
           description: m.description || "",
         }));
     }

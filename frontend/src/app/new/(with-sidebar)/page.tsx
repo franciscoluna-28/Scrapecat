@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { GitBranch, FileText } from "lucide-react";
@@ -23,9 +23,9 @@ import { useReports } from "@/src/_features/reports/services/reports-api";
 import { useProjects } from "@/src/_features/reports/services/projects-api";
 import { GitHubRepository } from "@/src/shared/types";
 import { ReportCard } from "@/src/_features/reports/components/ReportCard";
+import { AISettingsManager } from "@/src/_features/settings/components/AISettingsManager";
 
 function PageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const activeView = searchParams.get("view") || "repositories";
 
@@ -148,19 +148,20 @@ function PageContent() {
       )}
 
       {activeView === "settings" && (
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <div>
-              <h3 className="text-base font-semibold">GitHub Settings</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Configure how repositories are fetched from GitHub.
-              </p>
-            </div>
+        <>
+          <Card>
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <h3 className="text-base font-semibold">GitHub Settings</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure how repositories are fetched from GitHub.
+                </p>
+              </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="type">Repository Type</Label>
-                <Select value={repositoryType} onValueChange={(v: any) => setRepositoryType(v)}>
+                <Select value={repositoryType} onValueChange={(v) => setRepositoryType(v as "all" | "owner" | "public" | "private")}>
                   <SelectTrigger id="type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -187,7 +188,7 @@ function PageContent() {
 
               <div className="space-y-2">
                 <Label htmlFor="sort">Sort By</Label>
-                <Select value={sort} onValueChange={(v: any) => setSort(v)}>
+                <Select value={sort} onValueChange={(v) => setSort(v as "created" | "updated" | "pushed" | "full_name")}>
                   <SelectTrigger id="sort">
                     <SelectValue placeholder="Select sort" />
                   </SelectTrigger>
@@ -202,7 +203,7 @@ function PageContent() {
 
               <div className="space-y-2">
                 <Label htmlFor="direction">Direction</Label>
-                <Select value={direction} onValueChange={(v: any) => setDirection(v)}>
+                <Select value={direction} onValueChange={(v) => setDirection(v as "asc" | "desc")}>
                   <SelectTrigger id="direction">
                     <SelectValue placeholder="Select direction" />
                   </SelectTrigger>
@@ -215,6 +216,9 @@ function PageContent() {
             </div>
           </CardContent>
         </Card>
+
+          <AISettingsManager />
+        </>
       )}
     </SectionLayout>
   );
