@@ -5,6 +5,7 @@ import {
   listCommitsQuerySchema,
   countCommitsQuerySchema,
   listReposQuerySchema,
+  branchQuerySchema,
 } from "@/gitRepositories/schemas";
 
 export async function listRepositories(
@@ -111,5 +112,39 @@ export async function countCommits(
   } catch (error) {
     console.error("Error fetching commit count:", error);
     return reply.status(500).send({ error: "Failed to fetch commit count" });
+  }
+}
+
+export async function downloadRepositoryArchive(
+  req: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const paramsParsed = ownerRepoParamsSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    return reply.status(400).send({ error: paramsParsed.error.flatten() });
+  }
+  const { owner, repo } = paramsParsed.data;
+
+  const queryParsed = branchQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return reply.status(400).send({ error: queryParsed.error.flatten() });
+  }
+  const { branch } = queryParsed.data;
+
+  try {
+    const archive = await getGitProvider().downloadRepositoryArchive(owner, repo, branch);
+    return reply
+      .type("application/zip")
+      .header("Content-Disposition", `attachment; filename="${archive.filename}"`)
+      .send(archive.stream);
+  } catch (error: any) {
+    console.error("Error downloading repository archive:", error);
+    if (error?.status === 404) {
+      return reply.status(404).send({ error: "Repository or branch not found" });
+    }
+    if (error?.status === 409) {
+      return reply.status(400).send({ error: "Repository has no commits in that branch" });
+    }
+    return reply.status(500).send({ error: "Failed to download repository archive" });
   }
 }

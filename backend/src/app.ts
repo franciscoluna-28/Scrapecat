@@ -7,7 +7,7 @@ import { env } from "@/config/env";
 import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
-import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
+import { listRepositories, listBranches, listCommits, countCommits, downloadRepositoryArchive } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits } from "@/reports/routes";
 import { listProjects, getProjectSyncStatus } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
@@ -26,6 +26,7 @@ import {
   RepositoriesQuery,
   RepositoriesResponse,
   BranchesResponse,
+  BranchQuery,
 } from "@/gitRepositories/schemas";
 import {
   ReportInputBody,
@@ -137,6 +138,16 @@ export async function buildApp() {
       response: { 200: CommitsCountResponse, 400: ErrorResponse },
     },
   }, countCommits);
+
+  app.get("/api/v1/repositories/:owner/:repo/archive", {
+    schema: {
+      description: "Download a repository zip archive for a given branch",
+      tags: ["repositories"],
+      params: RepoOwnerParams,
+      querystring: BranchQuery,
+      response: { 400: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse },
+    },
+  }, downloadRepositoryArchive);
 
   app.post("/api/v1/reports", {
     schema: {

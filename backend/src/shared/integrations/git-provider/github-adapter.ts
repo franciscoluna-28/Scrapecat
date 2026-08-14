@@ -1,6 +1,8 @@
 import { Octokit } from "@octokit/core";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
+import { Readable } from "node:stream";
+import { ReadableStream as WebReadableStream } from "node:stream/web";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
 import { paginate } from "@/shared/integrations/git-provider/pagination";
 import type {
@@ -11,6 +13,7 @@ import type {
   CommitParams,
   DateRangeParams,
   ConnectionStatus,
+  RepositoryArchive,
 } from "@/shared/integrations/git-provider/types";
 
 const MyOctokit = Octokit.plugin(throttling, retry);
@@ -68,6 +71,13 @@ function hasNextPage(headers: Record<string, any>): boolean {
 function toPage<T>(items: T[], headers: Record<string, any>, page: number): Page<T> {
   const hasMore = hasNextPage(headers);
   return { items, hasMore, nextPage: hasMore ? page + 1 : null };
+}
+
+function archiveFilename(headers: Record<string, any>, owner: string, repo: string, ref: string): string {
+  const disposition = headers?.["content-disposition"] as string | undefined;
+  const match = disposition?.match(/filename="?([^";]+)"?/i);
+  const fallback = `${owner}-${repo}-${ref.replace(/[^a-zA-Z0-9._-]/g, "-")}.zip`;
+  return match?.[1] || fallback;
 }
 
 export class GithubAdapter implements GitProvider {
@@ -180,6 +190,36 @@ export class GithubAdapter implements GitProvider {
     return {
       login: response.data.login,
       rateLimitRemaining: isNaN(rateLimitRemaining) ? 5000 : rateLimitRemaining,
+    };
+  }
+
+  async downloadRepositoryArchive(
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<RepositoryArchive> {
+    const { data, headers } = await this.octokit.request(
+      "GET /repos/{owner}/{repo}/zipball/{ref}",
+      {
+        owner,
+        repo,
+        ref,
+        request: { parseSuccessResponseBody: false },
+      },
+    );
+
+    let stream: Readable;
+    if (data instanceof WebReadableStream) {
+      stream = Readable.fromWeb(data as WebReadableStream<Uint8Array>);
+    } else if (data) {
+      stream = Readable.from(data instanceof ArrayBuffer ? Buffer.from(data) : (data as Buffer | string));
+    } else {
+      throw new Error("GitHub returned an empty archive response");
+    }
+
+    return {
+      stream,
+      filename: archiveFilename(headers, owner, repo, ref),
     };
   }
 }

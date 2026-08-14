@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { Readable } from "node:stream";
 
 const mockProvider = {
   listRepositories: vi.fn(),
@@ -6,6 +7,7 @@ const mockProvider = {
   listCommitsPage: vi.fn(),
   listCommits: vi.fn(),
   countCommits: vi.fn(),
+  downloadRepositoryArchive: vi.fn(),
 };
 
 vi.mock("@/shared/integrations/git-provider", () => ({
@@ -209,5 +211,77 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json()).toEqual({ error: "Failed to fetch commit count" });
+  });
+});
+
+describe("GET /api/v1/repositories/:owner/:repo/archive", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("streams the repository zip archive", async () => {
+    mockProvider.downloadRepositoryArchive.mockResolvedValue({
+      stream: Readable.from(Buffer.from("fake zip bytes")),
+      filename: "owner1-repo1-main.zip",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/archive?branch=main",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/zip");
+    expect(res.headers["content-disposition"]).toContain('filename="owner1-repo1-main.zip"');
+    expect(res.rawPayload.toString()).toBe("fake zip bytes");
+  });
+
+  it("passes the branch to the provider", async () => {
+    mockProvider.downloadRepositoryArchive.mockResolvedValue({
+      stream: Readable.from(Buffer.from("")),
+      filename: "owner1-repo1-dev.zip",
+    });
+
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/archive?branch=dev",
+    });
+
+    expect(mockProvider.downloadRepositoryArchive).toHaveBeenCalledWith("owner1", "repo1", "dev");
+  });
+
+  it("rejects a missing branch", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/archive",
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 when the repo or branch is not found", async () => {
+    mockProvider.downloadRepositoryArchive.mockRejectedValue({ status: 404 });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/archive?branch=nope",
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Repository or branch not found" });
+  });
+
+  it("returns 500 on error", async () => {
+    mockProvider.downloadRepositoryArchive.mockRejectedValue(new Error("API error"));
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/archive?branch=main",
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({ error: "Failed to download repository archive" });
   });
 });

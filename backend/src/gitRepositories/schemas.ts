@@ -25,6 +25,10 @@ export const listReposQuerySchema = z.object({
   per_page: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+export const branchQuerySchema = z.object({
+  branch: z.string().min(1, "branch is required"),
+});
+
 export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
   repo: Type.String(),
@@ -71,4 +75,8 @@ export const RepositoriesResponse = Type.Array(
 
 export const BranchesResponse = Type.Object({
   branches: Type.Array(Type.String()),
+});
+
+export const BranchQuery = Type.Object({
+  branch: Type.String({ minLength: 1 }),
 });

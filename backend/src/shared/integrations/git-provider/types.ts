@@ -59,3 +59,12 @@ export interface ConnectionStatus {
   login: string;
   rateLimitRemaining: number;
 }
+
+import type { Readable } from "node:stream";
+
+export interface RepositoryArchive {
+  /** Streaming zip bytes of the repository archive. */
+  stream: Readable;
+  /** Suggested download filename, e.g. `owner-repo-main.zip`. */
+  filename: string;
+}

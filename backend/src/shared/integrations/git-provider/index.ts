@@ -10,6 +10,7 @@ export type {
   DateRangeParams,
   Page,
   ConnectionStatus,
+  RepositoryArchive,
 } from "@/shared/integrations/git-provider/types";
 
 let provider: ReturnType<typeof createProvider> | null = null;
