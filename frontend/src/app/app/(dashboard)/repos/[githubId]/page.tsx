@@ -1,15 +1,16 @@
 "use client";
 
-import { useSearchParams, notFound } from "next/navigation";
+import { Suspense } from "react";
+import { useParams, useSearchParams, notFound } from "next/navigation";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { SettingsForm } from "@/src/_features/reports/components/SettingsForm";
 import { RepositoryInfoCard } from "@/src/_features/reports/components/RepositoryInfoCard";
 import { useRepositories, useBranches } from "@/src/_features/reports/services/api";
 import type { GitHubRepository } from "@/src/shared/types";
 
-export default function Page() {
+function RepoReportPageContent() {
+  const params = useParams<{ githubId: string }>();
   const searchParams = useSearchParams();
-  const githubId = searchParams.get("githubId");
   const branch = searchParams.get("branch");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
@@ -24,6 +25,7 @@ export default function Page() {
     per_page: 100,
   });
 
+  const githubId = params?.githubId;
   if (!githubId) {
     notFound();
   }
@@ -31,7 +33,7 @@ export default function Page() {
   const repoId = parseInt(githubId, 10);
   const repository = (repositories as GitHubRepository[]).find((r) => r.id === repoId) ?? null;
 
-  const { branches, isLoading: branchesLoading } = useBranches(
+  const { branches } = useBranches(
     repository?.owner.login ?? "",
     repository?.name ?? "",
   );
@@ -57,5 +59,13 @@ export default function Page() {
         </>
       )}
     </SectionLayout>
+  );
+}
+
+export default function RepoReportPage() {
+  return (
+    <Suspense fallback={null}>
+      <RepoReportPageContent />
+    </Suspense>
   );
 }

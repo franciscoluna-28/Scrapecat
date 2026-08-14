@@ -12,7 +12,7 @@ type Props = {
 
 export function ReportCard({ report }: Props) {
   return (
-    <Link href={`/new/report?reportId=${report.id}`} className="block">
+    <Link href={`/app/reports/${report.id}`} className="block">
       <Card className="hover:bg-muted/80 bg-muted/40 transition-colors cursor-pointer ring-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">

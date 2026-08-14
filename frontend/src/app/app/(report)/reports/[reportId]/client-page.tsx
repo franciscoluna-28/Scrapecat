@@ -82,8 +82,6 @@ export default function ReportClientPage({
 
   const handleBack = () => window.history.back();
 
-
-
   if (!repositoryName) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -107,7 +105,7 @@ export default function ReportClientPage({
           } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
         >
           <div className="p-4 border-b flex items-center min-w-0">
-            <a href="/new" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors">
+            <a href="/app" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors">
               <div className="flex aspect-square size-7 items-center justify-center rounded-lg">
                 <Image src={LogoImage} alt="Scrapecat Logo" width={24} height={24} className="size-6" />
               </div>

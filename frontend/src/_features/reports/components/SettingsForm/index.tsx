@@ -32,7 +32,6 @@ type Props = {
   selectedBranch: string;
   startDate?: string;
   endDate?: string;
-  basePath?: string;
 };
 
 export function SettingsForm({
@@ -41,7 +40,6 @@ export function SettingsForm({
   selectedBranch,
   startDate,
   endDate,
-  basePath = "/new/settings",
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -68,7 +66,7 @@ export function SettingsForm({
     } else {
       params.delete(key);
     }
-    router.push(`${basePath}?${params.toString()}`);
+    router.push(`${window.location.pathname}?${params.toString()}`);
   };
 
   const handleGenerate = async () => {
@@ -100,7 +98,7 @@ export function SettingsForm({
         return;
       }
 
-      router.push(`/new/report?reportId=${data.reportId}`);
+      router.push(`/app/reports/${data.reportId}`);
     });
   };
 

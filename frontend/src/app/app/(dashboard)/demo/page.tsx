@@ -47,7 +47,7 @@ function DemoPageContent() {
     reset();
     setUrlInput("");
     setParseError(null);
-    router.push("/new/demo");
+    router.push("/app/demo");
   };
 
   const repository: GitHubRepository | null = owner && repo
@@ -131,7 +131,6 @@ function DemoPageContent() {
             selectedBranch={selectedBranch}
             startDate={searchParams.get("startDate") || today}
             endDate={searchParams.get("endDate") ?? undefined}
-            basePath="/new/demo"
           />
         </>
       )}

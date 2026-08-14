@@ -51,7 +51,7 @@ export function RepositoryCard({ repository, onSelect }: Props) {
   }
 
   return (
-    <Link href={`/new/settings?githubId=${repository.id}`} className="block">
+    <Link href={`/app/repos/${repository.id}`} className="block">
       {card}
     </Link>
   );

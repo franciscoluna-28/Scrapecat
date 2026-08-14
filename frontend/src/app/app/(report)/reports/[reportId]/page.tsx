@@ -1,14 +1,14 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useReport } from "@/src/_features/reports/services/reports-api";
 import ReportClientPage from "./client-page";
 
 export default function ReportPage() {
-  const searchParams = useSearchParams();
-  const reportId = searchParams.get("reportId");
+  const params = useParams<{ reportId: string }>();
+  const reportId = params?.reportId ?? "";
 
-  const { report, isLoading } = useReport(reportId ?? "");
+  const { report, isLoading } = useReport(reportId);
 
   if (!reportId) {
     return (
