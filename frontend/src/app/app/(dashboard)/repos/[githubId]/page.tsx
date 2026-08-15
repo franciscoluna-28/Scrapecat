@@ -30,7 +30,7 @@ function RepoReportPageContent() {
     notFound();
   }
 
-  const repoId = parseInt(githubId, 10);
+  const repoId = githubId;
   const repository = (repositories as GitHubRepository[]).find((r) => r.id === repoId) ?? null;
 
   const { branches } = useBranches(

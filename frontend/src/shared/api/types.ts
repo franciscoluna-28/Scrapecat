@@ -460,7 +460,7 @@ export interface paths {
                         data: {
                             repository: string;
                             gitProvider?: "github" | "gitlab";
-                            providerProjectId: number;
+                            providerProjectId: string;
                             providerOwner: string;
                             branch: string;
                             /** Format: date */
@@ -683,7 +683,7 @@ export interface paths {
                             projects: {
                                 id: string;
                                 gitProvider: string;
-                                providerProjectId: number;
+                                providerProjectId: string;
                                 providerOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;

@@ -14,7 +14,7 @@ export const ProjectsResponse = Type.Object({
     Type.Object({
       id: Type.String(),
       gitProvider: Type.String(),
-      providerProjectId: Type.Integer(),
+      providerProjectId: Type.String(),
       providerOwner: Type.String(),
       repositoryName: Type.String(),
       defaultBranch: Type.String(),

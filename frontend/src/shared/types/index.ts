@@ -1,7 +1,7 @@
 import type { paths } from "@/src/shared/api/types";
 
 export type GitHubRepository = {
-  id: number;
+  id: string;
   name: string;
   full_name: string;
   private: boolean;

@@ -4,7 +4,7 @@ import { projects, type GitProvider } from "@/db/schema";
 
 export type ProjectInput = {
   gitProvider?: GitProvider;
-  providerProjectId: number;
+  providerProjectId: string;
   providerOwner: string;
   repositoryName: string;
   defaultBranch?: string;
@@ -73,7 +73,7 @@ export async function getProjectByProviderId({
   tx,
 }: {
   gitProvider: GitProvider;
-  providerProjectId: number;
+  providerProjectId: string;
   tx?: DbOrTx;
 }) {
   const client = tx || db;

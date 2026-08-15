@@ -6,7 +6,7 @@ export const gitProviderSchema = z.enum(["github", "gitlab"]);
 export const reportInputSchema = z.object({
   repository: z.string(),
   gitProvider: gitProviderSchema.optional().default("github"),
-  providerProjectId: z.number(),
+  providerProjectId: z.string(),
   providerOwner: z.string(),
   branch: z.string(),
   startDate: z.string(),
@@ -39,7 +39,7 @@ export const reportIdParamsSchema = z.object({
 const ReportDataInput = Type.Object({
   repository: Type.String(),
   gitProvider: Type.Optional(Type.Union([Type.Literal("github"), Type.Literal("gitlab")])),
-  providerProjectId: Type.Integer(),
+  providerProjectId: Type.String(),
   providerOwner: Type.String(),
   branch: Type.String(),
   startDate: Type.String({ format: "date" }),

@@ -15,7 +15,7 @@ import { parseRepoUrl } from "@/src/shared/utils/repo-url";
 import { GitBranch, Link2 } from "lucide-react";
 import type { GitHubRepository } from "@/src/shared/types";
 
-const DEMO_REPO_ID = 1;
+const DEMO_REPO_ID = "demo";
 
 function DemoPageContent() {
   const router = useRouter();

@@ -61,7 +61,7 @@ export const projects = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     gitProvider: gitProviderEnum("git_provider").default("github").notNull(),
-    providerProjectId: integer("provider_project_id").notNull(),
+    providerProjectId: text("provider_project_id").notNull(),
     providerOwner: text("provider_owner").default("").notNull(),
     repositoryName: text("repository_name").notNull(),
     defaultBranch: text("default_branch").default("main").notNull(),
