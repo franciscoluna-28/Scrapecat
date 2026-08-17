@@ -22,15 +22,16 @@ Route handlers stay thin; business logic goes in services.
 All route registration is imperative in `src/app.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/reports/routes.ts`). There is no router/index.ts or decorator-based routing.
 
 **Route handler pattern** (every handler must follow this):
-1. Accept `req: FastifyRequest, reply: FastifyReply` — **never** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; those are compile-only and provide no runtime safety
-2. Parse params/query/body with Zod `safeParse` at the top of the handler
-3. If parse fails, return `400` with `parsed.error.flatten()`
-4. Call the appropriate service / git-provider method
-5. Return data or catch with a generic `500`
+1. Accept `req: FastifyRequest, reply: FastifyReply` — do **not** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; validation is enforced at the route `schema` level, not via compile-time generics
+2. Read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts (e.g. `const { id } = req.params as Static<typeof ProjectIdParams>`) — Fastify already validated and applied defaults before the handler runs
+3. Call the appropriate service / git-provider method
+4. Return data or catch with a generic `500`
 
-Validation uses a **dual schema system**:
-- **Zod** — runtime validation inside route handlers. Every param, query, and body must be parsed with a Zod schema. No `as` casts, no generic type assertions. Zod schemas live in each domain's `schemas.ts`.
-- **TypeBox** — Fastify response serialization and OpenAPI spec generation. Registered in the route's `schema.response` in `app.ts`. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
+Validation uses **TypeBox-first, Fastify-owned validation**:
+- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/app.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
+- Handlers read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts — no Zod schemas in the request path.
+- A global `setErrorHandler` in `src/app.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
+- **Zod is reserved for non-request validation only:** `src/config/env.ts` (env parsing) and `src/reports/report-output.ts` (validating AI-generated markdown against `parsedReportSchema`). Do not reintroduce Zod for route input.
 
 Never return API key values from any endpoint — metadata only (key hints).
 

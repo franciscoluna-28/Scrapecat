@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -55,6 +56,16 @@ import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+
+  app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    if (error.validation) {
+      return reply.status(400).send({ error: "Invalid request parameters" });
+    }
+    const statusCode = error.statusCode ?? 500;
+    return reply.status(statusCode).send({
+      error: error.message || "Internal Server Error",
+    });
+  });
 
   await app.register(cors, {
     origin: env.CORS_ORIGIN,

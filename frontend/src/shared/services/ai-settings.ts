@@ -5,9 +5,9 @@ import { apiClient } from "../api/client";
 import { queryKeys } from "./keys";
 
 export type AISettings = {
-  reportProvider: string;
+  reportProvider: "openrouter" | "deepseek" | "openai";
   reportModel: string;
-  embeddingProvider: string;
+  embeddingProvider: "openrouter";
   embeddingModel: string;
 };
 

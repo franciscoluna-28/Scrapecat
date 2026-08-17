@@ -24,7 +24,7 @@ import {
 import { useModels } from "@/src/shared/services/ai-models";
 
 type Draft = {
-  reportProvider: string;
+  reportProvider: AISettings["reportProvider"];
   reportModel: string;
   embeddingModel: string;
 };
@@ -55,7 +55,7 @@ export function AISettingsManager() {
   }
 
   const { reportProvider, reportModel, embeddingModel } = draft;
-  const setReportProvider = (reportProvider: string) =>
+  const setReportProvider = (reportProvider: AISettings["reportProvider"]) =>
     setDraft((d) => ({ ...d, reportProvider }));
   const setReportModel = (reportModel: string) =>
     setDraft((d) => ({ ...d, reportModel }));
@@ -135,7 +135,7 @@ export function AISettingsManager() {
             <Label htmlFor="report-provider" className="text-sm font-medium">
               Report Generation Provider
             </Label>
-            <Select value={reportProvider} onValueChange={(v) => setReportProvider(v)}>
+            <Select value={reportProvider} onValueChange={(v) => setReportProvider(v as AISettings["reportProvider"])}>
               <SelectTrigger id="report-provider" className="mt-1.5">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>

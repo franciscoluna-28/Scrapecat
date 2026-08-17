@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { modelsQuerySchema } from "@/models/schemas";
+import type { Static } from "@sinclair/typebox";
+import { ModelsQuery } from "@/models/schemas";
 
 const OPENROUTER_FALLBACK = [
   { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B", free: true, description: "" },
@@ -67,12 +68,7 @@ export async function listModels(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const parsed = modelsQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    return reply.status(400).send({ error: parsed.error.flatten() });
-  }
-
-  const { provider, modality = "chat" } = parsed.data;
+  const { provider, modality = "chat" } = req.query as Static<typeof ModelsQuery>;
 
   if (modality === "embeddings") {
     const models = await fetchOpenRouterEmbeddingModels();

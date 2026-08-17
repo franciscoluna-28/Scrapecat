@@ -1,5 +1,4 @@
 import { randomUUID } from "crypto";
-import { z } from "zod";
 import { db } from "@/db/client";
 import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
@@ -10,7 +9,7 @@ import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
-import { reportInputSchema } from "@/reports/schemas";
+import { type CreateReportInput } from "@/reports/schemas";
 import {
   buildSystemPrompt,
   getLanguageInstruction,
@@ -20,7 +19,7 @@ import { validateReportStructure, buildTemplateInstruction } from "@/reports/rep
 import { callAI, cleanResponse } from "@/reports/ai";
 import { extractReportTitle } from "@/shared/utils";
 
-export type CreateReportInput = z.infer<typeof reportInputSchema>;
+export type { CreateReportInput };
 
 function startOfDayUtc(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);

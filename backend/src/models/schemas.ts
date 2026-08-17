@@ -1,10 +1,4 @@
-import { z } from "zod";
 import { Type } from "@sinclair/typebox";
-
-export const modelsQuerySchema = z.object({
-  provider: z.string().optional(),
-  modality: z.enum(["chat", "embeddings"]).optional(),
-});
 
 export const ModelsQuery = Type.Object({
   provider: Type.Optional(Type.String()),

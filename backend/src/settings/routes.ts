@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { aiSettingsInputSchema } from "@/settings/schemas";
+import type { Static } from "@sinclair/typebox";
+import { AISettingsBody } from "@/settings/schemas";
 import { getAISettings, updateAISettings } from "@/settings/services";
 
 export async function getSettingsRoute(
@@ -19,13 +20,10 @@ export async function updateSettingsRoute(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const parsed = aiSettingsInputSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return reply.status(400).send({ error: parsed.error.flatten() });
-  }
+  const body = req.body as Static<typeof AISettingsBody>;
 
   try {
-    const settings = await updateAISettings(parsed.data);
+    const settings = await updateAISettings(body);
     return reply.send(settings);
   } catch (error: any) {
     if (error?.message?.startsWith("Unsupported provider")) {

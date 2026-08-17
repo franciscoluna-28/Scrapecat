@@ -459,6 +459,7 @@ export interface paths {
                     "application/json": {
                         data: {
                             repository: string;
+                            /** @default github */
                             gitProvider?: "github" | "gitlab";
                             providerProjectId: string;
                             providerOwner: string;
@@ -469,7 +470,7 @@ export interface paths {
                             endDate: string;
                             customInstructions?: string;
                             model?: string;
-                            provider?: string;
+                            provider?: "openrouter" | "deepseek" | "openai";
                         };
                     };
                 };
@@ -1024,9 +1025,10 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: string;
+                            reportProvider: "openrouter" | "deepseek" | "openai";
                             reportModel: string;
-                            embeddingProvider: string;
+                            /** @enum {string} */
+                            embeddingProvider: "openrouter";
                             embeddingModel: string;
                         };
                     };
@@ -1055,9 +1057,10 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        reportProvider: string;
+                        reportProvider: "openrouter" | "deepseek" | "openai";
                         reportModel: string;
-                        embeddingProvider: string;
+                        /** @enum {string} */
+                        embeddingProvider: "openrouter";
                         embeddingModel: string;
                     };
                 };
@@ -1070,9 +1073,10 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: string;
+                            reportProvider: "openrouter" | "deepseek" | "openai";
                             reportModel: string;
-                            embeddingProvider: string;
+                            /** @enum {string} */
+                            embeddingProvider: "openrouter";
                             embeddingModel: string;
                         };
                     };

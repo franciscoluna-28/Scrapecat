@@ -1,13 +1,4 @@
-import { z } from "zod";
 import { Type } from "@sinclair/typebox";
-
-export const projectIdParamsSchema = z.object({
-  id: z.string().min(1, "project id is required"),
-});
-
-export const syncStatusQuerySchema = z.object({
-  branch: z.string().optional(),
-});
 
 export const ProjectsResponse = Type.Object({
   projects: Type.Array(

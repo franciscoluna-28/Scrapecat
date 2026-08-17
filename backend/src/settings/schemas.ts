@@ -1,26 +1,20 @@
-import { z } from "zod";
-import { Type } from "@sinclair/typebox";
+import { Type, type Static } from "@sinclair/typebox";
 
-export const aiSettingsInputSchema = z.object({
-  reportProvider: z.enum(["openrouter", "deepseek", "openai"]),
-  reportModel: z.string().min(1, "Report model is required"),
-  embeddingProvider: z.enum(["openrouter"]),
-  embeddingModel: z.string().min(1, "Embedding model is required"),
+const AiSettingsBody = Type.Object({
+  reportProvider: Type.Union([Type.Literal("openrouter"), Type.Literal("deepseek"), Type.Literal("openai")]),
+  reportModel: Type.String({ minLength: 1 }),
+  embeddingProvider: Type.Literal("openrouter"),
+  embeddingModel: Type.String({ minLength: 1 }),
 });
 
-export type AISettingsInput = z.infer<typeof aiSettingsInputSchema>;
+export { AiSettingsBody as AISettingsBody };
+
+export type AISettingsInput = Static<typeof AiSettingsBody>;
 
 const AiSettingsResponse = Type.Object({
-  reportProvider: Type.String(),
+  reportProvider: Type.Union([Type.Literal("openrouter"), Type.Literal("deepseek"), Type.Literal("openai")]),
   reportModel: Type.String(),
-  embeddingProvider: Type.String(),
-  embeddingModel: Type.String(),
-});
-
-export const AISettingsBody = Type.Object({
-  reportProvider: Type.String(),
-  reportModel: Type.String(),
-  embeddingProvider: Type.String(),
+  embeddingProvider: Type.Literal("openrouter"),
   embeddingModel: Type.String(),
 });
 
