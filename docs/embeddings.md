@@ -6,26 +6,27 @@ How commit embeddings are produced, stored, and kept cheap and reliable. Semanti
 
 Three constraints drove the design, in order of priority:
 
-1. **Cost.** Embedding the full git diff for every commit would burn tokens on patch noise (boilerplate, formatting churn, generated files) for almost no retrieval value, and re-embedding unchanged content on every report run would multiply the bill. The corpus is therefore a *structured commit doc*, not a diff.
+1. **Cost.** Embedding the full git diff for every commit would burn tokens on patch noise (boilerplate, formatting churn, generated files) for almost no retrieval value, and re-embedding unchanged content on every report run would multiply the bill. The corpus is therefore a *small-LLM summary of the real diff*, not the raw diff.
 2. **Reliability.** Embedding must never block or fail report generation. If the embedding provider is down, out of quota, or missing a key, the report still succeeds — vectors are a derived cache that catches up later.
 3. **Correctness by construction.** A commit is immutable (identified by its SHA), so a stored commit's content never changes. The only thing that can go stale is its embedding — and that staleness is tracked explicitly.
 
-## The corpus: a structured commit doc
+## The corpus: an LLM-verified summary of the diff
 
-Each `commit_chunks` row stores a compact, human-readable doc plus structured metadata. Full patch text is **never** stored or embedded.
+Each `commit_chunks` row stores a code-grounded summary plus structured metadata. The summary is produced by a **small LLM guardrail** (`src/repositories/summarizer.ts`) that reads the commit's real diff (from the local git archive) and verifies the change against its commit message — it never trusts the message verbatim. The bounded raw patch is saved in `diff_patch` for audit / future code search.
 
 | Field | Source | Where stored |
 |---|---|---|
-| `sha` | `listCommits` | `commit_sha` |
-| `commit_message` | `listCommits` | `commit_message` |
-| `author` | `listCommits` | `author` |
-| `summary` | PR body excerpt, falling back to the commit message | `diff_summary` (embedding source) |
-| `pr_title` / `pr_url` / `pr_number` | `getPullRequestForCommit` | `metadata` jsonb |
-| `files_changed` | `getCommitDetails` → `files[].filename` | `metadata` jsonb |
-| `metrics` (`added`/`deleted`) | `getCommitDetails` → `stats` | `metadata` jsonb |
-| `commit_url` | `listCommits` → `html_url` | `metadata` jsonb |
+| `sha` | local git log (isomorphic-git) | `commit_sha` |
+| `commit_message` | local git log | `commit_message` |
+| `author` | local git log | `author` |
+| `diff_summary` | small-LLM summary of the diff (fallback: message + file stats) | `diff_summary` (embedding source) |
+| `diff_patch` | bounded unified patch from the commit's tree walk | `diff_patch` |
+| `files_changed` / `additions` / `deletions` | tree walk between commit and parent | `metadata` jsonb |
+| `summary.model` / `summary.at` | summarizer model + run time | `metadata` jsonb |
+| `validation.status` (`confirmed`/`flagged`/`skipped`) + `notes` | LLM verification result | `metadata` jsonb |
+| `commit_url` | (legacy / optional) | `metadata` jsonb |
 
-The embedded text is the composed doc (`summary` + PR title + commit message). Diffs are never part of the embedding.
+The embedded text is the `diff_summary` (the LLM's code-grounded summary). The raw patch is stored separately but not embedded.
 
 ## The staleness gate: `content_hash` / `embedding_hash`
 
@@ -47,18 +48,25 @@ A row's embedding is **current** iff `embedding_hash = content_hash`. The embed 
 - **Guarding:** if the model ever returns a vector of the wrong length, the batch fails loudly instead of writing corrupt vectors.
 - **Model changes:** changing the embedding model only applies to newly embedded rows. Existing vectors keep their model until a full re-embed (the staleness gate is content-based, not model-based).
 
+## The summarizer guardrail (`src/repositories/summarizer.ts`)
+
+- **Batch:** commits are summarized in batches of `DIFF_SUMMARY_BATCH_SIZE` (default 50) per LLM call — the diff patches fit comfortably in a 256k-token context window.
+- **Verification:** the model must confirm the diff matches its commit message and flag suspicious/empty/contradictory diffs; the result is stored as `validation.status` + `notes`.
+- **Graceful degradation:** a missing key or a failed batch falls back to a structural summary (message + file stats, `validation.status = "flagged"` with a note). Ingestion never hard-fails on the guardrail.
+- **Disabled:** set `DIFF_SUMMARY_ENABLED=false` to skip the LLM entirely (everything becomes structural fallbacks).
+
 ## When embeddings happen
 
-1. **Inline, non-blocking** — after a report generation upserts new chunks, `embedNewChunks(projectId)` runs fire-and-forget (`void ... .catch(...)`). Report generation never waits on it or fails because of it. If it fails (no key, quota, outage), the chunks stay persisted with `content_hash`, and the next run or backfill catches up.
+1. **Inline, non-blocking** — after ingestion upserts new chunks, `embedNewChunks(projectId)` runs fire-and-forget (`void ... .catch(...)`). Report generation never waits on it or fails because of it. If it fails (no key, quota, outage), the chunks stay persisted with `content_hash`, and the next run or backfill catches up.
 2. **Batch backfill** — `pnpm embed:backfill` (`backend/scripts/embed-backfill.ts`) walks every project and embeds all pending rows, in batches of `EMBEDDING_BATCH_SIZE` (default 100) — one HTTP call per batch.
 
 ## Reliability & scaling properties
 
-- **Bounded cost per run:** GitHub enrichment (PR + per-commit detail) only runs for SHAs not already in the store (`getChunksByShas`); the enrich calls are concurrency-limited (6). Same-range re-runs make zero enrichment calls and zero embedding calls.
-- **Graceful degradation:** enrichment failures produce a valid, degraded doc (message + author + URL) rather than poisoning a row; embedding failures leave the row pending for later.
-- **Resumable:** every step is idempotent and can be re-run safely.
+- **Bounded cost per run:** diffs and summaries are only computed for SHAs not already in the store (`getChunksByShas` skips existing). Same-range re-runs make zero diff walks and zero summarizer/embedding calls.
+- **Graceful degradation:** summarizer failures produce a valid, degraded doc (message + file stats) rather than poisoning a row; embedding failures leave the row pending for later.
+- **Resumable:** every step is idempotent and can be re-run safely (dedupe by SHA).
 
 ## Status
 
-- **Shipped:** commit-doc corpus, deduped enrichment, staleness gate, inline non-blocking embed, batch backfill, OpenRouter provider wiring.
+- **Shipped:** archive-cloned diffs, LLM-verified summary corpus, staleness gate, inline non-blocking embed, batch backfill, OpenRouter provider wiring.
 - **Not shipped (future):** the semantic-search endpoint (`cosineDistance` over the HNSW index), RAG prompt enrichment, and any retrieval consumer. See `docs/architecture.md` → "RAG (Vectors: partial, semantic search not shipped)".
