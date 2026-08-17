@@ -1,21 +1,18 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { getGitProvider } from "@/shared/integrations/git-provider";
+import type { Static } from "@sinclair/typebox";
 import {
-  ownerRepoParamsSchema,
-  listCommitsQuerySchema,
-  countCommitsQuerySchema,
-  listReposQuerySchema,
+  RepoOwnerParams,
+  CommitsQuery,
+  CommitsCountQuery,
+  RepositoriesQuery,
 } from "@/gitRepositories/schemas";
 
 export async function listRepositories(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const parsed = listReposQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    return reply.status(400).send({ error: parsed.error.flatten() });
-  }
-  const { type, sort, direction, per_page } = parsed.data;
+  const { type, sort, direction, per_page } = req.query as Static<typeof RepositoriesQuery>;
 
   try {
     const repositories = await getGitProvider().listRepositories({
@@ -35,11 +32,7 @@ export async function listBranches(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const parsed = ownerRepoParamsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return reply.status(400).send({ error: parsed.error.flatten() });
-  }
-  const { owner, repo } = parsed.data;
+  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
 
   try {
     const branches = await getGitProvider().listBranches(owner, repo);
@@ -54,17 +47,8 @@ export async function listCommits(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const paramsParsed = ownerRepoParamsSchema.safeParse(req.params);
-  if (!paramsParsed.success) {
-    return reply.status(400).send({ error: paramsParsed.error.flatten() });
-  }
-  const { owner, repo } = paramsParsed.data;
-
-  const queryParsed = listCommitsQuerySchema.safeParse(req.query);
-  if (!queryParsed.success) {
-    return reply.status(400).send({ error: queryParsed.error.flatten() });
-  }
-  const { limit, startDate, endDate, branch } = queryParsed.data;
+  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
+  const { limit, startDate, endDate, branch } = req.query as Static<typeof CommitsQuery>;
 
   try {
     const page = await getGitProvider().listCommitsPage(owner, repo, {
@@ -90,17 +74,8 @@ export async function countCommits(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const paramsParsed = ownerRepoParamsSchema.safeParse(req.params);
-  if (!paramsParsed.success) {
-    return reply.status(400).send({ error: paramsParsed.error.flatten() });
-  }
-  const { owner, repo } = paramsParsed.data;
-
-  const queryParsed = countCommitsQuerySchema.safeParse(req.query);
-  if (!queryParsed.success) {
-    return reply.status(400).send({ error: queryParsed.error.flatten() });
-  }
-  const { startDate, endDate } = queryParsed.data;
+  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
+  const { startDate, endDate } = req.query as Static<typeof CommitsCountQuery>;
 
   try {
     const count = await getGitProvider().countCommits(owner, repo, {

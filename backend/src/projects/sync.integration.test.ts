@@ -34,7 +34,7 @@ vi.mock("@/projects/embeddings", () => ({
 const enabled = process.env.DB_INTEGRATION === "1";
 
 describe.runIf(enabled)("sync worker + runProjectSync (set DB_INTEGRATION=1)", () => {
-  const providerProjectId = 999_999_006;
+  const providerProjectId = "999999006";
   const repositoryName = "worker-integration-repo";
 
   beforeAll(async () => {

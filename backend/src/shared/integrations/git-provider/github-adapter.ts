@@ -37,7 +37,7 @@ function createOctokit(token: string) {
 
 function toRepository(raw: any): Repository {
   return {
-    id: raw.id,
+    id: String(raw.id),
     name: raw.name,
     full_name: raw.full_name,
     owner: { login: raw.owner?.login ?? "" },

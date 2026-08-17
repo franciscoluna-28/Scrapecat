@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState, useEffect } from "react";
+import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -17,16 +17,14 @@ import {
 } from "@/src/components/ui/select";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, Bookmark } from "lucide-react";
-import { APP_CONFIG, PROVIDERS } from "@/src/shared/constants";
+import { APP_CONFIG } from "@/src/shared/constants";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/ui/DatePicker";
 import { apiClient } from "@/src/shared/api/client";
 import { useCommits } from "@/src/_features/reports/services/api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
-import { useAISettingsStore } from "@/src/store/ai-settings";
-import { useModels } from "@/src/shared/services/ai-models";
+import { useAISettings } from "@/src/shared/services/ai-settings";
 import { CommitsPreviewContainer } from "../CommitsPreviewContainer";
-import { ModelSelector } from "../ModelSelector";
 
 type Props = {
   repository: GitHubRepository;
@@ -34,7 +32,6 @@ type Props = {
   selectedBranch: string;
   startDate?: string;
   endDate?: string;
-  basePath?: string;
 };
 
 export function SettingsForm({
@@ -43,20 +40,12 @@ export function SettingsForm({
   selectedBranch,
   startDate,
   endDate,
-  basePath = "/new/settings",
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
-  const selectedProvider = useAISettingsStore((s) => s.selectedProvider);
-  const setSelectedProvider = useAISettingsStore((s) => s.setSelectedProvider);
-  const selectedModel = useAISettingsStore((s) => s.selectedModel);
-  const setSelectedModel = useAISettingsStore((s) => s.setSelectedModel);
-  const { models: availableModels, isLoading: modelsLoading } =
-    useModels(selectedProvider);
+  const { settings: aiSettings } = useAISettings();
   const {
     commits,
     count: commitCount,
@@ -77,7 +66,7 @@ export function SettingsForm({
     } else {
       params.delete(key);
     }
-    router.push(`${basePath}?${params.toString()}`);
+    router.push(`${window.location.pathname}?${params.toString()}`);
   };
 
   const handleGenerate = async () => {
@@ -100,8 +89,6 @@ export function SettingsForm({
             startDate,
             endDate: finalEndDate,
             customInstructions,
-            model: selectedModel,
-            provider: selectedProvider,
           },
         },
       });
@@ -111,7 +98,7 @@ export function SettingsForm({
         return;
       }
 
-      router.push(`/new/report?reportId=${data.reportId}`);
+      router.push(`/app/reports/${data.reportId}`);
     });
   };
 
@@ -190,45 +177,18 @@ export function SettingsForm({
             </div>
           </div>
 
-          <div className="border-t pt-3 space-y-3">
-            <div className="max-w-xs">
-              <Label htmlFor="provider" className="text-sm font-medium">
-                Provider
-              </Label>
-              <Select
-                value={selectedProvider}
-                onValueChange={(v: any) => {
-                  setSelectedProvider(v);
-                  setSelectedModel("");
-                }}
-              >
-                <SelectTrigger id="provider" className="mt-1.5">
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROVIDERS.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <span className="flex items-center gap-2">{p.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="border-t pt-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Report model</span>
+              <span className="font-medium">
+                {aiSettings
+                  ? `${aiSettings.reportModel} · ${aiSettings.reportProvider}`
+                  : "Loading..."}
+              </span>
             </div>
-
-            <div className="max-w-xs">
-              <Label htmlFor="model" className="text-sm font-medium">
-                Model
-              </Label>
-              <div className="mt-1.5">
-                <ModelSelector
-                  models={availableModels}
-                  selectedModel={selectedModel}
-                  onModelChange={setSelectedModel}
-                  loading={modelsLoading}
-                  mounted={mounted}
-                />
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Managed globally in Settings.
+            </p>
           </div>
 
           <div className="space-y-1.5">

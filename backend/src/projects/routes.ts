@@ -1,10 +1,8 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { getSyncStatus } from "@/projects/sync-service";
-import {
-  projectIdParamsSchema,
-  syncStatusQuerySchema,
-} from "@/projects/schemas";
+import type { Static } from "@sinclair/typebox";
+import { ProjectIdParams, SyncStatusQuery } from "@/projects/schemas";
 
 export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
   try {
@@ -31,19 +29,13 @@ export async function getProjectSyncStatus(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const params = projectIdParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    return reply.status(400).send({ error: params.error.flatten() });
-  }
-  const query = syncStatusQuerySchema.safeParse(req.query);
-  if (!query.success) {
-    return reply.status(400).send({ error: query.error.flatten() });
-  }
+  const { id } = req.params as Static<typeof ProjectIdParams>;
+  const { branch } = req.query as Static<typeof SyncStatusQuery>;
 
   try {
     const status = await getSyncStatus({
-      projectId: params.data.id,
-      branch: query.data.branch ?? "main",
+      projectId: id,
+      branch: branch ?? "main",
     });
     return reply.send(status);
   } catch (error) {

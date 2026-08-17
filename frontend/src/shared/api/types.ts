@@ -98,6 +98,7 @@ export interface paths {
             parameters: {
                 query?: {
                     provider?: string;
+                    modality?: "chat" | "embeddings";
                 };
                 header?: never;
                 path?: never;
@@ -458,8 +459,9 @@ export interface paths {
                     "application/json": {
                         data: {
                             repository: string;
+                            /** @default github */
                             gitProvider?: "github" | "gitlab";
-                            providerProjectId: number;
+                            providerProjectId: string;
                             providerOwner: string;
                             branch: string;
                             /** Format: date */
@@ -468,7 +470,7 @@ export interface paths {
                             endDate: string;
                             customInstructions?: string;
                             model?: string;
-                            provider?: string;
+                            provider?: "openrouter" | "deepseek" | "openai";
                         };
                     };
                 };
@@ -682,7 +684,7 @@ export interface paths {
                             projects: {
                                 id: string;
                                 gitProvider: string;
-                                providerProjectId: number;
+                                providerProjectId: string;
                                 providerOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
@@ -993,6 +995,117 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get global AI model settings */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            reportProvider: "openrouter" | "deepseek" | "openai";
+                            reportModel: string;
+                            /** @enum {string} */
+                            embeddingProvider: "openrouter";
+                            embeddingModel: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update global AI model settings */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reportProvider: "openrouter" | "deepseek" | "openai";
+                        reportModel: string;
+                        /** @enum {string} */
+                        embeddingProvider: "openrouter";
+                        embeddingModel: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            reportProvider: "openrouter" | "deepseek" | "openai";
+                            reportModel: string;
+                            /** @enum {string} */
+                            embeddingProvider: "openrouter";
+                            embeddingModel: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

@@ -1,57 +1,27 @@
-import { z } from "zod";
-import { Type } from "@sinclair/typebox";
+import { Type, type Static } from "@sinclair/typebox";
 
-export const gitProviderSchema = z.enum(["github", "gitlab"]);
-
-export const reportInputSchema = z.object({
-  repository: z.string(),
-  gitProvider: gitProviderSchema.optional().default("github"),
-  providerProjectId: z.number(),
-  providerOwner: z.string(),
-  branch: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  customInstructions: z.string().optional(),
-  model: z.string().optional(),
-  provider: z
-    .enum(["openrouter", "deepseek", "openai"])
-    .optional(),
-});
-
-export const reportInputBodySchema = z.object({
-  data: reportInputSchema,
-});
-
-export const listReportsQuerySchema = z.object({
-  projectId: z.string().optional(),
-});
-
-export const listReportCommitsQuerySchema = z.object({
-  q: z.string().optional(),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-});
-
-export const reportIdParamsSchema = z.object({
-  id: z.string().min(1, "id is required"),
-});
-
-const ReportDataInput = Type.Object({
+export const ReportDataInput = Type.Object({
   repository: Type.String(),
-  gitProvider: Type.Optional(Type.Union([Type.Literal("github"), Type.Literal("gitlab")])),
-  providerProjectId: Type.Integer(),
+  gitProvider: Type.Optional(
+    Type.Union([Type.Literal("github"), Type.Literal("gitlab")], { default: "github" }),
+  ),
+  providerProjectId: Type.String(),
   providerOwner: Type.String(),
   branch: Type.String(),
   startDate: Type.String({ format: "date" }),
   endDate: Type.String({ format: "date" }),
   customInstructions: Type.Optional(Type.String()),
   model: Type.Optional(Type.String()),
-  provider: Type.Optional(Type.String()),
+  provider: Type.Optional(
+    Type.Union([Type.Literal("openrouter"), Type.Literal("deepseek"), Type.Literal("openai")]),
+  ),
 });
 
 export const ReportInputBody = Type.Object({
   data: ReportDataInput,
 });
+
+export type CreateReportInput = Static<typeof ReportDataInput>;
 
 export const ReportCreatedResponse = Type.Object({
   reportId: Type.String(),

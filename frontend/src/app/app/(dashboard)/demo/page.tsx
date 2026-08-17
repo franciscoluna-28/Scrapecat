@@ -15,7 +15,7 @@ import { parseRepoUrl } from "@/src/shared/utils/repo-url";
 import { GitBranch, Link2 } from "lucide-react";
 import type { GitHubRepository } from "@/src/shared/types";
 
-const DEMO_REPO_ID = 1;
+const DEMO_REPO_ID = "demo";
 
 function DemoPageContent() {
   const router = useRouter();
@@ -47,7 +47,7 @@ function DemoPageContent() {
     reset();
     setUrlInput("");
     setParseError(null);
-    router.push("/new/demo");
+    router.push("/app/demo");
   };
 
   const repository: GitHubRepository | null = owner && repo
@@ -131,7 +131,6 @@ function DemoPageContent() {
             selectedBranch={selectedBranch}
             startDate={searchParams.get("startDate") || today}
             endDate={searchParams.get("endDate") ?? undefined}
-            basePath="/new/demo"
           />
         </>
       )}

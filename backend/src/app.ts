@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -11,6 +12,7 @@ import { listRepositories, listBranches, listCommits, countCommits } from "@/git
 import { createReport, listReports, getReport, getReportCommits } from "@/reports/routes";
 import { listProjects, getProjectSyncStatus } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
+import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
 import { HealthResponse } from "@/health/schemas";
@@ -50,9 +52,20 @@ import {
   VerifyCredentialBody,
   VerifyCredentialResponse,
 } from "@/credentials/schemas";
+import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+
+  app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    if (error.validation) {
+      return reply.status(400).send({ error: "Invalid request parameters" });
+    }
+    const statusCode = error.statusCode ?? 500;
+    return reply.status(statusCode).send({
+      error: error.message || "Internal Server Error",
+    });
+  });
 
   await app.register(cors, {
     origin: env.CORS_ORIGIN,
@@ -225,6 +238,23 @@ export async function buildApp() {
       response: { 200: VerifyCredentialResponse, 400: ErrorResponse },
     },
   }, verifyCredential);
+
+  app.get("/api/v1/settings/ai", {
+    schema: {
+      description: "Get global AI model settings",
+      tags: ["settings"],
+      response: { 200: AISettingsGetResponse, 500: ErrorResponse },
+    },
+  }, getSettingsRoute);
+
+  app.put("/api/v1/settings/ai", {
+    schema: {
+      description: "Update global AI model settings",
+      tags: ["settings"],
+      body: AISettingsBody,
+      response: { 200: AISettingsGetResponse, 400: ErrorResponse, 500: ErrorResponse },
+    },
+  }, updateSettingsRoute);
 
   return app;
 }

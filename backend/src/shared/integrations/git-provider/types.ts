@@ -1,5 +1,5 @@
 export interface Repository {
-  id: number;
+  id: string;
   name: string;
   full_name: string;
   owner: { login: string };

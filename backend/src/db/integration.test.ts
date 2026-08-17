@@ -20,13 +20,13 @@ vi.mock("@/projects/embeddings", () => ({
 const enabled = process.env.DB_INTEGRATION === "1";
 
 describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
-  const providerProjectId = 999_999_001;
-  const chunkProjectId = 999_999_002;
-  const legacyProjectId = 999_999_003;
-  const embedProjectId = 999_999_004;
+  const providerProjectId = "999999001";
+  const chunkProjectId = "999999002";
+  const legacyProjectId = "999999003";
+  const embedProjectId = "999999004";
   const repositoryName = "integration-test-repo";
 
-  const cleanupProject = async (id: number) => {
+  const cleanupProject = async (id: string) => {
     const project = await projectsStore.getProjectByProviderId({ gitProvider: "github", providerProjectId: id });
     if (project) {
       await db.delete(projects).where(eq(projects.id, project.id));
@@ -313,7 +313,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
   });
 
   it("GET /api/v1/reports/:id/commits paginates with a cursor and searches", async () => {
-    const pid = 999_999_010;
+    const pid = "999999010";
     const { project } = await projectsStore.upsertProject({
       input: { gitProvider: "github", providerProjectId: pid, providerOwner: "test-owner", repositoryName: `${repositoryName}-paginated` },
     });

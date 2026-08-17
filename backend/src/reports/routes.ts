@@ -1,9 +1,10 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import type { Static } from "@sinclair/typebox";
 import {
-  reportInputBodySchema,
-  listReportsQuerySchema,
-  listReportCommitsQuerySchema,
-  reportIdParamsSchema,
+  ReportInputBody,
+  ReportsListQuery,
+  ReportIdParams,
+  ReportCommitsQuery,
 } from "@/reports/schemas";
 import {
   createReportUseCase,
@@ -23,13 +24,10 @@ import {
 import { formatDate } from "@/shared/utils";
 
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
-  const parsed = reportInputBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return reply.status(400).send({ error: parsed.error.flatten() });
-  }
+  const { data } = req.body as Static<typeof ReportInputBody>;
 
   try {
-    const { reportId, projectId } = await createReportUseCase(parsed.data.data);
+    const { reportId, projectId } = await createReportUseCase(data);
     return reply.code(201).send({ reportId, projectId });
   } catch (error: any) {
     console.error("Error generating report:", error);
@@ -55,16 +53,13 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function listReports(
-  req: FastifyRequest<{ Querystring: { projectId?: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const query = listReportsQuerySchema.safeParse(req.query);
-  if (!query.success) {
-    return reply.status(400).send({ error: query.error.flatten() });
-  }
+  const { projectId } = req.query as Static<typeof ReportsListQuery>;
 
   try {
-    const rows = await reportsStore.listReports({ projectId: query.data.projectId });
+    const rows = await reportsStore.listReports({ projectId });
     const projectIds = [...new Set(rows.map((r) => r.projectId))];
     const projects = await projectsStore.getProjectsByIds({ ids: projectIds });
     const projectById = new Map(projects.map((p) => [p.id, p]));
@@ -92,16 +87,13 @@ export async function listReports(
 }
 
 export async function getReport(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const params = reportIdParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    return reply.status(400).send({ error: params.error.flatten() });
-  }
+  const { id } = req.params as Static<typeof ReportIdParams>;
 
   try {
-    const report = await reportsStore.getReport({ id: params.data.id });
+    const report = await reportsStore.getReport({ id });
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
@@ -127,29 +119,23 @@ export async function getReport(
 }
 
 export async function getReportCommits(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const params = reportIdParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    return reply.status(400).send({ error: params.error.flatten() });
-  }
-  const query = listReportCommitsQuerySchema.safeParse(req.query);
-  if (!query.success) {
-    return reply.status(400).send({ error: query.error.flatten() });
-  }
+  const { id } = req.params as Static<typeof ReportIdParams>;
+  const { q, cursor, limit } = req.query as Static<typeof ReportCommitsQuery>;
 
-  let cursor: ReportCommitsCursor | undefined;
-  if (query.data.cursor) {
+  let cursorValue: ReportCommitsCursor | undefined;
+  if (cursor) {
     try {
-      cursor = decodeReportCommitsCursor(query.data.cursor);
+      cursorValue = decodeReportCommitsCursor(cursor);
     } catch {
       return reply.status(400).send({ error: "Invalid cursor" });
     }
   }
 
   try {
-    const report = await reportsStore.getReport({ id: params.data.id });
+    const report = await reportsStore.getReport({ id });
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
@@ -158,16 +144,16 @@ export async function getReportCommits(
       reportId: report.id,
       projectId: report.projectId,
       branch: report.branch,
-      q: query.data.q,
-      cursor,
-      limit: query.data.limit,
+      q,
+      cursor: cursorValue,
+      limit,
     });
 
     const total = await reportCommitsStore.countCommitsForReport({
       reportId: report.id,
       projectId: report.projectId,
       branch: report.branch,
-      q: query.data.q,
+      q,
     });
 
     return reply.send({
