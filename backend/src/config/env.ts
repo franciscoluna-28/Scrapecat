@@ -17,14 +17,10 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
-  SYNC_MAX_COMMITS: z.coerce.number().int().min(0).default(0),
-  SYNC_MAX_PAGES: z.coerce.number().int().min(0).default(0),
-  SYNC_DEADLINE_MS: z.coerce.number().int().min(0).default(0),
-  SYNC_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
-  SYNC_STALENESS_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
-  SYNC_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
-  SYNC_JOB_AWAIT_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
-  SYNC_WORKER_ENABLED: z
+  REPO_ARCHIVE_DIR: z.string().default("repos"),
+  DIFF_SUMMARY_MODEL: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
+  DIFF_SUMMARY_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+  DIFF_SUMMARY_ENABLED: z
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),

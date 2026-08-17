@@ -10,6 +10,7 @@ export type CommitChunkInput = {
   commitMessage: string;
   author?: string | null;
   diffSummary: string;
+  diffPatch?: string;
   metadata?: CommitChunkMetadata;
   committedAt: Date;
 };
@@ -37,6 +38,7 @@ export async function upsertCommitChunks({
         commitMessage: i.commitMessage,
         author: i.author ?? null,
         diffSummary: i.diffSummary,
+        diffPatch: i.diffPatch ?? null,
         contentHash: contentHashOf(i.diffSummary),
         metadata: i.metadata ?? {},
         committedAt: i.committedAt,
@@ -48,6 +50,7 @@ export async function upsertCommitChunks({
         commitMessage: sql`excluded.commit_message`,
         author: sql`excluded.author`,
         diffSummary: sql`excluded.diff_summary`,
+        diffPatch: sql`excluded.diff_patch`,
         contentHash: sql`excluded.content_hash`,
         metadata: sql`excluded.metadata`,
         committedAt: sql`excluded.committed_at`,

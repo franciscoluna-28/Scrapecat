@@ -5,7 +5,6 @@ import {
   jsonb,
   pgEnum,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -54,6 +53,11 @@ export type CommitChunkMetadata = {
   prNumber?: number;
   prTitle?: string;
   prUrl?: string;
+  summary?: { model?: string; at?: string };
+  validation?: {
+    status?: "confirmed" | "flagged" | "skipped";
+    notes?: string[];
+  };
 };
 
 export const projects = pgTable(
@@ -89,6 +93,7 @@ export const commitChunks = pgTable(
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
     diffSummary: text("diff_summary").notNull(),
+    diffPatch: text("diff_patch"),
     embedding: vector("embedding"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
@@ -112,54 +117,6 @@ export const commitChunks = pgTable(
       ),
     };
   },
-);
-
-export const projectSyncState = pgTable(
-  "project_sync_state",
-  {
-    projectId: uuid("project_id")
-      .references(() => projects.id, { onDelete: "cascade" })
-      .notNull(),
-    branch: text("branch").notNull(),
-    lastSyncedCommitSha: text("last_synced_commit_sha").notNull(),
-    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.projectId, table.branch] }),
-  }),
-);
-
-export const syncJobStatus = pgEnum("sync_job_status", [
-  "pending",
-  "running",
-  "succeeded",
-  "failed",
-]);
-
-export const syncJobs = pgTable(
-  "sync_jobs",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    projectId: uuid("project_id")
-      .references(() => projects.id, { onDelete: "cascade" })
-      .notNull(),
-    branch: text("branch").notNull(),
-    status: syncJobStatus("status").default("pending").notNull(),
-    attempts: integer("attempts").default(0).notNull(),
-    lastError: text("last_error"),
-    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).defaultNow().notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    finishedAt: timestamp("finished_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    statusScheduledIdx: index("sync_jobs_status_scheduled_idx").on(
-      table.status,
-      table.scheduledAt,
-    ),
-  }),
 );
 
 export const reports = pgTable("reports", {
