@@ -12,7 +12,6 @@ import {
   AIGenerationError,
   ProviderKeyError,
 } from "@/reports/use-cases";
-import { SyncError } from "@/projects/sync-service";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
@@ -40,10 +39,7 @@ export async function createReport(req: FastifyRequest, reply: FastifyReply) {
     if (error instanceof AIGenerationError) {
       return reply.status(error.status).send({ error: error.message });
     }
-    if (error instanceof SyncError) {
-      return reply.status(error.status).send({ error: error.message });
-    }
-    if (error?.status === 404 || error?.status === 422) {
+    if (error?.status === 404 || error?.status === 422 || error?.code === "NotFoundError") {
       return reply.status(400).send({
         error: "Branch or repository not found on GitHub. Check the branch name and repository access.",
       });

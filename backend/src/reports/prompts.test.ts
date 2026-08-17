@@ -39,7 +39,7 @@ describe("buildReportPrompt", () => {
     startDate: "2024-01-01",
     endDate: "2024-01-31",
     commits: [
-      { message: "fix: bug", sha: "abc123", date: "2024-01-15", author: "dev" },
+      { message: "fix: bug", summary: "Fixed a bug in the parser" },
     ],
     languageInstruction: "",
   };

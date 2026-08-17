@@ -18,35 +18,3 @@ export const ProjectsResponse = Type.Object({
 export const ProjectIdParams = Type.Object({
   id: Type.String(),
 });
-
-export const SyncStatusQuery = Type.Object({
-  branch: Type.Optional(Type.String({ default: "main" })),
-});
-
-export const ProjectSyncStatusResponse = Type.Object({
-  projectId: Type.String(),
-  branch: Type.String(),
-  watermark: Type.Union([
-    Type.Null(),
-    Type.Object({
-      sha: Type.String(),
-      at: Type.String({ format: "date-time" }),
-    }),
-  ]),
-  latestJob: Type.Union([
-    Type.Null(),
-    Type.Object({
-      id: Type.String(),
-      status: Type.String(),
-      attempts: Type.Integer(),
-      error: Type.Union([Type.Null(), Type.String()]),
-      scheduledAt: Type.String({ format: "date-time" }),
-      startedAt: Type.Union([Type.Null(), Type.String({ format: "date-time" })]),
-      finishedAt: Type.Union([Type.Null(), Type.String({ format: "date-time" })]),
-    }),
-  ]),
-  totals: Type.Object({
-    chunks: Type.Integer(),
-    embedded: Type.Integer(),
-  }),
-});

@@ -10,7 +10,7 @@ import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits } from "@/reports/routes";
-import { listProjects, getProjectSyncStatus } from "@/projects/routes";
+import { listProjects } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 
@@ -42,8 +42,6 @@ import {
 import {
   ProjectsResponse,
   ProjectIdParams,
-  SyncStatusQuery,
-  ProjectSyncStatusResponse,
 } from "@/projects/schemas";
 import {
   AddCredentialBody,
@@ -193,16 +191,6 @@ export async function buildApp() {
       response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
-
-  app.get("/api/v1/projects/:id/sync", {
-    schema: {
-      description: "Sync status (watermark, latest job, totals) for a project branch",
-      tags: ["projects"],
-      params: ProjectIdParams,
-      querystring: SyncStatusQuery,
-      response: { 200: ProjectSyncStatusResponse, 400: ErrorResponse, 500: ErrorResponse },
-    },
-  }, getProjectSyncStatus);
 
   app.get("/api/v1/credentials", {
     schema: {

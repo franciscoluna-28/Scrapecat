@@ -28,12 +28,14 @@ interface ReportPromptParams {
   branch: string | null;
   startDate: string;
   endDate: string;
-  commits: { message: string }[];
+  commits: { message: string; summary: string }[];
   languageInstruction: string;
 }
 
 export function buildReportPrompt(params: ReportPromptParams): string {
-  const commitLines = params.commits.map((c) => `- ${c.message}`).join("\n");
+  const commitLines = params.commits
+    .map((c) => `- ${c.message}\n  Summary: ${c.summary}`)
+    .join("\n");
   return [
     `Generate a Product Update for ${params.repository} (${params.branch}) from ${params.startDate} to ${params.endDate}.`,
     "",

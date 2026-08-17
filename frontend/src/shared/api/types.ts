@@ -337,6 +337,7 @@ export interface paths {
                 query?: {
                     startDate?: string;
                     endDate?: string;
+                    branch?: string;
                 };
                 header?: never;
                 path: {
@@ -693,90 +694,6 @@ export interface paths {
                                 /** Format: date-time */
                                 updatedAt: string;
                             }[];
-                        };
-                    };
-                };
-                /** @description Default Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{id}/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Sync status (watermark, latest job, totals) for a project branch */
-        get: {
-            parameters: {
-                query?: {
-                    branch?: string;
-                };
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            projectId: string;
-                            branch: string;
-                            watermark: null | {
-                                sha: string;
-                                /** Format: date-time */
-                                at: string;
-                            };
-                            latestJob: null | {
-                                id: string;
-                                status: string;
-                                attempts: number;
-                                error: null | string;
-                                /** Format: date-time */
-                                scheduledAt: string;
-                                startedAt: null | string;
-                                finishedAt: null | string;
-                            };
-                            totals: {
-                                chunks: number;
-                                embedded: number;
-                            };
-                        };
-                    };
-                };
-                /** @description Default Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
                         };
                     };
                 };

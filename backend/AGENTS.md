@@ -53,12 +53,12 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 ## Report generation flow (`src/reports/routes.ts`)
 
-1. Validate input body with `reportInputBodySchema` (wraps `reportInputSchema` in `{ data: ... }`)
+1. Validate input body with `ReportInputBody` (wraps `ReportDataInput` in `{ data: ... }`)
 2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
-3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`); on a new row, enqueue an eager full backfill
-4. Delegate to the sync worker and wait: `ensureSynced()` (`src/projects/sync-service.ts`) blocks until the store covers the report window (UTC) or a catch-up reached the branch tip
+3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`)
+4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits + real diffs from disk (isomorphic-git), summarizes/verifies them in batches with the small LLM, upserts `commit_chunks`, and embeds
 5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
-6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts`
+6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts` (commit messages + LLM summaries)
 7. Call AI with up to 2 retries if structure validation fails
 8. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
 9. Store report + `report_commits` snapshot in Postgres via Drizzle ORM
@@ -66,11 +66,11 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 ### Read-path model
 
-The DB is the materialized read model for commits. The background worker owns ingestion; GitHub is only consulted for the delta past the watermark.
+The DB is the materialized read model for commits. The git archive is the ingestion source of truth; GitHub's REST API is used only for discovery and the clone.
 
-- **Discovery** (repos/branches, pre-sync commit preview) hits GitHub live: `src/gitRepositories/routes.ts` (`/commits` returns a bounded single page; `limit`/`per_page` are validated ints 1–100)
+- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **archive-backed** — it reads from the local clone, downloading it first if needed.
 - **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
-- **Report generation** (`POST /api/v1/reports`): delegates to the sync worker via `ensureSynced`, then reads the window from `commit_chunks`.
+- **Report generation** (`POST /api/v1/reports`): ingests the window via `src/repositories/ingest.ts`, then reads the window from `commit_chunks`.
 
 ## Database (`src/db/`)
 
@@ -78,25 +78,22 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
-- **commit_chunks** — one row per commit: message, author, `diff_summary`, optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
-- **project_sync_state** — per-`(project_id, branch)` sync watermark (`last_synced_commit_sha` + `last_synced_at`); the read-model frontier for ingestion
-- **sync_jobs** — the background sync queue: `status` enum (`pending` | `running` | `succeeded` | `failed`), `attempts`, `last_error`, `scheduled_at` (backoff reschedules); indexed on `(status, scheduled_at)`
+- **commit_chunks** — one row per commit: message, author, `diff_summary` (LLM summary — the embedding source), `diff_patch` (bounded raw diff), optional `embedding` (vector(1536)), `metadata` jsonb (files/stats/validation); unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
 - **reports** — generated reports linked to a project (uuid PK, title, markdown)
 - **report_commits** — snapshot of the SHAs a report was generated from (unique `(report_id, commit_sha)`)
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `sync-state-store.ts`, `sync-jobs-store.ts`, `src/reports/stores/reports-store.ts` + `report-commits-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/reports/stores/reports-store.ts` + `report-commits-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
 
-## Sync worker (commit ingestion)
+## Commit ingestion (`src/repositories/`)
 
-One background worker owns ALL commit ingestion. Reports and RAG never touch the git provider — they delegate through `src/projects/sync-service.ts` and read from Postgres.
+Commit ingestion is **synchronous, batch, archive-based** — no background worker, queue, or watermark.
 
-- **Queue** (`sync_jobs`): `enqueueSyncJob` (idempotent while a pending/running job exists for a project+branch), `claimNextSyncJob` (`FOR UPDATE SKIP LOCKED` so concurrent workers never double-run), `completeSyncJob`, `failSyncJob` (reschedules with exponential backoff up to `SYNC_MAX_ATTEMPTS`).
-- **Worker** (`src/projects/worker/sync-worker.ts`): `startSyncWorker()` polls the queue on `SYNC_POLL_INTERVAL_MS`, claims a job, runs `runProjectSync` (advisory-locked transaction), then fires `embedNewChunks`, and logs structured pino events (`sync.job.start/complete/failed`, `sync.enqueued`, `sync.caught-up`, `sync.embed.*`). Started from `src/index.ts` when `SYNC_WORKER_ENABLED`.
-- **Sync** (`runProjectSync` in `src/projects/sync.ts`): inside a per-project `pg_advisory_xact_lock` transaction, fetches commits newer than the watermark (full paginated backfill on first sync — no hard cap; `per_page` is a page size), dedupes against stored SHAs, advances the watermark (composite `(committed_at, commit_sha)` keyset, never regressing). The watermark only advances when the transaction commits, so a run that dies mid-pagination restarts from the same watermark (re-fetched commits are deduped).
-- **Delegation** (`sync-service.ts`): `enqueueSync`, `ensureSynced` (blocks until the store covers `needByUtc` OR a recent catch-up reached the branch tip — the watermark can never exceed GitHub's newest commit, so a successful catch-up IS synced), `getSyncStatus`.
-- **Status API**: `GET /api/v1/projects/:id/sync` returns watermark, latest job, and chunk/embedding totals.
-- **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any sync or LLM work — `ProviderKeyError` otherwise. `ensureSynced` awaits the worker (blocking), then the window is read from `commit_chunks`.
+- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with isomorphic-git (`repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN`) and does an incremental fetch on repeat runs. The archive is the source of truth; commits and diffs are read from disk, never the API.
+- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git`; `getCommitDiff` walks the commit↔parent trees to produce files changed, +/-, and a bounded unified patch.
+- **Summarizer** (`summarizer.ts`): `summarizeCommits` batches diffs (default 50/call) to the small LLM (`DIFF_SUMMARY_MODEL`, via `callAI` + `resolveApiKey("openrouter")`) which **verifies the diff against its commit message** and returns `[{ sha, summary, validated, notes }]` (Zod-validated). Failures fall back to a structural summary — ingestion never hard-fails on the guardrail. Set `DIFF_SUMMARY_ENABLED=false` to skip.
+- **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → compute diffs → summarize in batches → upsert `commit_chunks` (dedupe by SHA, skipping already-stored) → `embedNewChunks`.
+- **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any clone or LLM work — `ProviderKeyError` otherwise.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
 
@@ -112,9 +109,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `listCommitsPage`, `listCommits`, `countCommits`, `verifyConnection`.
-
-Pagination is provider-agnostic: adapters implement the page primitive `listCommitsPage(...) → Page<T>` (GitHub reads the `Link` header for `hasMore`); the shared driver in `pagination.ts` owns the loop — early-stop predicates, `maxPages`/`maxCommits`/deadline guards, bounded retry with backoff on transient failures (5xx/429/network), fail-fast on permanent errors (4xx), and SHA dedupe across page boundaries. `listCommits` is a bounded collector over the driver. `per_page` is a page size (GitHub max 100) — it is **not** a system limit.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits and diffs are read from the local archive via isomorphic-git (`src/repositories/`), never from this interface.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 
@@ -154,16 +149,21 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 |---|---|
 | `ENCRYPTION_KEY` | Required; any base64 32-byte string |
 | `OPENROUTER_API_KEY` | For OpenRouter (warned if missing) |
-| `GITHUB_TOKEN` | GitHub personal access token (warned if missing) |
+| `GITHUB_TOKEN` | GitHub personal access token (warned if missing); used for the archive clone |
 | `AI_MODEL` | Default model override |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
+| `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
+| `DIFF_SUMMARY_MODEL` | Small LLM for diff summaries (default `nvidia/nemotron-3-ultra-550b-a55b:free`) |
+| `DIFF_SUMMARY_BATCH_SIZE` | Commits per summarizer call (default 50) |
+| `DIFF_SUMMARY_ENABLED` | Set `false` to skip the LLM guardrail (default `true`) |
 
 ## Deep dives
 
 - `src/reports/report-output.ts` — AI markdown structure validation with Zod + hand-written parser
 - `src/reports/prompts.ts` — all prompt builders and `FALLBACK_REPORT`
-- `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry
+- `src/repositories/` — archive clone, git reading, batch diff summarizer, ingestion orchestrator
+- `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/credentials/encryption.ts` — AES-256-GCM details

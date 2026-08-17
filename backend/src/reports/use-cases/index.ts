@@ -4,7 +4,7 @@ import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
 import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
-import { enqueueSync, ensureSynced } from "@/projects/sync-service";
+import { ingestCommits } from "@/repositories/ingest";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
@@ -70,7 +70,7 @@ export class AIGenerationError extends Error {
 
 async function generateReport(opts: {
   input: CreateReportInput;
-  commits: { message: string }[];
+  commits: { message: string; summary: string }[];
   apiKey?: string | null;
   provider?: string;
   model?: string;
@@ -165,7 +165,7 @@ export async function createReportUseCase(input: CreateReportInput) {
     throw new ProviderKeyError(provider);
   }
 
-  const { project, created } = await projectsStore.upsertProject({
+  const { project } = await projectsStore.upsertProject({
     input: {
       gitProvider: input.gitProvider,
       providerProjectId: input.providerProjectId,
@@ -175,17 +175,15 @@ export async function createReportUseCase(input: CreateReportInput) {
     },
   });
 
-  // Eager full backfill on project creation — the worker owns it from here.
-  if (created) {
-    await enqueueSync({ projectId: project.id, branch: input.branch });
-  }
-
-  // Delegate to the sync worker and wait until the store covers the report
-  // window (in UTC), then read the window's commits straight from Postgres.
-  await ensureSynced({
-    projectId: project.id,
+  // Batch-ingest the report window from the local git archive (clone + diffs +
+  // LLM summaries), then read the window's commits straight from Postgres.
+  await ingestCommits({
+    owner: input.providerOwner,
+    repo: input.repository,
     branch: input.branch,
-    needByUtc: endOfDayUtc(input.endDate),
+    projectId: project.id,
+    startDate: startOfDayUtc(input.startDate),
+    endDate: endOfDayUtc(input.endDate),
   });
 
   const storedRows = await commitChunksStore.listCommitsForProject({
@@ -197,8 +195,7 @@ export async function createReportUseCase(input: CreateReportInput) {
   const commits = storedRows.map((r) => ({
     sha: r.commitSha,
     message: r.commitMessage,
-    author: r.author ?? "",
-    date: r.committedAt.toISOString(),
+    summary: r.diffSummary,
   }));
 
   if (commits.length === 0) {
