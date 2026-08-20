@@ -5,7 +5,7 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   DATABASE_URL: z.string().default("postgres://scrapecat:scrapecat@localhost:5432/scrapecat"),
   OPENROUTER_API_KEY: z.string().default(""),
-  AI_MODEL: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
+  AI_MODEL: z.string().default("openai/gpt-5.6-luna"),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
   GITHUB_TOKEN: z.string().default(""),

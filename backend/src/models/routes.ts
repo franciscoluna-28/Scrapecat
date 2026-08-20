@@ -3,6 +3,7 @@ import type { Static } from "@sinclair/typebox";
 import { ModelsQuery } from "@/models/schemas";
 
 const OPENROUTER_FALLBACK = [
+  { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna", free: false, description: "" },
   { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B", free: true, description: "" },
   { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra", free: true, description: "" },
   { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nemotron 3 Super", free: true, description: "" },
@@ -98,6 +99,16 @@ export async function listModels(
         }));
     }
   } catch {}
+
+  // The MVP default model must always be pickable even though the live fetch
+  // only returns free models.
+  const MVP_DEFAULT = "openai/gpt-5.6-luna";
+  if (!openrouterModels.some((m) => m.id === MVP_DEFAULT)) {
+    openrouterModels = [
+      { id: MVP_DEFAULT, name: "GPT-5.6 Luna", free: false, description: "" },
+      ...openrouterModels,
+    ];
+  }
 
   if (provider === "openrouter") {
     return reply.send({ models: openrouterModels.map((m) => ({ ...m, provider: "openrouter" })) });
