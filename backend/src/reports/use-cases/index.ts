@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { db } from "@/db/client";
 import { env } from "@/config/env";
+import { logger } from "@/shared/logger";
+import { timed } from "@/shared/timing";
 import { resolveApiKey } from "@/credentials/services";
 import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
@@ -14,6 +16,7 @@ import {
   buildSystemPrompt,
   getLanguageInstruction,
   buildReportPrompt,
+  type ReportCommit,
 } from "@/reports/prompts";
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
@@ -70,7 +73,7 @@ export class AIGenerationError extends Error {
 
 async function generateReport(opts: {
   input: CreateReportInput;
-  commits: { message: string; summary: string }[];
+  commits: ReportCommit[];
   apiKey?: string | null;
   provider?: string;
   model?: string;
@@ -95,6 +98,7 @@ async function generateReport(opts: {
   for (let attempts = 1; attempts <= maxAttempts; attempts++) {
     let content: string;
     let finishReason: string | null | undefined;
+    const attemptStart = performance.now();
     try {
       const result = await callAI({
         model: opts.input.model || opts.model,
@@ -116,12 +120,39 @@ async function generateReport(opts: {
       finishReason = result.finishReason;
     } catch (error) {
       lastError = error;
-      console.error(`AI report call failed (attempt ${attempts}/${maxAttempts}):`, error);
+      logger.warn(
+        {
+          attempt: attempts,
+          maxAttempts,
+          provider: opts.provider,
+          model: opts.input.model || opts.model,
+          durationMs: Math.round(performance.now() - attemptStart),
+          err: (error as Error)?.message ?? String(error),
+        },
+        "AI report call failed",
+      );
       continue;
     }
 
+    const attemptMs = Math.round(performance.now() - attemptStart);
+    logger.info(
+      {
+        attempt: attempts,
+        maxAttempts,
+        provider: opts.provider,
+        model: opts.input.model || opts.model,
+        finishReason,
+        responseLength: content.length,
+        durationMs: attemptMs,
+      },
+      "AI report call complete",
+    );
+
     if (finishReason === "length") {
-      console.warn(`Report truncated by token limit (attempt ${attempts}/${maxAttempts})`);
+      logger.warn(
+        { attempt: attempts, maxAttempts },
+        "Report truncated by token limit",
+      );
       continue;
     }
 
@@ -131,7 +162,10 @@ async function generateReport(opts: {
       if (validation.valid) {
         return cleaned;
       }
-      console.warn(`Report structure invalid (attempt ${attempts}/${maxAttempts}):`, validation.errors);
+      logger.warn(
+        { attempt: attempts, maxAttempts, errors: validation.errors },
+        "Report structure invalid",
+      );
     }
     lastReport = cleaned;
   }
@@ -139,7 +173,10 @@ async function generateReport(opts: {
   if (lastError) {
     throw AIGenerationError.from(lastError);
   }
-  console.error("AI never produced a valid report after retries:", lastReport);
+  logger.error(
+    { provider: opts.provider, model: opts.input.model || opts.model, lastReport },
+    "AI never produced a valid report after retries",
+  );
   throw new AIGenerationError(
     "AI failed to produce a valid report after retries. Please try again.",
     500,
@@ -165,74 +202,119 @@ export async function createReportUseCase(input: CreateReportInput) {
     throw new ProviderKeyError(provider);
   }
 
-  const { project } = await projectsStore.upsertProject({
-    input: {
-      gitProvider: input.gitProvider,
-      providerProjectId: input.providerProjectId,
-      providerOwner: input.providerOwner,
-      repositoryName: input.repository,
-      defaultBranch: input.branch,
-    },
-  });
+  const { project } = await timed(
+    "report.upsertProject",
+    { provider, model, repo: input.repository, branch: input.branch },
+    () =>
+      projectsStore.upsertProject({
+        input: {
+          gitProvider: input.gitProvider,
+          providerProjectId: input.providerProjectId,
+          providerOwner: input.providerOwner,
+          repositoryName: input.repository,
+          defaultBranch: input.branch,
+        },
+      }),
+  );
 
   // Batch-ingest the report window from the local git archive (clone + diffs +
   // LLM summaries), then read the window's commits straight from Postgres.
-  await ingestCommits({
-    owner: input.providerOwner,
-    repo: input.repository,
-    branch: input.branch,
-    projectId: project.id,
-    startDate: startOfDayUtc(input.startDate),
-    endDate: endOfDayUtc(input.endDate),
-  });
+  const ingestResult = await timed(
+    "report.ingestCommits",
+    { provider, model, repo: input.repository, branch: input.branch },
+    () =>
+      ingestCommits({
+        owner: input.providerOwner,
+        repo: input.repository,
+        branch: input.branch,
+        projectId: project.id,
+        startDate: startOfDayUtc(input.startDate),
+        endDate: endOfDayUtc(input.endDate),
+      }),
+  );
 
-  const storedRows = await commitChunksStore.listCommitsForProject({
-    projectId: project.id,
-    branch: input.branch,
-    startDate: startOfDayUtc(input.startDate),
-    endDate: endOfDayUtc(input.endDate),
-  });
-  const commits = storedRows.map((r) => ({
+  const storedRows = await timed(
+    "report.listCommitsForProject",
+    { repo: input.repository, branch: input.branch },
+    () =>
+      commitChunksStore.listCommitsForProject({
+        projectId: project.id,
+        branch: input.branch,
+        startDate: startOfDayUtc(input.startDate),
+        endDate: endOfDayUtc(input.endDate),
+      }),
+  );
+  const commits: ReportCommit[] = storedRows.map((r) => ({
     sha: r.commitSha,
     message: r.commitMessage,
     summary: r.diffSummary,
+    files: r.metadata?.fileStats ?? [],
+    filesChanged: r.metadata?.filesChanged?.length ?? 0,
+    additions: r.metadata?.additions ?? 0,
+    deletions: r.metadata?.deletions ?? 0,
+    commitUrl: r.metadata?.commitUrl ?? null,
+    flagged: r.metadata?.validation?.status === "flagged",
   }));
 
   if (commits.length === 0) {
     throw new NoCommitsError();
   }
 
-  const generatedReport = await generateReport({
-    input,
-    commits,
-    apiKey,
-    provider,
-    model,
-  });
+  const generatedReport = await timed(
+    "report.generateReport",
+    { provider, model, commits: commits.length },
+    () =>
+      generateReport({
+        input,
+        commits,
+        apiKey,
+        provider,
+        model,
+      }),
+  );
 
   const reportId = randomUUID();
 
-  await db.transaction(async (tx) => {
-    await reportsStore.createReport({
-      input: {
-        id: reportId,
-        projectId: project.id,
-        title: extractReportTitle(generatedReport, input.repository),
-        originalMarkdown: generatedReport,
-        startDate: new Date(input.startDate),
-        endDate: new Date(input.endDate),
-        branch: input.branch,
-        customInstructions: input.customInstructions?.trim() || null,
-      },
-      tx,
-    });
+  await timed(
+    "report.store",
+    { repo: input.repository, branch: input.branch, commits: commits.length },
+    () =>
+      db.transaction(async (tx) => {
+        await reportsStore.createReport({
+          input: {
+            id: reportId,
+            projectId: project.id,
+            title: extractReportTitle(generatedReport, input.repository),
+            originalMarkdown: generatedReport,
+            startDate: new Date(input.startDate),
+            endDate: new Date(input.endDate),
+            branch: input.branch,
+            customInstructions: input.customInstructions?.trim() || null,
+          },
+          tx,
+        });
 
-    await reportCommitsStore.insertReportCommits({
+        await reportCommitsStore.insertReportCommits({
+          reportId,
+          commitShas: commits.map((c) => c.sha),
+          tx,
+        });
+      }),
+  );
+
+  logger.info(
+    {
       reportId,
-      commitShas: commits.map((c) => c.sha),
-      tx,
-    });
-  });
+      projectId: project.id,
+      repo: input.repository,
+      branch: input.branch,
+      provider,
+      model,
+      commitsFound: ingestResult.commitsFound,
+      chunksWritten: ingestResult.chunksWritten,
+    },
+    "report generation complete",
+  );
 
   return { reportId, projectId: project.id };
 }

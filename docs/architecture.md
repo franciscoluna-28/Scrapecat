@@ -96,6 +96,13 @@ One ~160-line handler does validation, key resolution, batch ingestion, AI retry
 - `GET /repositories/*` and `/commits`/`/commits/count` are archive-backed (the preview triggers a clone/fetch of the branch); the normalized read path is `GET /reports/:id/commits`.
 - No transactions: project upsert and report create are separate writes; the window ingest runs outside a transaction. A mid-way failure leaves chunks persisted without a report (safe today — chunks are the cache — but should be intentional).
 
+### Diff grounding is file-level, not content-level
+
+The report prompt is grounded on real, provable diff **scope** (files, line counts, commit link) — the commit message is demoted to a hint and flagged when it contradicts the diff (`git-diff.ts` computes the stats, `guardrail.ts` skips empty commits and flags junk/lying messages). Two deliberate shortcuts remain:
+
+- **The report model never reads the patch hunks.** It knows *what/where* changed and *how much*, but the "why" is inferred from file paths + line counts + message + link, not from the changed lines themselves. A commit mislabeled as `refactor` that actually deletes a feature is only caught if the file paths reveal it. Closing this means condensing real hunks into the report prompt (or the batch summarizer) — a token cost we're deferring.
+- **`diff_summary` (the embedding source) is the commit message by design.** With clear conventional commits the message is a legitimate summary, so generating a diff-derived one via a batched LLM (`summarizer`) is currently **unnecessary**: it only feeds embeddings, semantic search isn't shipped, and the guardrail already flags junk/lying messages at ingest. Revisit only if search ships *and* message-based embeddings prove insufficient (the `embed:backfill` script already exists for one-time re-summary).
+
 ## What needs to happen
 
 Decouple in three phases, no big-bang rewrites:

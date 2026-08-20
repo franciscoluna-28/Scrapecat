@@ -47,6 +47,12 @@ export const vector = customType<{ data: number[]; driverData: string }>({
 
 export type CommitChunkMetadata = {
   filesChanged?: string[];
+  fileStats?: {
+    filepath: string;
+    status: "added" | "deleted" | "modified";
+    additions: number;
+    deletions: number;
+  }[];
   additions?: number;
   deletions?: number;
   commitUrl?: string;

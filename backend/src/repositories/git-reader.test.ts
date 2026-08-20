@@ -3,14 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import git from "isomorphic-git";
-import { listCommitsInRange, getCommitDiff } from "@/repositories/git-reader";
+import { listCommitsInRange } from "@/repositories/git-reader";
 
 let dir: string;
 
 async function makeCommit(opts: {
   message: string;
   files: { name: string; content: string }[];
-  removed?: string[];
   offsetSeconds: number;
 }) {
   for (const f of opts.files) {
@@ -18,9 +17,6 @@ async function makeCommit(opts: {
     await fs.mkdir(path.dirname(p), { recursive: true });
     await fs.writeFile(p, f.content);
     await git.add({ fs, dir, filepath: f.name });
-  }
-  for (const r of opts.removed ?? []) {
-    await git.remove({ fs, dir, filepath: r });
   }
   return git.commit({
     fs,
@@ -65,45 +61,5 @@ describe("listCommitsInRange", () => {
     const until = new Date(Date.now() - 30_000);
     const commits = await listCommitsInRange({ dir, ref: "master", since, until });
     expect(commits.map((c) => c.message)).toEqual(["mid"]);
-  });
-});
-
-describe("getCommitDiff", () => {
-  it("reports added, modified, and deleted files with stats and patch", async () => {
-    await makeCommit({
-      message: "c1",
-      files: [
-        { name: "a.txt", content: "hello\n" },
-        { name: "sub/b.txt", content: "b1\n" },
-      ],
-      offsetSeconds: 600,
-    });
-    await makeCommit({
-      message: "c2",
-      files: [
-        { name: "a.txt", content: "hello\nworld\n" },
-        { name: "c.txt", content: "c1\n" },
-      ],
-      removed: ["sub/b.txt"],
-      offsetSeconds: 0,
-    });
-
-    const commits = await listCommitsInRange({ dir, ref: "master" });
-    const diff = await getCommitDiff({ dir, commit: commits[0] });
-
-    expect(diff.filesChanged.sort()).toEqual(["a.txt", "c.txt", "sub/b.txt"]);
-    expect(diff.additions).toBeGreaterThanOrEqual(2);
-    expect(diff.deletions).toBeGreaterThanOrEqual(1);
-    expect(diff.patch).toContain("a.txt");
-    expect(diff.patch).toContain("c.txt");
-    expect(diff.patch).toContain("sub/b.txt");
-  });
-
-  it("handles the root commit (empty tree parent)", async () => {
-    await makeCommit({ message: "root", files: [{ name: "a.txt", content: "hi\n" }], offsetSeconds: 0 });
-    const commits = await listCommitsInRange({ dir, ref: "master" });
-    const diff = await getCommitDiff({ dir, commit: commits[0] });
-    expect(diff.filesChanged).toEqual(["a.txt"]);
-    expect(diff.additions).toBeGreaterThanOrEqual(1);
   });
 });

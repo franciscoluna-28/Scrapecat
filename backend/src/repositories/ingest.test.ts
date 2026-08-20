@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockEnsureArchive = vi.fn();
 const mockListCommitsInRange = vi.fn();
-const mockGetCommitDiff = vi.fn();
-const mockSummarizeCommits = vi.fn();
+const mockGetCommitDiffStats = vi.fn();
 const mockUpsertCommitChunks = vi.fn();
 const mockGetChunksByShas = vi.fn();
 const mockEmbedNewChunks = vi.fn();
@@ -14,11 +13,10 @@ vi.mock("@/repositories/archive-service", () => ({
 
 vi.mock("@/repositories/git-reader", () => ({
   listCommitsInRange: (...args: unknown[]) => mockListCommitsInRange(...args),
-  getCommitDiff: (...args: unknown[]) => mockGetCommitDiff(...args),
 }));
 
-vi.mock("@/repositories/summarizer", () => ({
-  summarizeCommits: (...args: unknown[]) => mockSummarizeCommits(...args),
+vi.mock("@/repositories/git-diff", () => ({
+  getCommitDiffStats: (...args: unknown[]) => mockGetCommitDiffStats(...args),
 }));
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
@@ -31,33 +29,39 @@ vi.mock("@/projects/embed-chunks", () => ({
 }));
 
 import { ingestCommits } from "@/repositories/ingest";
+import type { CommitDiffStats } from "@/repositories/git-diff";
+
+const BASE_DIFF: CommitDiffStats = {
+  filesChanged: 1,
+  additions: 2,
+  deletions: 1,
+  files: [{ filepath: "a.txt", status: "modified", additions: 2, deletions: 1 }],
+};
+
+const baseCommit = {
+  sha: "a",
+  message: "fix: bug in parser",
+  author: "t",
+  date: "2026-01-01T00:00:00Z",
+  tree: "t1",
+  parentSha: null,
+};
 
 beforeEach(() => {
   mockEnsureArchive.mockReset();
   mockListCommitsInRange.mockReset();
-  mockGetCommitDiff.mockReset();
-  mockSummarizeCommits.mockReset();
+  mockGetCommitDiffStats.mockReset();
   mockUpsertCommitChunks.mockReset();
   mockGetChunksByShas.mockReset();
   mockEmbedNewChunks.mockReset();
 });
 
 describe("ingestCommits", () => {
-  it("ingests new commits end to end with summaries and metadata", async () => {
+  it("ingests new commits with diff-derived metadata and validation", async () => {
     mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([
-      { sha: "a", message: "fix a", author: "t", date: "2026-01-01T00:00:00Z", tree: "t1", parentSha: null },
-    ]);
+    mockListCommitsInRange.mockResolvedValue([baseCommit]);
     mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitDiff.mockResolvedValue({
-      filesChanged: ["x.ts"],
-      additions: 3,
-      deletions: 1,
-      patch: "+a\n-b\n+c\n",
-    });
-    mockSummarizeCommits.mockResolvedValue([
-      { sha: "a", summary: "Verified change in x.ts", validated: true, notes: [] },
-    ]);
+    mockGetCommitDiffStats.mockResolvedValue(BASE_DIFF);
     mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
 
     const result = await ingestCommits({
@@ -69,65 +73,91 @@ describe("ingestCommits", () => {
       endDate: new Date("2026-01-31T00:00:00Z"),
     });
 
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, summarized: 1, tipSha: "tip123" });
+    expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
+    expect(mockGetCommitDiffStats).toHaveBeenCalledWith({
+      dir: "/repo",
+      parentSha: null,
+      commitSha: "a",
+    });
     expect(mockUpsertCommitChunks).toHaveBeenCalledWith({
       inputs: [
-        expect.objectContaining({
+        {
           projectId: "proj",
           commitSha: "a",
           branch: "main",
-          commitMessage: "fix a",
-          diffSummary: "Verified change in x.ts",
-          diffPatch: "+a\n-b\n+c\n",
-          metadata: expect.objectContaining({
-            filesChanged: ["x.ts"],
-            additions: 3,
+          commitMessage: "fix: bug in parser",
+          author: "t",
+          diffSummary: "fix: bug in parser",
+          metadata: {
+            filesChanged: ["a.txt"],
+            fileStats: [{ filepath: "a.txt", status: "modified", additions: 2, deletions: 1 }],
+            additions: 2,
             deletions: 1,
+            commitUrl: "https://github.com/owner/repo/commit/a",
             validation: { status: "confirmed", notes: [] },
-          }),
-        }),
+          },
+          committedAt: new Date("2026-01-01T00:00:00Z"),
+        },
       ],
     });
     expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
   });
 
-  it("skips commits that already exist and re-embeds nothing when no new chunks", async () => {
+  it("flags commits whose message is uninformative", async () => {
     mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
     mockListCommitsInRange.mockResolvedValue([
-      { sha: "a", message: "fix a", author: "t", date: "2026-01-01T00:00:00Z", tree: "t1", parentSha: null },
+      { ...baseCommit, sha: "b", message: "fix: lol" },
     ]);
-    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as any]]));
-    mockSummarizeCommits.mockResolvedValue([]);
+    mockGetChunksByShas.mockResolvedValue(new Map());
+    mockGetCommitDiffStats.mockResolvedValue({ ...BASE_DIFF, filesChanged: 12 });
+    mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
 
-    const result = await ingestCommits({ owner: "o", repo: "r", branch: "main", projectId: "proj" });
+    await ingestCommits({
+      owner: "owner",
+      repo: "repo",
+      branch: "main",
+      projectId: "proj",
+    });
 
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, summarized: 0, tipSha: "tip123" });
-    expect(mockGetCommitDiff).not.toHaveBeenCalled();
+    const [call] = mockUpsertCommitChunks.mock.calls;
+    const meta = call[0].inputs[0].metadata;
+    expect(meta.validation.status).toBe("flagged");
+    expect(meta.validation.notes.length).toBeGreaterThan(0);
+  });
+
+  it("skips commits with no file changes (empty/no-op)", async () => {
+    mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
+    mockListCommitsInRange.mockResolvedValue([baseCommit]);
+    mockGetChunksByShas.mockResolvedValue(new Map());
+    mockGetCommitDiffStats.mockResolvedValue({
+      filesChanged: 0,
+      additions: 0,
+      deletions: 0,
+      files: [],
+    });
+
+    const result = await ingestCommits({
+      owner: "owner",
+      repo: "repo",
+      branch: "main",
+      projectId: "proj",
+    });
+
+    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
     expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
     expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });
 
-  it("marks unvalidated summaries as flagged", async () => {
+  it("skips commits that already exist without diffing them", async () => {
     mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([
-      { sha: "a", message: "fix a", author: "t", date: "2026-01-01T00:00:00Z", tree: "t1", parentSha: null },
-    ]);
-    mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitDiff.mockResolvedValue({ filesChanged: [], additions: 0, deletions: 0, patch: "" });
-    mockSummarizeCommits.mockResolvedValue([
-      { sha: "a", summary: "fallback", validated: false, notes: ["llm down"] },
-    ]);
-    mockEmbedNewChunks.mockResolvedValue({ embedded: 0 });
+    mockListCommitsInRange.mockResolvedValue([baseCommit]);
+    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as any]]));
 
-    await ingestCommits({ owner: "o", repo: "r", branch: "main", projectId: "proj" });
+    const result = await ingestCommits({ owner: "o", repo: "r", branch: "main", projectId: "proj" });
 
-    expect(mockUpsertCommitChunks).toHaveBeenCalledWith({
-      inputs: [
-        expect.objectContaining({
-          diffSummary: "fallback",
-          metadata: expect.objectContaining({ validation: { status: "flagged", notes: ["llm down"] } }),
-        }),
-      ],
-    });
+    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
+    expect(mockGetCommitDiffStats).not.toHaveBeenCalled();
+    expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
+    expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,8 @@ import path from "node:path";
 import git from "isomorphic-git";
 import http from "isomorphic-git/http/node";
 import { env } from "@/config/env";
+import { logger } from "@/shared/logger";
+import { timed } from "@/shared/timing";
 
 export type RepoArchive = {
   owner: string;
@@ -54,12 +56,19 @@ export async function ensureArchive(opts: {
 
   await fs.mkdir(path.dirname(dir), { recursive: true });
 
-  if (await isRepo(dir)) {
-    await git.fetch({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
-  } else {
-    await git.clone({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
-  }
+  const existed = await isRepo(dir);
+  await timed(`archive.${existed ? "fetch" : "clone"}`, { owner, repo, branch, url }, async () => {
+    if (existed) {
+      await git.fetch({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
+    } else {
+      await git.clone({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
+    }
+  });
 
   const tipSha = await git.resolveRef({ fs, dir, ref: branch });
+  logger.info(
+    { owner, repo, branch, dir, tipSha, action: existed ? "fetch" : "clone" },
+    "archive ready",
+  );
   return { owner, repo, branch, dir, tipSha };
 }

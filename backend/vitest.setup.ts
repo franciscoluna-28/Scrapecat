@@ -8,6 +8,3 @@ process.env.HOST ??= "localhost";
 process.env.PORT ??= "4000";
 process.env.CORS_ORIGIN ??= "*";
 process.env.REPO_ARCHIVE_DIR ??= ".tmp-repos";
-process.env.DIFF_SUMMARY_MODEL ??= "test-model";
-process.env.DIFF_SUMMARY_BATCH_SIZE ??= "2";
-process.env.DIFF_SUMMARY_ENABLED ??= "true";

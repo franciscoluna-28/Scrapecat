@@ -23,24 +23,72 @@ export function getLanguageInstruction(customInstructions?: string | null): stri
     : "Write the report in English.";
 }
 
+export type ReportCommit = {
+  sha: string;
+  message: string;
+  summary: string;
+  files: {
+    filepath: string;
+    status: "added" | "deleted" | "modified";
+    additions: number;
+    deletions: number;
+  }[];
+  filesChanged: number;
+  additions: number;
+  deletions: number;
+  commitUrl: string | null;
+  flagged: boolean;
+};
+
 interface ReportPromptParams {
   repository: string;
   branch: string | null;
   startDate: string;
   endDate: string;
-  commits: { message: string; summary: string }[];
+  commits: ReportCommit[];
   languageInstruction: string;
 }
 
+const MAX_FILES_IN_SCOPE = 10;
+
+/**
+ * Renders a single commit for the report prompt. The commit message is kept as
+ * context, but the real grounding is the provable diff scope (files + line
+ * counts) and the commit URL — the message can lie, the diff can't.
+ */
+function formatCommitForPrompt(commit: ReportCommit): string {
+  const lines = [`- ${commit.message}`];
+  const shown = commit.files.slice(0, MAX_FILES_IN_SCOPE);
+  const fileDesc = shown
+    .map((f) => `${f.filepath} (+${f.additions} -${f.deletions})`)
+    .join(", ");
+  const extra =
+    commit.files.length > MAX_FILES_IN_SCOPE
+      ? `, +${commit.files.length - MAX_FILES_IN_SCOPE} more`
+      : "";
+  lines.push(
+    `  Files (${commit.filesChanged} changed, +${commit.additions} -${commit.deletions}): ${fileDesc}${extra}`,
+  );
+  if (commit.commitUrl) {
+    lines.push(`  Commit: ${commit.commitUrl}`);
+  }
+  if (commit.flagged) {
+    lines.push(
+      "  Note: the commit message looks uninformative — base this item on the actual file changes above.",
+    );
+  }
+  return lines.join("\n");
+}
+
 export function buildReportPrompt(params: ReportPromptParams): string {
-  const commitLines = params.commits
-    .map((c) => `- ${c.message}\n  Summary: ${c.summary}`)
-    .join("\n");
+  const commitLines = params.commits.map(formatCommitForPrompt).join("\n");
   return [
     `Generate a Product Update for ${params.repository} (${params.branch}) from ${params.startDate} to ${params.endDate}.`,
     "",
     "Raw Activity Data:",
     commitLines,
+    "",
+    "For each commit, the commit message is only a hint. Trust the file changes, line counts, and commit links as the ground truth for what was actually done and why.",
     "",
     params.languageInstruction,
     "",

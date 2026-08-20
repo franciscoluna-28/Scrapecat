@@ -18,13 +18,8 @@ const envSchema = z.object({
     .default("true")
     .transform((v) => v === "true"),
   REPO_ARCHIVE_DIR: z.string().default("repos"),
-  DIFF_SUMMARY_MODEL: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
-  DIFF_SUMMARY_BATCH_SIZE: z.coerce.number().int().positive().default(50),
-  DIFF_SUMMARY_ENABLED: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((v) => v === "true"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
 const parsed = envSchema.safeParse(process.env);

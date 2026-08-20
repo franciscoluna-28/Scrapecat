@@ -56,7 +56,7 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 1. Validate input body with `ReportInputBody` (wraps `ReportDataInput` in `{ data: ... }`)
 2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
 3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`)
-4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits + real diffs from disk (isomorphic-git), summarizes/verifies them in batches with the small LLM, upserts `commit_chunks`, and embeds
+4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits from disk (isomorphic-git), upserts `commit_chunks`, and embeds
 5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
 6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts` (commit messages + LLM summaries)
 7. Call AI with up to 2 retries if structure validation fails
@@ -78,7 +78,7 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
-- **commit_chunks** — one row per commit: message, author, `diff_summary` (LLM summary — the embedding source), `diff_patch` (bounded raw diff), optional `embedding` (vector(1536)), `metadata` jsonb (files/stats/validation); unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
+- **commit_chunks** — one row per commit: message, author, `diff_summary` (the commit message — the embedding source; diff-based LLM summaries are planned but not implemented), `diff_patch` (unused, always null for now), optional `embedding` (vector(1536)), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
 - **reports** — generated reports linked to a project (uuid PK, title, markdown)
 - **report_commits** — snapshot of the SHAs a report was generated from (unique `(report_id, commit_sha)`)
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
@@ -89,10 +89,9 @@ All DB access goes through per-domain store modules — `src/projects/stores/pro
 
 Commit ingestion is **synchronous, batch, archive-based** — no background worker, queue, or watermark.
 
-- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with isomorphic-git (`repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN`) and does an incremental fetch on repeat runs. The archive is the source of truth; commits and diffs are read from disk, never the API.
-- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git`; `getCommitDiff` walks the commit↔parent trees to produce files changed, +/-, and a bounded unified patch.
-- **Summarizer** (`summarizer.ts`): `summarizeCommits` batches diffs (default 50/call) to the small LLM (`DIFF_SUMMARY_MODEL`, via `callAI` + `resolveApiKey("openrouter")`) which **verifies the diff against its commit message** and returns `[{ sha, summary, validated, notes }]` (Zod-validated). Failures fall back to a structural summary — ingestion never hard-fails on the guardrail. Set `DIFF_SUMMARY_ENABLED=false` to skip.
-- **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → compute diffs → summarize in batches → upsert `commit_chunks` (dedupe by SHA, skipping already-stored) → `embedNewChunks`.
+- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with isomorphic-git (`repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN`) and does an incremental fetch on repeat runs. The archive is the source of truth; commits are read from disk, never the API.
+- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git`. Diff-based verification was removed for now and will be re-added as a guardrail later.
+- **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → upsert `commit_chunks` (dedupe by SHA, skipping already-stored, commit message as `diff_summary`) → `embedNewChunks`.
 - **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any clone or LLM work — `ProviderKeyError` otherwise.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
@@ -109,7 +108,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits and diffs are read from the local archive via isomorphic-git (`src/repositories/`), never from this interface.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits are read from the local archive via isomorphic-git (`src/repositories/`), never from this interface.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 
@@ -156,14 +155,11 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
 | `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
-| `DIFF_SUMMARY_MODEL` | Small LLM for diff summaries (default `nvidia/nemotron-3-ultra-550b-a55b:free`) |
-| `DIFF_SUMMARY_BATCH_SIZE` | Commits per summarizer call (default 50) |
-| `DIFF_SUMMARY_ENABLED` | Set `false` to skip the LLM guardrail (default `true`) |
 
 ## Deep dives
 
 - `src/reports/report-output.ts` — AI markdown structure validation with Zod + hand-written parser
 - `src/reports/prompts.ts` — all prompt builders and `FALLBACK_REPORT`
-- `src/repositories/` — archive clone, git reading, batch diff summarizer, ingestion orchestrator
+- `src/repositories/` — archive clone, git reading, ingestion orchestrator
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/credentials/encryption.ts` — AES-256-GCM details
