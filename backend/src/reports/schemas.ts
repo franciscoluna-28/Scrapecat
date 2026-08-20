@@ -23,13 +23,30 @@ export const ReportInputBody = Type.Object({
 
 export type CreateReportInput = Static<typeof ReportDataInput>;
 
-export const ReportCreatedResponse = Type.Object({
-  reportId: Type.String(),
-  projectId: Type.String(),
+export const ReportJobAcceptedResponse = Type.Object({
+  jobId: Type.String(),
+  status: Type.String(),
 });
 
-export const ReportFallbackResponse = Type.Object({
-  report: Type.String(),
+export const ReportJobStatusResponse = Type.Object({
+  jobId: Type.String(),
+  status: Type.String(),
+  reportId: Type.Union([Type.String(), Type.Null()]),
+  projectId: Type.Union([Type.String(), Type.Null()]),
+  error: Type.Union([
+    Type.Object({
+      message: Type.String(),
+      status: Type.Integer(),
+    }),
+    Type.Null(),
+  ]),
+  createdAt: Type.String({ format: "date-time" }),
+  startedAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+  finishedAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+});
+
+export const ReportJobParams = Type.Object({
+  jobId: Type.String(),
 });
 
 export const ReportsListQuery = Type.Object({

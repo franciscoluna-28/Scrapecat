@@ -9,7 +9,7 @@ import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
-import { createReport, listReports, getReport, getReportCommits } from "@/reports/routes";
+import { createReport, listReports, getReport, getReportCommits, getReportJobStatus } from "@/reports/routes";
 import { listProjects } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
@@ -30,8 +30,9 @@ import {
 } from "@/gitRepositories/schemas";
 import {
   ReportInputBody,
-  ReportCreatedResponse,
-  ReportFallbackResponse,
+  ReportJobAcceptedResponse,
+  ReportJobStatusResponse,
+  ReportJobParams,
   ReportsListQuery,
   ReportsListResponse,
   ReportIdParams,
@@ -53,7 +54,7 @@ import {
 import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
 
 export async function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: { level: env.LOG_LEVEL } });
 
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
     if (error.validation) {
@@ -149,12 +150,21 @@ export async function buildApp() {
 
   app.post("/api/v1/reports", {
     schema: {
-      description: "Generate a new report from commits",
+      description: "Queue a new report from commits (processed in the background)",
       tags: ["reports"],
       body: ReportInputBody,
-      response: { 201: ReportCreatedResponse, 400: ErrorResponse, 429: ReportFallbackResponse },
+      response: { 202: ReportJobAcceptedResponse, 400: ErrorResponse },
     },
   }, createReport);
+
+  app.get("/api/v1/reports/jobs/:jobId", {
+    schema: {
+      description: "Get the status of a queued report job",
+      tags: ["reports"],
+      params: ReportJobParams,
+      response: { 200: ReportJobStatusResponse, 404: ErrorResponse },
+    },
+  }, getReportJobStatus);
 
   app.get("/api/v1/reports", {
     schema: {

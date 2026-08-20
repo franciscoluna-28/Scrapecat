@@ -447,7 +447,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** @description Generate a new report from commits */
+        /** @description Queue a new report from commits (processed in the background) */
         post: {
             parameters: {
                 query?: never;
@@ -478,14 +478,14 @@ export interface paths {
             };
             responses: {
                 /** @description Default Response */
-                201: {
+                202: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            reportId: string;
-                            projectId: string;
+                            jobId: string;
+                            status: string;
                         };
                     };
                 };
@@ -500,19 +500,70 @@ export interface paths {
                         };
                     };
                 };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get the status of a queued report job */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    jobId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
                 /** @description Default Response */
-                429: {
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            report: string;
+                            jobId: string;
+                            status: string;
+                            reportId: string | null;
+                            projectId: string | null;
+                            error: {
+                                message: string;
+                                status: number;
+                            } | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            startedAt: string | null;
+                            finishedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
             };
         };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

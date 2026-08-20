@@ -5,13 +5,14 @@ import {
   ReportsListQuery,
   ReportIdParams,
   ReportCommitsQuery,
+  ReportJobParams,
 } from "@/reports/schemas";
 import {
-  createReportUseCase,
-  NoCommitsError,
-  AIGenerationError,
-  ProviderKeyError,
-} from "@/reports/use-cases";
+  enqueueReportJob,
+  getReportJob,
+  type ReportJob,
+} from "@/reports/jobs";
+import { ProviderKeyError } from "@/reports/use-cases";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as reportsStore from "@/reports/stores/reports-store";
 import * as reportCommitsStore from "@/reports/stores/report-commits-store";
@@ -22,30 +23,47 @@ import {
 } from "@/reports/stores/report-commits-store";
 import { formatDate } from "@/shared/utils";
 
+export function toJobResponse(job: ReportJob) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    reportId: job.reportId,
+    projectId: job.projectId,
+    error: job.error,
+    createdAt: job.createdAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+  };
+}
+
 export async function createReport(req: FastifyRequest, reply: FastifyReply) {
   const { data } = req.body as Static<typeof ReportInputBody>;
 
   try {
-    const { reportId, projectId } = await createReportUseCase(data);
-    return reply.code(201).send({ reportId, projectId });
-  } catch (error: any) {
-    console.error("Error generating report:", error);
-    if (error instanceof NoCommitsError) {
-      return reply.status(400).send({ error: error.message });
-    }
+    const job = await enqueueReportJob(data);
+    return reply
+      .code(202)
+      .send({ jobId: job.id, status: job.status });
+  } catch (error) {
     if (error instanceof ProviderKeyError) {
       return reply.status(400).send({ error: error.message });
     }
-    if (error instanceof AIGenerationError) {
-      return reply.status(error.status).send({ error: error.message });
-    }
-    if (error?.status === 404 || error?.status === 422 || error?.code === "NotFoundError") {
-      return reply.status(400).send({
-        error: "Branch or repository not found on GitHub. Check the branch name and repository access.",
-      });
-    }
-    return reply.status(500).send({ error: "Failed to generate report" });
+    console.error("Error queueing report:", error);
+    return reply.status(500).send({ error: "Failed to queue report" });
   }
+}
+
+export async function getReportJobStatus(
+  req: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const { jobId } = req.params as Static<typeof ReportJobParams>;
+
+  const job = getReportJob(jobId);
+  if (!job) {
+    return reply.status(404).send({ error: "Report job not found" });
+  }
+  return reply.send(toJobResponse(job));
 }
 
 export async function listReports(

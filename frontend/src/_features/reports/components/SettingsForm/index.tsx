@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -17,14 +17,12 @@ import {
 } from "@/src/components/ui/select";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, Bookmark } from "lucide-react";
-import { APP_CONFIG } from "@/src/shared/constants";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/ui/DatePicker";
 import { apiClient } from "@/src/shared/api/client";
-import { useCommits } from "@/src/_features/reports/services/api";
+import { useReportJob } from "@/src/_features/reports/services/reports-api";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 import { useAISettings } from "@/src/shared/services/ai-settings";
-import { CommitsPreviewContainer } from "../CommitsPreviewContainer";
 
 type Props = {
   repository: GitHubRepository;
@@ -45,19 +43,25 @@ export function SettingsForm({
   const [isPending, startTransition] = useTransition();
   const [customInstructions, setCustomInstructions] = useState("");
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   const { settings: aiSettings } = useAISettings();
-  const {
-    commits,
-    count: commitCount,
-    isFetching,
-    hasError,
-  } = useCommits({
-    owner: repository.owner.login,
-    repo: repository.name,
-    startDate,
-    endDate,
-    branch: selectedBranch,
-  });
+  const { job, error: jobError } = useReportJob(jobId ?? undefined);
+
+  useEffect(() => {
+    if (job?.status === "succeeded" && job.reportId) {
+      router.push(`/app/reports/${job.reportId}`);
+    } else if (job?.status === "failed") {
+      toast.error(job.error?.message ?? "Failed to generate report");
+      setJobId(null);
+    }
+  }, [job, router]);
+
+  useEffect(() => {
+    if (jobError) {
+      toast.error("Report job is no longer available. Please try again.");
+      setJobId(null);
+    }
+  }, [jobError]);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -70,7 +74,7 @@ export function SettingsForm({
   };
 
   const handleGenerate = async () => {
-    if (!startDate || commits.length === 0) return;
+    if (!startDate) return;
 
     startTransition(async () => {
       const d = new Date();
@@ -98,15 +102,11 @@ export function SettingsForm({
         return;
       }
 
-      router.push(`/app/reports/${data.reportId}`);
+      setJobId(data.jobId);
     });
   };
 
-  /**
-   * Determines if the form is ready for report generation.
-   * Requires: date selected, not loading, no errors, and at least 1 commit.
-   */
-  const canGenerate = !isFetching && !hasError && startDate && commitCount > 0;
+  const isGenerating = isPending || !!jobId;
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
@@ -228,22 +228,14 @@ export function SettingsForm({
           />
         </div>
 
-        <CommitsPreviewContainer
-          startDate={startDate}
-          isFetching={isFetching}
-          hasError={hasError}
-          commitCount={commitCount}
-          commits={commits}
-        />
-
         <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
-            disabled={!startDate || isPending || !canGenerate}
+            disabled={!startDate || isGenerating}
             size="default"
             className="w-full"
           >
-            {isPending ? (
+            {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating Report...
@@ -255,9 +247,6 @@ export function SettingsForm({
               </>
             )}
           </Button>
-          <p className="text-xs text-muted-foreground text-center">
-            {`Up to ${APP_CONFIG.commits.MAX_LIMIT} commits will be analyzed for the report`}
-          </p>
         </div>
       </CardContent>
     </Card>

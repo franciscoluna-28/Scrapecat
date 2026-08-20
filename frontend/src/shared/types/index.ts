@@ -11,11 +11,11 @@ export type GitHubRepository = {
   forks_count?: number;
 };
 
-export type ProcessedCommit =
-  paths["/api/v1/repositories/{owner}/{repo}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];
-
 export type GitHubProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
+
+export type ReportJob =
+  paths["/api/v1/reports/jobs/{jobId}"]["get"]["responses"]["200"]["content"]["application/json"];
 
 export type StoredCommit =
   paths["/api/v1/reports/{id}/commits"]["get"]["responses"]["200"]["content"]["application/json"]["commits"][number];

@@ -3,7 +3,7 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
-import type { ReportDetail, ReportSummary, StoredCommit } from "@/src/shared/types";
+import type { ReportDetail, ReportJob, ReportSummary, StoredCommit } from "@/src/shared/types";
 
 export function useReports(projectId?: string) {
   const query = projectId ? { projectId } : undefined;
@@ -47,6 +47,33 @@ export function useReport(id: string) {
 
   return {
     report: (data ?? null) as ReportDetail | null,
+    isLoading,
+    error: error ?? null,
+  };
+}
+
+export function useReportJob(jobId?: string) {
+  const { data, error, isLoading } = useQuery({
+    queryKey: queryKeys.reports.job(jobId),
+    queryFn: () =>
+      apiClient
+        .GET("/api/v1/reports/jobs/{jobId}", {
+          params: { path: { jobId: jobId! } },
+        })
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.data;
+        }),
+    enabled: !!jobId,
+    refetchInterval: (query) => {
+      if (query.state.error) return false;
+      const status = query.state.data?.status;
+      return status === "succeeded" || status === "failed" ? false : 3000;
+    },
+  });
+
+  return {
+    job: (data ?? null) as ReportJob | null,
     isLoading,
     error: error ?? null,
   };

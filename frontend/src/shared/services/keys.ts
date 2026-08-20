@@ -12,6 +12,7 @@ export const queryKeys = {
     all: ["reports"] as const,
     list: (projectId?: string) => ["reports", "list", { projectId }] as const,
     detail: (id: string) => ["reports", "detail", id] as const,
+    job: (jobId?: string) => ["reports", "job", jobId] as const,
     commits: (id: string, q?: string) => ["reports", "commits", id, { q }] as const,
   },
   projects: {
@@ -30,14 +31,6 @@ export const queryKeys = {
   branches: {
     all: ["branches"] as const,
     list: (owner: string, repo: string) => ["branches", "list", owner, repo] as const,
-  },
-  commits: {
-    all: ["commits"] as const,
-    list: (
-      owner: string,
-      repo: string,
-      params?: { startDate?: string; endDate?: string; branch?: string },
-    ) => ["commits", "list", owner, repo, params] as const,
   },
   credentials: {
     all: ["credentials"] as const,
