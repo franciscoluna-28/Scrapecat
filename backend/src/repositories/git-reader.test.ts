@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import git from "isomorphic-git";
 import { listCommitsInRange } from "@/repositories/git-reader";
+import { initRepo, addFile, commit } from "@/repositories/git-fixtures";
 
 let dir: string;
 
@@ -13,26 +13,16 @@ async function makeCommit(opts: {
   offsetSeconds: number;
 }) {
   for (const f of opts.files) {
-    const p = path.join(dir, f.name);
-    await fs.mkdir(path.dirname(p), { recursive: true });
-    await fs.writeFile(p, f.content);
-    await git.add({ fs, dir, filepath: f.name });
+    await addFile(dir, f.name, f.content);
   }
-  return git.commit({
-    fs,
-    dir,
-    message: opts.message,
-    author: {
-      name: "tester",
-      email: "t@example.com",
-      timestamp: Math.floor(Date.now() / 1000) - opts.offsetSeconds,
-    },
+  return commit(dir, opts.message, {
+    authorDate: new Date(Date.now() - opts.offsetSeconds * 1000),
   });
 }
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "gitreader-"));
-  await git.init({ fs, dir });
+  await initRepo(dir);
 });
 
 afterEach(async () => {

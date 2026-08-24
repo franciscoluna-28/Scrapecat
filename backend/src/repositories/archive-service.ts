@@ -1,10 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import git from "isomorphic-git";
-import http from "isomorphic-git/http/node";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
+import { runGit, authArgs } from "@/repositories/git";
 
 export type RepoArchive = {
   owner: string;
@@ -14,16 +13,14 @@ export type RepoArchive = {
   tipSha: string;
 };
 
+const TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
+
 function archiveDir(owner: string, repo: string, branch: string): string {
   return path.join(env.REPO_ARCHIVE_DIR, owner, repo, branch);
 }
 
 function remoteUrl(owner: string, repo: string): string {
   return `https://github.com/${owner}/${repo}.git`;
-}
-
-function auth() {
-  return { username: env.GITHUB_TOKEN, password: "" };
 }
 
 async function isRepo(dir: string): Promise<boolean> {
@@ -36,14 +33,20 @@ async function isRepo(dir: string): Promise<boolean> {
 }
 
 /**
- * Ensures a local git clone of `owner/repo` at `branch` exists under
- * `REPO_ARCHIVE_DIR/{owner}/{repo}/{branch}/`. Clones on first access, then
- * fetches to keep the branch ref current (incremental — only new objects are
- * transferred). Returns the archive dir and the resolved tip SHA.
+ * Ensures a local clone of `owner/repo` at `branch` under
+ * `REPO_ARCHIVE_DIR/{owner}/{repo}/{branch}/`. Clones on first access with the
+ * native `git` binary, then fetches to keep the branch current (incremental —
+ * only new objects are transferred). Returns the archive dir and the resolved
+ * tip SHA.
+ *
+ * The clone is bare-ish (`--no-checkout` — only `.git`, no working tree, since
+ * nothing reads file contents). A plain `git fetch origin` updates the
+ * remote-tracking ref; the local branch ref is then fast-forwarded with
+ * `git update-ref` so the rest of the pipeline can keep reading `ref: branch`.
  *
  * This is the batch-ingestion source of truth: once cloned, every commit and
- * diff for the branch is read from disk via isomorphic-git — no per-item API
- * calls, no pagination, no watermark.
+ * diff for the branch is read from disk — no per-item API calls, no
+ * pagination, no watermark.
  */
 export async function ensureArchive(opts: {
   owner: string;
@@ -59,13 +62,38 @@ export async function ensureArchive(opts: {
   const existed = await isRepo(dir);
   await timed(`archive.${existed ? "fetch" : "clone"}`, { owner, repo, branch, url }, async () => {
     if (existed) {
-      await git.fetch({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
+      await runGit({
+        cwd: dir,
+        args: [...authArgs(), "fetch", "origin"],
+        timeoutMs: TRANSFER_TIMEOUT_MS,
+        label: "git fetch",
+      });
+      const tip = (await runGit({ cwd: dir, args: ["rev-parse", `origin/${branch}`] })).trim();
+      await runGit({
+        cwd: dir,
+        args: ["update-ref", `refs/heads/${branch}`, tip],
+        label: "git update-ref",
+      });
     } else {
-      await git.clone({ fs, http, dir, url, ref: branch, singleBranch: true, onAuth: auth });
+      await runGit({
+        cwd: path.dirname(dir),
+        args: [
+          ...authArgs(),
+          "clone",
+          "--single-branch",
+          "--branch",
+          branch,
+          "--no-checkout",
+          url,
+          dir,
+        ],
+        timeoutMs: TRANSFER_TIMEOUT_MS,
+        label: "git clone",
+      });
     }
   });
 
-  const tipSha = await git.resolveRef({ fs, dir, ref: branch });
+  const tipSha = (await runGit({ cwd: dir, args: ["rev-parse", branch] })).trim();
   logger.info(
     { owner, repo, branch, dir, tipSha, action: existed ? "fetch" : "clone" },
     "archive ready",

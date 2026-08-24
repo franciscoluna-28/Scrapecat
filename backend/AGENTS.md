@@ -56,7 +56,7 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 1. Validate input body with `ReportInputBody` (wraps `ReportDataInput` in `{ data: ... }`)
 2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
 3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`)
-4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits from disk (isomorphic-git), upserts `commit_chunks`, and embeds
+4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits from disk (native `git` binary), upserts `commit_chunks`, and embeds
 5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
 6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts` (commit messages + LLM summaries)
 7. Call AI with up to 2 retries if structure validation fails
@@ -89,8 +89,8 @@ All DB access goes through per-domain store modules — `src/projects/stores/pro
 
 Commit ingestion is **synchronous, batch, archive-based** — no background worker, queue, or watermark.
 
-- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with isomorphic-git (`repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN`) and does an incremental fetch on repeat runs. The archive is the source of truth; commits are read from disk, never the API.
-- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git`. Diff-based verification was removed for now and will be re-added as a guardrail later.
+- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with the native `git` binary (`git clone --single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN` via `http.extraheader`) and does an incremental fetch (`git fetch origin` + `git update-ref`) on repeat runs. The archive is the source of truth; commits are read from disk, never the API.
+- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`).
 - **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → upsert `commit_chunks` (dedupe by SHA, skipping already-stored, commit message as `diff_summary`) → `embedNewChunks`.
 - **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any clone or LLM work — `ProviderKeyError` otherwise.
 
@@ -108,7 +108,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits are read from the local archive via isomorphic-git (`src/repositories/`), never from this interface.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 
