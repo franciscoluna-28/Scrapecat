@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lte, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { reportCommits, commitChunks, type CommitChunkMetadata } from "@/db/schema";
 
@@ -169,6 +169,116 @@ export async function countCommitsForReport({
         eq(commitChunks.branch, branch),
       ),
     )
+    .where(and(...conditions));
+  return row?.count ?? 0;
+}
+
+function windowConditions({
+  projectId,
+  branch,
+  startDate,
+  endDate,
+  q,
+  cursor,
+}: {
+  projectId: string;
+  branch: string;
+  startDate?: Date;
+  endDate?: Date;
+  q?: string;
+  cursor?: ReportCommitsCursor;
+}) {
+  const conditions = [
+    eq(commitChunks.projectId, projectId),
+    eq(commitChunks.branch, branch),
+  ];
+  if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));
+  if (endDate) conditions.push(lte(commitChunks.committedAt, endDate));
+  if (q) {
+    conditions.push(ilike(commitChunks.commitMessage, `%${escapeLike(q)}%`));
+  }
+  if (cursor) {
+    conditions.push(
+      sql`(${commitChunks.committedAt}, ${commitChunks.id}) < (${cursor.at}, ${cursor.id})`,
+    );
+  }
+  return conditions;
+}
+
+const WINDOW_COMMIT_COLUMNS = {
+  id: commitChunks.id,
+  projectId: commitChunks.projectId,
+  commitSha: commitChunks.commitSha,
+  branch: commitChunks.branch,
+  commitMessage: commitChunks.commitMessage,
+  author: commitChunks.author,
+  diffSummary: commitChunks.diffSummary,
+  committedAt: commitChunks.committedAt,
+  metadata: commitChunks.metadata,
+};
+
+/**
+ * Cursor-paginated commits for an ingested window (before a report exists),
+ * served straight from `commit_chunks` — the DB is the read model, no git work.
+ */
+export async function listCommitsForWindow({
+  projectId,
+  branch,
+  startDate,
+  endDate,
+  q,
+  cursor,
+  limit = 50,
+  tx,
+}: {
+  projectId: string;
+  branch: string;
+  startDate?: Date;
+  endDate?: Date;
+  q?: string;
+  cursor?: ReportCommitsCursor;
+  limit?: number;
+  tx?: DbOrTx;
+}): Promise<{ rows: ReportCommitRow[]; nextCursor: ReportCommitsCursor | null }> {
+  const client = tx || db;
+  const conditions = windowConditions({ projectId, branch, startDate, endDate, q, cursor });
+
+  const rows = await client
+    .select(WINDOW_COMMIT_COLUMNS)
+    .from(commitChunks)
+    .where(and(...conditions))
+    .orderBy(desc(commitChunks.committedAt), desc(commitChunks.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    rows: page as ReportCommitRow[],
+    nextCursor: hasMore && last ? { at: last.committedAt.toISOString(), id: last.id } : null,
+  };
+}
+
+export async function countCommitsForWindow({
+  projectId,
+  branch,
+  startDate,
+  endDate,
+  q,
+  tx,
+}: {
+  projectId: string;
+  branch: string;
+  startDate?: Date;
+  endDate?: Date;
+  q?: string;
+  tx?: DbOrTx;
+}): Promise<number> {
+  const client = tx || db;
+  const conditions = windowConditions({ projectId, branch, startDate, endDate, q });
+  const [row] = await client
+    .select({ count: sql<number>`count(*)::int` })
+    .from(commitChunks)
     .where(and(...conditions));
   return row?.count ?? 0;
 }

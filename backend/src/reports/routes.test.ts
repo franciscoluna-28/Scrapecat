@@ -74,6 +74,8 @@ describe("POST /api/v1/reports (async)", () => {
   });
 });
 
+const JOB_ID = "11111111-1111-4111-8111-111111111111";
+
 describe("GET /api/v1/reports/jobs/:jobId", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 
@@ -87,8 +89,11 @@ describe("GET /api/v1/reports/jobs/:jobId", () => {
 
   it("returns the job status", async () => {
     mockGetReportJob.mockReturnValue({
-      id: "job-1",
+      id: JOB_ID,
       status: "succeeded",
+      phase: null,
+      commitCount: 12,
+      progress: null,
       reportId: "report-1",
       projectId: "proj-1",
       error: null,
@@ -99,13 +104,15 @@ describe("GET /api/v1/reports/jobs/:jobId", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/reports/jobs/job-1",
+      url: `/api/v1/reports/jobs/${JOB_ID}`,
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
-      jobId: "job-1",
+      jobId: JOB_ID,
       status: "succeeded",
+      phase: null,
+      commitCount: 12,
       reportId: "report-1",
     });
   });
@@ -115,7 +122,7 @@ describe("GET /api/v1/reports/jobs/:jobId", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/reports/jobs/nope",
+      url: `/api/v1/reports/jobs/${JOB_ID}`,
     });
 
     expect(res.statusCode).toBe(404);

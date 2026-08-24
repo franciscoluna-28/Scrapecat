@@ -31,6 +31,13 @@ export const ReportJobAcceptedResponse = Type.Object({
 export const ReportJobStatusResponse = Type.Object({
   jobId: Type.String(),
   status: Type.String(),
+  phase: Type.Union([
+    Type.Literal("ingestion"),
+    Type.Literal("generation"),
+    Type.Null(),
+  ]),
+  commitCount: Type.Integer(),
+  progress: Type.Union([Type.String(), Type.Null()]),
   reportId: Type.Union([Type.String(), Type.Null()]),
   projectId: Type.Union([Type.String(), Type.Null()]),
   error: Type.Union([
@@ -46,7 +53,7 @@ export const ReportJobStatusResponse = Type.Object({
 });
 
 export const ReportJobParams = Type.Object({
-  jobId: Type.String(),
+  jobId: Type.String({ format: "uuid" }),
 });
 
 export const ReportsListQuery = Type.Object({

@@ -3,10 +3,11 @@ import { db } from "@/db/client";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
+import { startOfDayUtc, endOfDayUtc, extractReportTitle } from "@/shared/utils";
 import { resolveApiKey } from "@/credentials/services";
 import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
-import { ingestCommits } from "@/repositories/ingest";
+import { ingestCommits, type IngestProgress } from "@/repositories/ingest";
 import * as projectsStore from "@/projects/stores/projects-store";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import * as reportsStore from "@/reports/stores/reports-store";
@@ -20,17 +21,8 @@ import {
 } from "@/reports/prompts";
 import { validateReportStructure, buildTemplateInstruction } from "@/reports/report-output";
 import { callAI, cleanResponse } from "@/reports/ai";
-import { extractReportTitle } from "@/shared/utils";
 
 export type { CreateReportInput };
-
-function startOfDayUtc(dateStr: string): Date {
-  return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function endOfDayUtc(dateStr: string): Date {
-  return new Date(`${dateStr}T23:59:59.999Z`);
-}
 
 export class NoCommitsError extends Error {
   readonly status = 400;
@@ -69,6 +61,48 @@ export class AIGenerationError extends Error {
       500,
     );
   }
+}
+
+/**
+ * Phase 1 — ingestion. Upserts the project and batch-ingests the commit window
+ * into `commit_chunks` from the local git archive. The project must exist so
+ * the preview can read commits from Postgres before any report is generated.
+ */
+export async function ingestReportWindow(
+  input: CreateReportInput,
+  onProgress?: IngestProgress,
+): Promise<{ projectId: string; ingestResult: Awaited<ReturnType<typeof ingestCommits>> }> {
+  const { project } = await timed(
+    "report.upsertProject",
+    { repo: input.repository, branch: input.branch },
+    () =>
+      projectsStore.upsertProject({
+        input: {
+          gitProvider: input.gitProvider,
+          providerProjectId: input.providerProjectId,
+          providerOwner: input.providerOwner,
+          repositoryName: input.repository,
+          defaultBranch: input.branch,
+        },
+      }),
+  );
+
+  const ingestResult = await timed(
+    "report.ingestCommits",
+    { repo: input.repository, branch: input.branch },
+    () =>
+      ingestCommits({
+        owner: input.providerOwner,
+        repo: input.repository,
+        branch: input.branch,
+        projectId: project.id,
+        startDate: startOfDayUtc(input.startDate),
+        endDate: endOfDayUtc(input.endDate),
+        onProgress,
+      }),
+  );
+
+  return { projectId: project.id, ingestResult };
 }
 
 async function generateReport(opts: {
@@ -183,9 +217,15 @@ async function generateReport(opts: {
   );
 }
 
-export async function createReportUseCase(input: CreateReportInput) {
-  // Never start report generation (not even the sync) without a valid AI key.
-  // Fail fast with a clear error instead of burning sync work + AI retries.
+/**
+ * Phase 2 — generation. Reads the ingested window from `commit_chunks`, calls
+ * the AI, and stores the report + commit snapshot. Runs only after phase 1
+ * (ingestion) has succeeded, so no git or filesystem work happens here.
+ */
+export async function generateReportUseCase(
+  input: CreateReportInput,
+  projectId: string,
+): Promise<{ reportId: string; projectId: string }> {
   const settings = await getAISettings();
   const provider = input.provider || settings.reportProvider;
   const model = input.model || settings.reportModel;
@@ -202,43 +242,12 @@ export async function createReportUseCase(input: CreateReportInput) {
     throw new ProviderKeyError(provider);
   }
 
-  const { project } = await timed(
-    "report.upsertProject",
-    { provider, model, repo: input.repository, branch: input.branch },
-    () =>
-      projectsStore.upsertProject({
-        input: {
-          gitProvider: input.gitProvider,
-          providerProjectId: input.providerProjectId,
-          providerOwner: input.providerOwner,
-          repositoryName: input.repository,
-          defaultBranch: input.branch,
-        },
-      }),
-  );
-
-  // Batch-ingest the report window from the local git archive (clone + diffs +
-  // LLM summaries), then read the window's commits straight from Postgres.
-  const ingestResult = await timed(
-    "report.ingestCommits",
-    { provider, model, repo: input.repository, branch: input.branch },
-    () =>
-      ingestCommits({
-        owner: input.providerOwner,
-        repo: input.repository,
-        branch: input.branch,
-        projectId: project.id,
-        startDate: startOfDayUtc(input.startDate),
-        endDate: endOfDayUtc(input.endDate),
-      }),
-  );
-
   const storedRows = await timed(
     "report.listCommitsForProject",
     { repo: input.repository, branch: input.branch },
     () =>
       commitChunksStore.listCommitsForProject({
-        projectId: project.id,
+        projectId,
         branch: input.branch,
         startDate: startOfDayUtc(input.startDate),
         endDate: endOfDayUtc(input.endDate),
@@ -248,10 +257,8 @@ export async function createReportUseCase(input: CreateReportInput) {
     sha: r.commitSha,
     message: r.commitMessage,
     summary: r.diffSummary,
-    files: r.metadata?.fileStats ?? [],
+    files: r.metadata?.filesChanged ?? [],
     filesChanged: r.metadata?.filesChanged?.length ?? 0,
-    additions: r.metadata?.additions ?? 0,
-    deletions: r.metadata?.deletions ?? 0,
     commitUrl: r.metadata?.commitUrl ?? null,
     flagged: r.metadata?.validation?.status === "flagged",
   }));
@@ -283,7 +290,7 @@ export async function createReportUseCase(input: CreateReportInput) {
         await reportsStore.createReport({
           input: {
             id: reportId,
-            projectId: project.id,
+            projectId,
             title: extractReportTitle(generatedReport, input.repository),
             originalMarkdown: generatedReport,
             startDate: new Date(input.startDate),
@@ -305,16 +312,15 @@ export async function createReportUseCase(input: CreateReportInput) {
   logger.info(
     {
       reportId,
-      projectId: project.id,
+      projectId,
       repo: input.repository,
       branch: input.branch,
       provider,
       model,
-      commitsFound: ingestResult.commitsFound,
-      chunksWritten: ingestResult.chunksWritten,
+      commits: commits.length,
     },
     "report generation complete",
   );
 
-  return { reportId, projectId: project.id };
+  return { reportId, projectId };
 }

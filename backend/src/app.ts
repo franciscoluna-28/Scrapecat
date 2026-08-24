@@ -9,7 +9,7 @@ import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
-import { createReport, listReports, getReport, getReportCommits, getReportJobStatus } from "@/reports/routes";
+import { createReport, listReports, getReport, getReportCommits, getReportJobStatus, streamReportJob, getJobCommits } from "@/reports/routes";
 import { listProjects } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
@@ -165,6 +165,24 @@ export async function buildApp() {
       response: { 200: ReportJobStatusResponse, 404: ErrorResponse },
     },
   }, getReportJobStatus);
+
+  app.get("/api/v1/reports/jobs/:jobId/stream", {
+    schema: {
+      description: "Server-sent event stream of a report job's progress",
+      tags: ["reports"],
+      params: ReportJobParams,
+    },
+  }, streamReportJob);
+
+  app.get("/api/v1/reports/jobs/:jobId/commits", {
+    schema: {
+      description: "Cursor-paginated commits for an ingested report window (before the report exists)",
+      tags: ["reports"],
+      params: ReportJobParams,
+      querystring: ReportCommitsQuery,
+      response: { 200: ReportCommitsResponse, 400: ErrorResponse, 404: ErrorResponse },
+    },
+  }, getJobCommits);
 
   app.get("/api/v1/reports", {
     schema: {

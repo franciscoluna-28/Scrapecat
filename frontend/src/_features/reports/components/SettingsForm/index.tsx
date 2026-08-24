@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition, useState } from "react";
+import { useEffect, useRef, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
@@ -20,7 +20,9 @@ import { Book, Loader2, Bookmark } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/src/components/ui/DatePicker";
 import { apiClient } from "@/src/shared/api/client";
-import { useReportJob } from "@/src/_features/reports/services/reports-api";
+import { useReportJobStream } from "@/src/_features/reports/services/reports-api";
+import { useCommits } from "@/src/_features/reports/services/api";
+import { CommitsPreviewCard } from "@/src/_features/reports/components/CommitsPreviewCard";
 import { PromptPresetsModal } from "@/src/components/PromptPresetsModal";
 import { useAISettings } from "@/src/shared/services/ai-settings";
 
@@ -44,24 +46,34 @@ export function SettingsForm({
   const [customInstructions, setCustomInstructions] = useState("");
   const [promptPresetsOpen, setPromptPresetsOpen] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const toastedJobId = useRef<string | null>(null);
   const { settings: aiSettings } = useAISettings();
-  const { job, error: jobError } = useReportJob(jobId ?? undefined);
+  const { job } = useReportJobStream(jobId ?? undefined);
+
+  const {
+    commits,
+    count: commitCount,
+    isFetching: commitsFetching,
+    hasError: commitsError,
+  } = useCommits({
+    owner: repository.owner.login,
+    repo: repository.name,
+    startDate,
+    endDate,
+    branch: selectedBranch,
+  });
 
   useEffect(() => {
     if (job?.status === "succeeded" && job.reportId) {
       router.push(`/app/reports/${job.reportId}`);
-    } else if (job?.status === "failed") {
+    } else if (
+      job?.status === "failed" &&
+      toastedJobId.current !== job.jobId
+    ) {
+      toastedJobId.current = job.jobId;
       toast.error(job.error?.message ?? "Failed to generate report");
-      setJobId(null);
     }
   }, [job, router]);
-
-  useEffect(() => {
-    if (jobError) {
-      toast.error("Report job is no longer available. Please try again.");
-      setJobId(null);
-    }
-  }, [jobError]);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -106,7 +118,9 @@ export function SettingsForm({
     });
   };
 
-  const isGenerating = isPending || !!jobId;
+  // A failed job keeps its jobId in state (the toast is guarded), so the
+  // button re-enables by excluding the failed status rather than resetting.
+  const isGenerating = isPending || (!!jobId && job?.status !== "failed");
 
   return (
     <Card className="border-0 shadow-sm max-w-2xl mx-auto">
@@ -228,6 +242,14 @@ export function SettingsForm({
           />
         </div>
 
+        <CommitsPreviewCard
+          startDate={startDate}
+          isFetching={commitsFetching}
+          hasError={commitsError}
+          commitCount={commitCount}
+          commits={commits}
+        />
+
         <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
@@ -238,7 +260,9 @@ export function SettingsForm({
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating Report...
+                {job?.phase === "generation"
+                  ? "Generating Report..."
+                  : "Ingesting Repository..."}
               </>
             ) : (
               <>
@@ -247,6 +271,13 @@ export function SettingsForm({
               </>
             )}
           </Button>
+
+          {job && job.status !== "succeeded" && job.status !== "failed" && (
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {job.progress ?? "Ingesting repository..."}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

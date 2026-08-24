@@ -1,49 +1,34 @@
 import { randomUUID } from "crypto";
+import { EventEmitter } from "events";
 import { logger } from "@/shared/logger";
-import { timed } from "@/shared/timing";
 import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
 import { resolveApiKey } from "@/credentials/services";
 import { env } from "@/config/env";
 import {
-  createReportUseCase,
+  ingestReportWindow,
+  generateReportUseCase,
   NoCommitsError,
   AIGenerationError,
   ProviderKeyError,
   type CreateReportInput,
 } from "@/reports/use-cases";
+import * as jobStore from "@/reports/stores/job-store";
+import type { ReportJobRow } from "@/reports/stores/job-store";
 
-export type ReportJobStatus = "queued" | "running" | "succeeded" | "failed";
-
-export type ReportJob = {
-  id: string;
-  status: ReportJobStatus;
-  input: CreateReportInput;
-  reportId: string | null;
-  projectId: string | null;
-  error: { message: string; status: number } | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-};
-
-const jobs = new Map<string, ReportJob>();
+/**
+ * Minimal in-process FIFO queue. Postgres (`report_jobs`) is the durable
+ * status store; this just sequences the single worker. No external infra.
+ */
 const queue: string[] = [];
 let active = 0;
 const CONCURRENCY = 1;
 
-function createJobRecord(input: CreateReportInput): ReportJob {
-  return {
-    id: randomUUID(),
-    status: "queued",
-    input,
-    reportId: null,
-    projectId: null,
-    error: null,
-    createdAt: new Date().toISOString(),
-    startedAt: null,
-    finishedAt: null,
-  };
+/** Emits every persisted job transition so SSE streams can push live updates. */
+export const jobEvents = new EventEmitter();
+
+function emit(job: ReportJobRow) {
+  jobEvents.emit(job.id, job);
 }
 
 function mapJobError(error: unknown): { message: string; status: number } {
@@ -69,30 +54,65 @@ function mapJobError(error: unknown): { message: string; status: number } {
   return { message, status };
 }
 
+/**
+ * Phase 1 ingests the window (clone + git walk + chunks + embedding) — the
+ * memory-heavy part. Phase 2 generates the report (AI + DB only) and only runs
+ * after phase 1 succeeds, so the frontend can gate on `commitCount` first.
+ */
 async function runJob(jobId: string) {
-  const job = jobs.get(jobId);
+  const job = await jobStore.updateJob(jobId, {
+    status: "running",
+    phase: "ingestion",
+    startedAt: new Date(),
+  });
   if (!job) return;
-  job.status = "running";
-  job.startedAt = new Date().toISOString();
+  emit(job);
+
+  const progress = (stage: string, message: string, done?: number) => {
+    void jobStore
+      .updateJobProgress(jobId, {
+        ...(stage === "commits" && done !== undefined ? { commitCount: done } : {}),
+        progress: message,
+      })
+      .then((updated) => {
+        if (updated) emit(updated);
+      });
+  };
 
   try {
-    const { reportId, projectId } = await timed(
-      "job.createReport",
-      { jobId, repo: job.input.repository, branch: job.input.branch },
-      () => createReportUseCase(job.input),
-    );
-    job.reportId = reportId;
-    job.projectId = projectId;
-    job.status = "succeeded";
+    const { projectId, ingestResult } = await ingestReportWindow(job.data, progress);
+
+    let updated = await jobStore.updateJob(jobId, {
+      phase: "generation",
+      projectId,
+      commitCount: ingestResult.commitsFound,
+      progress: "Generating report...",
+    });
+    if (updated) emit(updated);
+
+    const { reportId } = await generateReportUseCase(job.data, projectId);
+
+    updated = await jobStore.updateJob(jobId, {
+      status: "succeeded",
+      reportId,
+      progress: null,
+      finishedAt: new Date(),
+    });
+    if (updated) emit(updated);
   } catch (error) {
-    job.error = mapJobError(error);
-    job.status = "failed";
+    const errorInfo = mapJobError(error);
+    const updated = await jobStore.updateJob(jobId, {
+      status: "failed",
+      error: errorInfo,
+      progress: null,
+      finishedAt: new Date(),
+    });
+    if (updated) emit(updated);
     logger.error(
       { jobId, err: (error as Error)?.message ?? String(error) },
       "report job failed",
     );
   } finally {
-    job.finishedAt = new Date().toISOString();
     active -= 1;
     void drainQueue();
   }
@@ -110,9 +130,10 @@ async function drainQueue() {
 /**
  * Validates the AI provider/key synchronously with the report use case
  * (fail fast with a 400 before queueing a doomed job), then enqueues the
- * report and returns the job. The worker runs the pipeline in the background.
+ * report and returns the persisted job. The worker runs both phases in the
+ * background.
  */
-export async function enqueueReportJob(input: CreateReportInput): Promise<ReportJob> {
+export async function enqueueReportJob(input: CreateReportInput): Promise<ReportJobRow> {
   const settings = await getAISettings();
   const provider = input.provider || settings.reportProvider;
   const providerConfig = getProviderConfig(provider);
@@ -128,8 +149,7 @@ export async function enqueueReportJob(input: CreateReportInput): Promise<Report
     throw new ProviderKeyError(provider);
   }
 
-  const job = createJobRecord(input);
-  jobs.set(job.id, job);
+  const job = await jobStore.createJob({ id: randomUUID(), data: input });
   queue.push(job.id);
   void drainQueue();
 
@@ -140,6 +160,14 @@ export async function enqueueReportJob(input: CreateReportInput): Promise<Report
   return job;
 }
 
-export function getReportJob(jobId: string): ReportJob | null {
-  return jobs.get(jobId) ?? null;
+export function getReportJob(jobId: string): Promise<ReportJobRow | null> {
+  return jobStore.getJob(jobId);
+}
+
+/** Marks jobs interrupted by a restart as failed so they never hang the UI. */
+export async function initJobs() {
+  const failed = await jobStore.failOrphanedJobs();
+  if (failed > 0) {
+    logger.info({ failed }, "failed orphaned report jobs on boot");
+  }
 }

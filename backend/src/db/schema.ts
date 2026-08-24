@@ -125,6 +125,21 @@ export const commitChunks = pgTable(
   },
 );
 
+export const reportJobs = pgTable("report_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  status: text("status").notNull().default("queued"),
+  phase: text("phase"),
+  commitCount: integer("commit_count").notNull().default(0),
+  progress: text("progress"),
+  error: jsonb("error").$type<{ message: string; status: number } | null>(),
+  data: jsonb("data").notNull(),
+  projectId: uuid("project_id"),
+  reportId: uuid("report_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")
