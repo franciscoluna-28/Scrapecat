@@ -2,7 +2,7 @@ import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { ensureArchive } from "@/repositories/archive-service";
 import { listCommitsInRange } from "@/repositories/git-reader";
-import { getCommitDiffStats, type CommitDiffStats } from "@/repositories/git-diff";
+import { getCommitChangedFiles } from "@/repositories/git-diff";
 import { classifyCommit } from "@/repositories/guardrail";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
@@ -14,20 +14,54 @@ export type IngestResult = {
   tipSha: string;
 };
 
+export type IngestProgress = (
+  stage: "archive" | "commits" | "ingest" | "embedding",
+  message: string,
+  done?: number,
+  total?: number,
+) => void;
+
+const BATCH_SIZE = 50;
+const WALK_CONCURRENCY = 8;
+
+/**
+ * Runs `fn` over `items` with at most `limit` promises in flight. The commit
+ * file-scope reads shell out to the native git binary (async, non-blocking),
+ * but spawning dozens of processes at once is still wasteful — a modest
+ * concurrency bounds process count while keeping the loop responsive.
+ */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 /**
  * Batch-ingests the commit window for a repo branch into `commit_chunks`.
  *
  * 1. Ensure the local git archive is current (clone or incremental fetch).
- * 2. List commits in `[startDate, endDate]` from disk (isomorphic-git).
- * 3. Diff each NEW commit against its parent to get provable scope (files,
- *    line counts) — the message can lie, the diff can't.
+ * 2. List commits in `[startDate, endDate]` from disk (native git).
+ * 3. Walk each NEW commit's tree vs its parent to get the real file scope
+ *    (OID compare only — no blob reads, bounded memory).
  * 4. Guardrail: skip empty/no-op commits, flag uninformative or lying messages.
- * 5. Upsert chunks (dedupe by sha) with the diff stats + validation status.
+ * 5. Upsert chunks in small batches (dedupe by SHA) — never hold the whole
+ *    window in memory at once.
  * 6. Trigger embedding.
  *
  * No per-item GitHub API calls, no pagination, no watermark — the archive is
- * the source of truth and dedupe is by SHA. Diff analysis is file-level only
- * (no line-by-line code review); the commit URL is kept as the escape hatch.
+ * the source of truth and dedupe is by SHA. `onProgress` reports stages so the
+ * caller can persist + stream live status.
  */
 export async function ingestCommits(opts: {
   owner: string;
@@ -36,8 +70,9 @@ export async function ingestCommits(opts: {
   projectId: string;
   startDate?: Date;
   endDate?: Date;
+  onProgress?: IngestProgress;
 }): Promise<IngestResult> {
-  const { owner, repo, branch, projectId, startDate, endDate } = opts;
+  const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
   const base = { owner, repo, branch, projectId };
 
   const archive = await timed("ingest.ensureArchive", base, () =>
@@ -55,6 +90,7 @@ export async function ingestCommits(opts: {
         until: endDate,
       }),
   );
+  onProgress?.("commits", `Found ${commits.length} commits`, commits.length, commits.length);
 
   const existing = await timed("ingest.getChunksByShas", { ...base, shas: commits.length }, () =>
     commitChunksStore.getChunksByShas({
@@ -74,50 +110,76 @@ export async function ingestCommits(opts: {
     "ingest.prepareChunks complete",
   );
 
-  const diffs = await timed(
-    "ingest.computeDiffStats",
-    { ...base, commits: newCommits.length },
-    () => computeDiffStatsBatched(archive.dir, newCommits),
-  );
+  let chunksWritten = 0;
+  let skipped = 0;
+  for (let i = 0; i < newCommits.length; i += BATCH_SIZE) {
+    const batch = newCommits.slice(i, i + BATCH_SIZE);
+    const chunks: CommitChunkInput[] = [];
+    const batchStart = performance.now();
 
-  const chunks: CommitChunkInput[] = [];
-  const skipped: string[] = [];
-  for (const c of newCommits) {
-    const diff = diffs.get(c.sha);
-    if (!diff) continue;
-    const guard = classifyCommit({ message: c.message, filesChanged: diff.filesChanged });
-    if (guard.status === "skipped") {
-      skipped.push(c.sha);
-      continue;
-    }
-    chunks.push({
-      projectId,
-      commitSha: c.sha,
-      branch,
-      commitMessage: c.message,
-      author: c.author,
-      diffSummary: c.message,
-      metadata: {
-        filesChanged: diff.files.map((f) => f.filepath),
-        fileStats: diff.files,
-        additions: diff.additions,
-        deletions: diff.deletions,
-        commitUrl: `https://github.com/${owner}/${repo}/commit/${c.sha}`,
-        validation: { status: guard.status, notes: guard.notes },
-      },
-      committedAt: new Date(c.date),
+    const diffs = await mapLimit(batch, WALK_CONCURRENCY, async (c) => {
+      const stats = await getCommitChangedFiles({
+        dir: archive.dir,
+        parentSha: c.parentSha,
+        commitSha: c.sha,
+      });
+      return { sha: c.sha, stats } as const;
     });
-  }
+    const diffBySha = new Map(diffs.map((d) => [d.sha, d.stats]));
 
-  if (chunks.length > 0) {
-    await timed("ingest.upsertCommitChunks", { ...base, chunks: chunks.length }, () =>
-      commitChunksStore.upsertCommitChunks({ inputs: chunks }),
+    for (const c of batch) {
+      const diff = diffBySha.get(c.sha);
+      if (!diff) continue;
+      const guard = classifyCommit({ message: c.message, filesChanged: diff.filesChanged });
+      if (guard.status === "skipped") {
+        skipped += 1;
+        continue;
+      }
+      chunks.push({
+        projectId,
+        commitSha: c.sha,
+        branch,
+        commitMessage: c.message,
+        author: c.author,
+        diffSummary: c.message,
+        metadata: {
+          filesChanged: diff.files.map((f) => f.filepath),
+          commitUrl: `https://github.com/${owner}/${repo}/commit/${c.sha}`,
+          validation: { status: guard.status, notes: guard.notes },
+        },
+        committedAt: new Date(c.date),
+      });
+    }
+
+    if (chunks.length > 0) {
+      await commitChunksStore.upsertCommitChunks({ inputs: chunks });
+      chunksWritten += chunks.length;
+    }
+    const processed = Math.min(i + batch.length, newCommits.length);
+    logger.info(
+      {
+        ...base,
+        batchIndex: i / BATCH_SIZE,
+        processed,
+        total: newCommits.length,
+        chunksWritten,
+        skipped,
+        durationMs: Math.round(performance.now() - batchStart),
+      },
+      "ingest batch complete",
+    );
+    onProgress?.(
+      "ingest",
+      `Stored ${chunksWritten} of ${newCommits.length} commits`,
+      processed,
+      newCommits.length,
     );
   }
 
   let embedded = 0;
-  if (chunks.length > 0) {
-    const result = await timed("ingest.embedNewChunks", { ...base }, () =>
+  if (chunksWritten > 0) {
+    onProgress?.("embedding", "Embedding commit summaries");
+    const result = await timed("ingest.embedNewChunks", base, () =>
       embedNewChunks(projectId),
     );
     embedded = result.embedded;
@@ -127,8 +189,8 @@ export async function ingestCommits(opts: {
     {
       ...base,
       commitsFound: commits.length,
-      chunksWritten: chunks.length,
-      skipped: skipped.length,
+      chunksWritten,
+      skipped,
       embedded,
       tipSha: archive.tipSha,
     },
@@ -137,31 +199,7 @@ export async function ingestCommits(opts: {
 
   return {
     commitsFound: commits.length,
-    chunksWritten: chunks.length,
+    chunksWritten,
     tipSha: archive.tipSha,
   };
-}
-
-const DIFF_CONCURRENCY = 8;
-
-async function computeDiffStatsBatched(
-  dir: string,
-  commits: { sha: string; parentSha: string | null }[],
-): Promise<Map<string, CommitDiffStats>> {
-  const results = new Map<string, CommitDiffStats>();
-  for (let i = 0; i < commits.length; i += DIFF_CONCURRENCY) {
-    const batch = commits.slice(i, i + DIFF_CONCURRENCY);
-    const computed = await Promise.all(
-      batch.map(async (c) => {
-        const stats = await getCommitDiffStats({
-          dir,
-          parentSha: c.parentSha,
-          commitSha: c.sha,
-        });
-        return [c.sha, stats] as const;
-      }),
-    );
-    for (const [sha, stats] of computed) results.set(sha, stats);
-  }
-  return results;
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockEnsureArchive = vi.fn();
 const mockListCommitsInRange = vi.fn();
-const mockGetCommitDiffStats = vi.fn();
+const mockGetCommitChangedFiles = vi.fn();
 const mockUpsertCommitChunks = vi.fn();
 const mockGetChunksByShas = vi.fn();
 const mockEmbedNewChunks = vi.fn();
@@ -16,7 +16,7 @@ vi.mock("@/repositories/git-reader", () => ({
 }));
 
 vi.mock("@/repositories/git-diff", () => ({
-  getCommitDiffStats: (...args: unknown[]) => mockGetCommitDiffStats(...args),
+  getCommitChangedFiles: (...args: unknown[]) => mockGetCommitChangedFiles(...args),
 }));
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
@@ -29,13 +29,11 @@ vi.mock("@/projects/embed-chunks", () => ({
 }));
 
 import { ingestCommits } from "@/repositories/ingest";
-import type { CommitDiffStats } from "@/repositories/git-diff";
+import type { CommitChangedStats } from "@/repositories/git-diff";
 
-const BASE_DIFF: CommitDiffStats = {
+const BASE_DIFF: CommitChangedStats = {
   filesChanged: 1,
-  additions: 2,
-  deletions: 1,
-  files: [{ filepath: "a.txt", status: "modified", additions: 2, deletions: 1 }],
+  files: [{ filepath: "a.txt", status: "modified" }],
 };
 
 const baseCommit = {
@@ -50,18 +48,18 @@ const baseCommit = {
 beforeEach(() => {
   mockEnsureArchive.mockReset();
   mockListCommitsInRange.mockReset();
-  mockGetCommitDiffStats.mockReset();
+  mockGetCommitChangedFiles.mockReset();
   mockUpsertCommitChunks.mockReset();
   mockGetChunksByShas.mockReset();
   mockEmbedNewChunks.mockReset();
 });
 
 describe("ingestCommits", () => {
-  it("ingests new commits with diff-derived metadata and validation", async () => {
+  it("ingests new commits with file-scope metadata and validation", async () => {
     mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
     mockListCommitsInRange.mockResolvedValue([baseCommit]);
     mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitDiffStats.mockResolvedValue(BASE_DIFF);
+    mockGetCommitChangedFiles.mockResolvedValue(BASE_DIFF);
     mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
 
     const result = await ingestCommits({
@@ -74,7 +72,7 @@ describe("ingestCommits", () => {
     });
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
-    expect(mockGetCommitDiffStats).toHaveBeenCalledWith({
+    expect(mockGetCommitChangedFiles).toHaveBeenCalledWith({
       dir: "/repo",
       parentSha: null,
       commitSha: "a",
@@ -90,9 +88,6 @@ describe("ingestCommits", () => {
           diffSummary: "fix: bug in parser",
           metadata: {
             filesChanged: ["a.txt"],
-            fileStats: [{ filepath: "a.txt", status: "modified", additions: 2, deletions: 1 }],
-            additions: 2,
-            deletions: 1,
             commitUrl: "https://github.com/owner/repo/commit/a",
             validation: { status: "confirmed", notes: [] },
           },
@@ -109,7 +104,7 @@ describe("ingestCommits", () => {
       { ...baseCommit, sha: "b", message: "fix: lol" },
     ]);
     mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitDiffStats.mockResolvedValue({ ...BASE_DIFF, filesChanged: 12 });
+    mockGetCommitChangedFiles.mockResolvedValue({ ...BASE_DIFF, filesChanged: 12 });
     mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
 
     await ingestCommits({
@@ -129,12 +124,7 @@ describe("ingestCommits", () => {
     mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
     mockListCommitsInRange.mockResolvedValue([baseCommit]);
     mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitDiffStats.mockResolvedValue({
-      filesChanged: 0,
-      additions: 0,
-      deletions: 0,
-      files: [],
-    });
+    mockGetCommitChangedFiles.mockResolvedValue({ filesChanged: 0, files: [] });
 
     const result = await ingestCommits({
       owner: "owner",
@@ -156,7 +146,7 @@ describe("ingestCommits", () => {
     const result = await ingestCommits({ owner: "o", repo: "r", branch: "main", projectId: "proj" });
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
-    expect(mockGetCommitDiffStats).not.toHaveBeenCalled();
+    expect(mockGetCommitChangedFiles).not.toHaveBeenCalled();
     expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
     expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });

@@ -27,15 +27,8 @@ export type ReportCommit = {
   sha: string;
   message: string;
   summary: string;
-  files: {
-    filepath: string;
-    status: "added" | "deleted" | "modified";
-    additions: number;
-    deletions: number;
-  }[];
+  files: string[];
   filesChanged: number;
-  additions: number;
-  deletions: number;
   commitUrl: string | null;
   flagged: boolean;
 };
@@ -53,22 +46,18 @@ const MAX_FILES_IN_SCOPE = 10;
 
 /**
  * Renders a single commit for the report prompt. The commit message is kept as
- * context, but the real grounding is the provable diff scope (files + line
- * counts) and the commit URL — the message can lie, the diff can't.
+ * context, but the real grounding is the provable file scope and the commit
+ * URL — the message can lie, the diff can't.
  */
 function formatCommitForPrompt(commit: ReportCommit): string {
   const lines = [`- ${commit.message}`];
   const shown = commit.files.slice(0, MAX_FILES_IN_SCOPE);
-  const fileDesc = shown
-    .map((f) => `${f.filepath} (+${f.additions} -${f.deletions})`)
-    .join(", ");
+  const fileDesc = shown.join(", ");
   const extra =
     commit.files.length > MAX_FILES_IN_SCOPE
       ? `, +${commit.files.length - MAX_FILES_IN_SCOPE} more`
       : "";
-  lines.push(
-    `  Files (${commit.filesChanged} changed, +${commit.additions} -${commit.deletions}): ${fileDesc}${extra}`,
-  );
+  lines.push(`  Files (${commit.filesChanged} changed): ${fileDesc}${extra}`);
   if (commit.commitUrl) {
     lines.push(`  Commit: ${commit.commitUrl}`);
   }
@@ -88,7 +77,7 @@ export function buildReportPrompt(params: ReportPromptParams): string {
     "Raw Activity Data:",
     commitLines,
     "",
-    "For each commit, the commit message is only a hint. Trust the file changes, line counts, and commit links as the ground truth for what was actually done and why.",
+    "For each commit, the commit message is only a hint. Trust the file changes and commit links as the ground truth for what was actually done and why.",
     "",
     params.languageInstruction,
     "",
