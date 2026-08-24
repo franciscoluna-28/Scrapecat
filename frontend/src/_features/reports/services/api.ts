@@ -137,6 +137,7 @@ export function useBranches(owner: string, repo: string) {
 
   return {
     branches: data?.branches ?? [],
+    defaultBranch: data?.defaultBranch ?? null,
     isLoading,
     error: error ?? null,
   };

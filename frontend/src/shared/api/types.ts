@@ -237,6 +237,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             branches: string[];
+                            defaultBranch: string;
                         };
                     };
                 };

@@ -47,4 +47,5 @@ export const RepositoriesResponse = Type.Array(
 
 export const BranchesResponse = Type.Object({
   branches: Type.Array(Type.String()),
+  defaultBranch: Type.String(),
 });

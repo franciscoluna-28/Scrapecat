@@ -79,6 +79,19 @@ export class GithubAdapter implements GitProvider {
     return branches;
   }
 
+  /**
+   * Resolves the repository's default branch (e.g. `main`, `master`, `canary`).
+   * Repos don't always have `main` — defaulting to a hardcoded branch name is a
+   * bug (next.js's default is `canary`).
+   */
+  async getDefaultBranch(owner: string, repo: string): Promise<string> {
+    const { data } = await this.octokit.request("GET /repos/{owner}/{repo}", {
+      owner,
+      repo,
+    });
+    return data.default_branch;
+  }
+
   async verifyConnection(): Promise<ConnectionStatus> {
     const response = await this.octokit.request("GET /user", {
       headers: { "X-GitHub-Api-Version": "2022-11-28" },

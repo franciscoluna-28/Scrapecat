@@ -31,7 +31,11 @@ export async function runGit(opts: {
       (error, stdout, stderr) => {
         if (error) {
           const detail = (stderr || "").trim();
-          reject(new Error(`${opts.label ?? "git"} failed${detail ? `: ${detail}` : ""}`));
+          const err = new Error(`${opts.label ?? "git"} failed${detail ? `: ${detail}` : ""}`);
+          if (/not found in upstream origin|couldn't find remote ref/i.test(stderr || "")) {
+            (err as any).code = "BranchNotFound";
+          }
+          reject(err);
           return;
         }
         resolve(stdout);

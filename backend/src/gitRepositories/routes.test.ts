@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 const mockProvider = {
   listRepositories: vi.fn(),
   listBranches: vi.fn(),
+  getDefaultBranch: vi.fn(async () => "main"),
 };
 
 vi.mock("@/shared/integrations/git-provider", () => ({
@@ -80,13 +81,14 @@ describe("GET /api/v1/repositories/:owner/:repo/branches", () => {
 
   it("returns branches list", async () => {
     mockProvider.listBranches.mockResolvedValue(["main", "dev"]);
+    mockProvider.getDefaultBranch.mockResolvedValue("main");
 
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/branches",
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ branches: ["main", "dev"] });
+    expect(res.json()).toEqual({ branches: ["main", "dev"], defaultBranch: "main" });
   });
 
   it("calls listBranches with correct params", async () => {

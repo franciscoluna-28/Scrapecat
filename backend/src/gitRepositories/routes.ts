@@ -41,8 +41,12 @@ export async function listBranches(
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
 
   try {
-    const branches = await getGitProvider().listBranches(owner, repo);
-    return reply.send({ branches });
+    const provider = getGitProvider();
+    const [branches, defaultBranch] = await Promise.all([
+      provider.listBranches(owner, repo),
+      provider.getDefaultBranch(owner, repo),
+    ]);
+    return reply.send({ branches, defaultBranch });
   } catch (error) {
     console.error("Error fetching branches:", error);
     return reply.status(500).send({ error: "Failed to fetch branches" });
@@ -59,7 +63,7 @@ export async function listCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { limit, startDate, endDate, branch } = req.query as Static<typeof CommitsQuery>;
-  const ref = branch || "main";
+  const ref = branch || (await getGitProvider().getDefaultBranch(owner, repo));
 
   try {
     const archive = await ensureArchive({ owner, repo, branch: ref });
@@ -84,6 +88,11 @@ export async function listCommits(
         error: "Branch or repository not found on GitHub. Check the branch name and repository access.",
       });
     }
+    if (error?.code === "BranchNotFound") {
+      return reply.status(400).send({
+        error: `Branch "${ref}" not found in this repository. Check the branch name.`,
+      });
+    }
     return reply.status(500).send({ error: "Failed to fetch commits" });
   }
 }
@@ -94,7 +103,7 @@ export async function countCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { startDate, endDate, branch } = req.query as Static<typeof CommitsCountQuery>;
-  const ref = branch || "main";
+  const ref = branch || (await getGitProvider().getDefaultBranch(owner, repo));
 
   try {
     const archive = await ensureArchive({ owner, repo, branch: ref });
@@ -105,8 +114,13 @@ export async function countCommits(
       until: parseDate(endDate),
     });
     return reply.send({ count: commits.length });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching commit count:", error);
+    if (error?.code === "BranchNotFound") {
+      return reply.status(400).send({
+        error: `Branch "${ref}" not found in this repository. Check the branch name.`,
+      });
+    }
     return reply.status(500).send({ error: "Failed to fetch commit count" });
   }
 }

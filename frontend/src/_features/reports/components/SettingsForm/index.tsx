@@ -86,7 +86,7 @@ export function SettingsForm({
   };
 
   const handleGenerate = async () => {
-    if (!startDate) return;
+    if (!startDate || !selectedBranch) return;
 
     startTransition(async () => {
       const d = new Date();
@@ -253,7 +253,7 @@ export function SettingsForm({
         <div className="pt-1 space-y-1.5">
           <Button
             onClick={handleGenerate}
-            disabled={!startDate || isGenerating}
+            disabled={!startDate || !selectedBranch || isGenerating}
             size="default"
             className="w-full"
           >

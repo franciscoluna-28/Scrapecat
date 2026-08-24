@@ -108,7 +108,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `getDefaultBranch`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface. The default branch is resolved via the GitHub API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
 
 Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
 

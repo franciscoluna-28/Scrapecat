@@ -41,6 +41,12 @@ function mapJobError(error: unknown): { message: string; status: number } {
   if (error instanceof AIGenerationError) {
     return { message: error.message, status: error.status };
   }
+  if ((error as any)?.code === "BranchNotFound") {
+    return {
+      message: "Branch not found in this repository. Check the branch name.",
+      status: 400,
+    };
+  }
   const status =
     (error as any)?.status === 404 ||
     (error as any)?.status === 422 ||

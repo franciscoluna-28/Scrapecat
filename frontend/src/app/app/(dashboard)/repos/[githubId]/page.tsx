@@ -33,7 +33,7 @@ function RepoReportPageContent() {
   const repoId = githubId;
   const repository = (repositories as GitHubRepository[]).find((r) => r.id === repoId) ?? null;
 
-  const { branches } = useBranches(
+  const { branches, defaultBranch } = useBranches(
     repository?.owner.login ?? "",
     repository?.name ?? "",
   );
@@ -41,6 +41,9 @@ function RepoReportPageContent() {
   if (!reposLoading && !repository) {
     notFound();
   }
+
+  const availableBranches = branches.length > 0 ? branches : [];
+  const selectedBranch = branch || defaultBranch || branches[0] || repository?.default_branch || "";
 
   return (
     <SectionLayout>
@@ -51,8 +54,8 @@ function RepoReportPageContent() {
           </div>
           <SettingsForm
             repository={repository}
-            branches={branches.length > 0 ? branches : ["main", "master"]}
-            selectedBranch={branch || branches[0] || "main"}
+            branches={availableBranches}
+            selectedBranch={selectedBranch}
             startDate={startDate || today}
             endDate={endDate ?? undefined}
           />

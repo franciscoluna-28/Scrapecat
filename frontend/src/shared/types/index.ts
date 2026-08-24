@@ -7,6 +7,7 @@ export type GitHubRepository = {
   private: boolean;
   updated_at: string;
   owner: { login: string };
+  default_branch?: string;
   stargazers_count?: number;
   forks_count?: number;
 };

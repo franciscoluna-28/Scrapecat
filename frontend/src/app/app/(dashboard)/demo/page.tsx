@@ -27,7 +27,7 @@ function DemoPageContent() {
   const owner = useDemoRepoStore((s) => s.owner);
   const repo = useDemoRepoStore((s) => s.repo);
 
-  const { branches, isLoading: branchesLoading } = useBranches(owner, repo);
+  const { branches, defaultBranch, isLoading: branchesLoading } = useBranches(owner, repo);
 
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -61,7 +61,7 @@ function DemoPageContent() {
       }
     : null;
 
-  const selectedBranch = searchParams.get("branch") || branches[0] || "main";
+  const selectedBranch = searchParams.get("branch") || defaultBranch || branches[0];
 
   return (
     <SectionLayout>
@@ -127,7 +127,7 @@ function DemoPageContent() {
           </div>
           <SettingsForm
             repository={repository}
-            branches={branches.length > 0 ? branches : ["main", "master"]}
+            branches={branches}
             selectedBranch={selectedBranch}
             startDate={searchParams.get("startDate") || today}
             endDate={searchParams.get("endDate") ?? undefined}
