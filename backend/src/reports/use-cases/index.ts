@@ -256,7 +256,7 @@ export async function generateReportUseCase(
   const commits: ReportCommit[] = storedRows.map((r) => ({
     sha: r.commitSha,
     message: r.commitMessage,
-    summary: r.diffSummary,
+    summary: r.commitMessage,
     files: r.metadata?.filesChanged ?? [],
     filesChanged: r.metadata?.filesChanged?.length ?? 0,
     commitUrl: r.metadata?.commitUrl ?? null,

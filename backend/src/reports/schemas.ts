@@ -106,7 +106,6 @@ export const ReportCommitsResponse = Type.Object({
       commitSha: Type.String(),
       commitMessage: Type.String(),
       author: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-      diffSummary: Type.String(),
       committedAt: Type.String({ format: "date-time" }),
       metadata: Type.Optional(Type.Any()),
     }),

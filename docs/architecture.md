@@ -22,41 +22,39 @@
 
 The commit corpus and embedding pipeline are real; semantic search over it is **not shipped yet**:
 
-- `commit_chunks.diff_summary` holds the **LLM-generated summary of a commit's real diff** (the small-model guardrail in `src/repositories/summarizer.ts`), with the raw bounded diff saved in `diff_patch`. `metadata` carries `files_changed`, `additions`/`deletions`, `summary.model`, and `validation.status` (`confirmed`/`flagged`/`skipped`) + `notes`.
-- `content_hash` (SHA-256 of the summary) and `embedding_hash` gate re-embedding: a row's embedding is current iff `embedding_hash = content_hash`. `embedding vector(1536)` + the HNSW index (`commit_embedding_hnsw_idx`) are populated by the non-blocking `embedNewChunks()` (OpenRouter, `openai/text-embedding-3-small`, 1536 dims) invoked after report generation, plus the `embed:backfill` script for one-time catch-up. If no OpenRouter key is available ingestion degrades gracefully and the backfill catches up later.
+- `commit_chunks.commit_message` is the **embedding source** (commit/PR review, not code review — the message is the unit of meaning). `metadata` carries `files_changed` and `validation.status` (`confirmed`/`flagged`/`skipped`) + `notes` from the free rule guardrail.
+- `content_hash` (SHA-256 of the message) and `embedding_hash` gate re-embedding: a row's embedding is current iff `embedding_hash = content_hash`. `embedding vector(512)` + the HNSW index (`commit_embedding_hnsw_idx`) are populated by the non-blocking `embedNewChunks()` (OpenRouter, `openai/text-embedding-3-small`, 512 dims) invoked after report generation, plus the `embed:backfill` script for one-time catch-up. If no OpenRouter key is available ingestion degrades gracefully and the backfill catches up later.
 - There is no semantic-search endpoint (`cosineDistance` over the HNSW index is the planned path) and no prompt-enrichment/retrieval in report generation yet.
 
 The full strategy (why, corpus shape, cost/reliability properties) is documented in [`docs/embeddings.md`](embeddings.md).
 
 ## Commit ingestion (batch, archive-based)
 
-Commit ingestion is **synchronous, batch, and local**. Instead of paginating the GitHub API per commit, we clone the branch once and read everything from disk with isomorphic-git — no background worker, no job queue, no watermark.
+Commit ingestion is **synchronous, batch, and local**. Instead of paginating the GitHub API per commit, we clone the branch once and read everything from disk with the native `git` binary — no background worker, no job queue, no watermark.
 
 ```
 report generation (synchronous)
    └─ repositories/archive-service.ensureArchive(owner, repo, branch)
-        repos/{owner}/{repo}/{branch}/   (git clone via isomorphic-git + GITHUB_TOKEN)
+        repos/{owner}/{repo}/{branch}/   (git clone via native git + GITHUB_TOKEN)
         · incremental fetch on repeat runs — only new objects transfer
         ▼
    repositories/git-reader.listCommitsInRange(dir, ref, since, until)
         · commits in the report window, read from the local .git
-        · per-commit real diff (files, +/-, bounded patch) via tree walk
+        · per-commit file scope (`git diff-tree --name-status`)
         ▼
-   repositories/summarizer.summarizeCommits(commits)     [batch: 10–50 per LLM call]
-        · small LLM verifies each diff against its message and writes a
-          code-grounded summary (NEVER trusts the commit message)
-        · output: [{ sha, summary, validated, notes }] — Zod-validated
+   classify with the free rule guardrail (skip empty/junk; flag misleading)
         ▼
-   upsert commit_chunks (dedupe by SHA)  →  embedNewChunks (batch)
+   upsert commit_chunks (dedupe by SHA; commit_message is the embedding source)
+        →  embedNewChunks (batch)
         ▼
    read window from Postgres → generate report
 ```
 
-**Why batch:** the workload needs *everything* (all metadata + diffs) from a remote, rate-limited API. A clone collapses that into one idempotent fetch; every fragile per-item call (pagination, retries, 429s) disappears. The GitHub REST API is used only for **discovery** (repo/branch listing, connection check) and the clone itself.
+**Why batch:** the workload needs *everything* (all metadata + file scopes) from a remote, rate-limited API. A clone collapses that into one idempotent fetch; every fragile per-item call (pagination, retries, 429s) disappears. The GitHub REST API is used only for **discovery** (repo/branch listing, connection check) and the clone itself.
 
-**Dedupe by SHA:** re-running ingestion for the same window writes nothing new (upsert `ON CONFLICT DO NOTHING`-style by `(project_id, commit_sha, branch)`), and already-synced commits are skipped before the summarizer runs.
+**Dedupe by SHA:** re-running ingestion for the same window writes nothing new (upsert `ON CONFLICT DO NOTHING`-style by `(project_id, commit_sha, branch)`), and already-synced commits are skipped before any file-scope work.
 
-**Failure handling:** the only remote step is the clone/fetch (retryable with backoff). Summarizer batches fall back to a structural summary on any failure and never block ingestion.
+**Failure handling:** the only remote step is the clone/fetch (retryable with backoff). No LLM call happens during ingestion — the only LLM work is report generation itself.
 
 **Status:** there is no `/projects/:id/sync` endpoint — ingestion is inline in report generation and the archive freshness is implicit (fetch-before-read).
 
@@ -100,8 +98,8 @@ One ~160-line handler does validation, key resolution, batch ingestion, AI retry
 
 The report prompt is grounded on real, provable diff **scope** (files, line counts, commit link) — the commit message is demoted to a hint and flagged when it contradicts the diff (`git-diff.ts` computes the stats, `guardrail.ts` skips empty commits and flags junk/lying messages). Two deliberate shortcuts remain:
 
-- **The report model never reads the patch hunks.** It knows *what/where* changed and *how much*, but the "why" is inferred from file paths + line counts + message + link, not from the changed lines themselves. A commit mislabeled as `refactor` that actually deletes a feature is only caught if the file paths reveal it. Closing this means condensing real hunks into the report prompt (or the batch summarizer) — a token cost we're deferring.
-- **`diff_summary` (the embedding source) is the commit message by design.** With clear conventional commits the message is a legitimate summary, so generating a diff-derived one via a batched LLM (`summarizer`) is currently **unnecessary**: it only feeds embeddings, semantic search isn't shipped, and the guardrail already flags junk/lying messages at ingest. Revisit only if search ships *and* message-based embeddings prove insufficient (the `embed:backfill` script already exists for one-time re-summary).
+- **The report model never reads the patch hunks.** It knows *what/where* changed and *how much*, but the "why" is inferred from file paths + line counts + message + link, not from the changed lines themselves. A commit mislabeled as `refactor` that actually deletes a feature is only caught if the file paths reveal it. Closing this means condensing real hunks into the report prompt — a token cost we're deferring.
+- **The embedding corpus is the commit message by design.** This is a commit/PR review tool, not a code reviewer: with clear conventional commits the message is a legitimate summary, so generating a diff-derived one via a batched LLM is **unnecessary**. Revisit only if search ships *and* message-based embeddings prove insufficient (the `embed:backfill` script already exists for one-time re-embedding).
 
 ## What needs to happen
 

@@ -9,8 +9,6 @@ export type CommitChunkInput = {
   branch?: string;
   commitMessage: string;
   author?: string | null;
-  diffSummary: string;
-  diffPatch?: string;
   metadata?: CommitChunkMetadata;
   committedAt: Date;
 };
@@ -37,9 +35,7 @@ export async function upsertCommitChunks({
         branch: i.branch ?? "main",
         commitMessage: i.commitMessage,
         author: i.author ?? null,
-        diffSummary: i.diffSummary,
-        diffPatch: i.diffPatch ?? null,
-        contentHash: contentHashOf(i.diffSummary),
+        contentHash: contentHashOf(i.commitMessage),
         metadata: i.metadata ?? {},
         committedAt: i.committedAt,
       })),
@@ -49,8 +45,6 @@ export async function upsertCommitChunks({
       set: {
         commitMessage: sql`excluded.commit_message`,
         author: sql`excluded.author`,
-        diffSummary: sql`excluded.diff_summary`,
-        diffPatch: sql`excluded.diff_patch`,
         contentHash: sql`excluded.content_hash`,
         metadata: sql`excluded.metadata`,
         committedAt: sql`excluded.committed_at`,
@@ -91,7 +85,7 @@ export async function getChunksByShas({
   shas: string[];
   branch?: string;
   tx?: DbOrTx;
-}): Promise<Map<string, { commitSha: string; diffSummary: string; metadata: CommitChunkMetadata; contentHash: string | null }>> {
+}): Promise<Map<string, { commitSha: string; metadata: CommitChunkMetadata; contentHash: string | null }>> {
   if (shas.length === 0) return new Map();
   const client = tx || db;
   const conditions = [
@@ -102,7 +96,6 @@ export async function getChunksByShas({
   const rows = await client
     .select({
       commitSha: commitChunks.commitSha,
-      diffSummary: commitChunks.diffSummary,
       metadata: commitChunks.metadata,
       contentHash: commitChunks.contentHash,
     })

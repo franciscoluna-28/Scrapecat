@@ -1,9 +1,9 @@
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { ensureArchive } from "@/repositories/archive-service";
-import { listCommitsInRange } from "@/repositories/git-reader";
-import { getCommitChangedFiles } from "@/repositories/git-diff";
-import { classifyCommit } from "@/repositories/guardrail";
+import { listCommitsInRange, type LocalCommit } from "@/repositories/git-reader";
+import { getCommitChangedFiles, type CommitChangedStats } from "@/repositories/git-diff";
+import { classifyCommit, type CommitGuardResult } from "@/repositories/guardrail";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
 import { embedNewChunks } from "@/projects/embed-chunks";
@@ -125,25 +125,34 @@ export async function ingestCommits(opts: {
       });
       return { sha: c.sha, stats } as const;
     });
-    const diffBySha = new Map(diffs.map((d) => [d.sha, d.stats]));
+    const diffBySha = new Map(diffs.map((d) => [d.sha, d]));
 
+    type IngestEntry = {
+      c: LocalCommit;
+      stats: CommitChangedStats;
+      guard: CommitGuardResult;
+    };
+    const entries: IngestEntry[] = [];
     for (const c of batch) {
-      const diff = diffBySha.get(c.sha);
-      if (!diff) continue;
-      const guard = classifyCommit({ message: c.message, filesChanged: diff.filesChanged });
+      const d = diffBySha.get(c.sha);
+      if (!d) continue;
+      const guard = classifyCommit({ message: c.message, filesChanged: d.stats.filesChanged });
       if (guard.status === "skipped") {
         skipped += 1;
         continue;
       }
+      entries.push({ c, stats: d.stats, guard });
+    }
+
+    for (const { c, stats, guard } of entries) {
       chunks.push({
         projectId,
         commitSha: c.sha,
         branch,
         commitMessage: c.message,
         author: c.author,
-        diffSummary: c.message,
         metadata: {
-          filesChanged: diff.files.map((f) => f.filepath),
+          filesChanged: stats.files.map((f) => f.filepath),
           commitUrl: `https://github.com/${owner}/${repo}/commit/${c.sha}`,
           validation: { status: guard.status, notes: guard.notes },
         },

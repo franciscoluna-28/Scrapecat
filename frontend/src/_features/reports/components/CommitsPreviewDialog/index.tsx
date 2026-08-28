@@ -26,7 +26,6 @@ export function CommitsPreviewDialog({ commits, commitCount }: Props) {
     commitMessage: c.message || "No commit message",
     author: c.author || null,
     committedAt: c.date || new Date().toISOString(),
-    diffSummary: c.message || "",
   }));
 
   return (

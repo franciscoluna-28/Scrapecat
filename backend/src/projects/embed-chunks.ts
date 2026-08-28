@@ -10,7 +10,7 @@ export async function listPendingChunks(projectId: string) {
   return db
     .select({
       id: commitChunks.id,
-      diffSummary: commitChunks.diffSummary,
+      commitMessage: commitChunks.commitMessage,
       contentHash: commitChunks.contentHash,
     })
     .from(commitChunks)
@@ -38,10 +38,10 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   for (let i = 0; i < pending.length; i += batchSize) {
     const batch = pending.slice(i, i + batchSize);
     const batchStart = performance.now();
-    const vectors = await embedTexts(batch.map((r) => r.diffSummary));
+    const vectors = await embedTexts(batch.map((r) => r.commitMessage));
 
     for (let j = 0; j < batch.length; j++) {
-      const hash = batch[j].contentHash ?? contentHashOf(batch[j].diffSummary);
+      const hash = batch[j].contentHash ?? contentHashOf(batch[j].commitMessage);
       await db
         .update(commitChunks)
         .set({

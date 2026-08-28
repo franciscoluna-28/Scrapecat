@@ -13,7 +13,7 @@ import { embedNewChunks } from "@/projects/embed-chunks";
 
 vi.mock("@/projects/embeddings", () => ({
   embedTexts: vi.fn(async (texts: string[]) =>
-    texts.map(() => Array.from({ length: 1536 }, () => 0)),
+    texts.map(() => Array.from({ length: 512 }, () => 0)),
   ),
 }));
 
@@ -84,7 +84,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       commitSha: "abc123",
       commitMessage: "feat: integration test",
       author: "tester",
-      diffSummary: "diff summary for integration test",
       metadata: { additions: 5, deletions: 2, filesChanged: ["src/a.ts"] },
       committedAt: new Date("2026-01-10T00:00:00Z"),
     };
@@ -93,7 +92,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
 
     const all = await commitChunksStore.listCommitsForProject({ projectId: project.id });
     expect(all.filter((c) => c.commitSha === "abc123")).toHaveLength(1);
-    expect(all[0].diffSummary).toBe("diff summary for integration test");
+    expect(all[0].commitMessage).toBe("feat: integration test");
 
     const inRange = await commitChunksStore.listCommitsForProject({
       projectId: project.id,
@@ -121,7 +120,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
           commitSha: "sha-1",
           commitMessage: "feat: first",
           author: "tester",
-          diffSummary: "first summary",
           metadata: { commitUrl: "https://github.com/org/repo/commit/sha-1" },
           committedAt: new Date("2026-02-01T00:00:00Z"),
         },
@@ -133,7 +131,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       shas: ["sha-1", "sha-missing"],
     });
     expect(found.has("sha-1")).toBe(true);
-    expect(found.get("sha-1")?.contentHash).toBe(commitChunksStore.contentHashOf("first summary"));
+    expect(found.get("sha-1")?.contentHash).toBe(commitChunksStore.contentHashOf("feat: first"));
     expect(found.has("sha-missing")).toBe(false);
   });
 
@@ -148,7 +146,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
           commitSha: "embed-abc",
           commitMessage: "feat: embeddings",
           author: "tester",
-          diffSummary: "embedding corpus text",
           metadata: {},
           committedAt: new Date("2026-02-02T00:00:00Z"),
         },
@@ -162,8 +159,8 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       .select()
       .from(commitChunks)
       .where(eq(commitChunks.commitSha, "embed-abc"));
-    expect(rows[0].embeddingHash).toBe(commitChunksStore.contentHashOf("embedding corpus text"));
-    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("embedding corpus text"));
+    expect(rows[0].embeddingHash).toBe(commitChunksStore.contentHashOf("feat: embeddings"));
+    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("feat: embeddings"));
 
     const second = await embedNewChunks(project.id);
     expect(second.embedded).toBe(0);
@@ -173,9 +170,8 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         {
           projectId: project.id,
           commitSha: "embed-abc",
-          commitMessage: "feat: embeddings",
+          commitMessage: "feat: embeddings v2",
           author: "tester",
-          diffSummary: "changed corpus text",
           metadata: {},
           committedAt: new Date("2026-02-02T00:00:00Z"),
         },
@@ -197,7 +193,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         commitSha: "legacy-abc",
         commitMessage: "feat: legacy",
         author: "tester",
-        diffSummary: "legacy corpus text",
         metadata: {},
         committedAt: new Date("2026-02-03T00:00:00Z"),
       })
@@ -211,7 +206,7 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
       .select()
       .from(commitChunks)
       .where(eq(commitChunks.commitSha, "legacy-abc"));
-    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("legacy corpus text"));
+    expect(rows[0].contentHash).toBe(commitChunksStore.contentHashOf("feat: legacy"));
     expect(rows[0].embeddingHash).toBe(commitChunksStore.contentHashOf("legacy corpus text"));
 
     const second = await embedNewChunks(project.id);
@@ -285,7 +280,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
           commitSha: "report-commits-sha",
           commitMessage: "feat: report commits",
           author: "tester",
-          diffSummary: "diff summary for report commits",
           committedAt: new Date("2026-01-10T00:00:00Z"),
         },
       ],
@@ -341,7 +335,6 @@ describe.runIf(enabled)("postgres integration (set DB_INTEGRATION=1)", () => {
         commitSha: c.sha,
         commitMessage: c.msg,
         author: "tester",
-        diffSummary: c.msg,
         committedAt: new Date(c.date),
       })),
     });

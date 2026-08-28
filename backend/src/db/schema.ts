@@ -32,7 +32,7 @@ export type GitProvider = (typeof gitProviderEnum)["enumValues"][number];
 
 export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(1536)";
+    return "vector(512)";
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`; 
@@ -98,8 +98,6 @@ export const commitChunks = pgTable(
     branch: text("branch").notNull().default("main"),
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
-    diffSummary: text("diff_summary").notNull(),
-    diffPatch: text("diff_patch"),
     embedding: vector("embedding"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),

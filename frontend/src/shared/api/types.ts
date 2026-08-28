@@ -645,7 +645,6 @@ export interface paths {
                                 commitSha: string;
                                 commitMessage: string;
                                 author?: string | null;
-                                diffSummary: string;
                                 /** Format: date-time */
                                 committedAt: string;
                                 metadata?: unknown;
@@ -784,7 +783,6 @@ export interface paths {
                                 commitSha: string;
                                 commitMessage: string;
                                 author?: string | null;
-                                diffSummary: string;
                                 /** Format: date-time */
                                 committedAt: string;
                                 metadata?: unknown;

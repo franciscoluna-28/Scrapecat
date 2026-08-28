@@ -9,7 +9,6 @@ export type ReportCommitRow = {
   branch: string;
   commitMessage: string;
   author: string | null;
-  diffSummary: string;
   committedAt: Date;
   metadata: CommitChunkMetadata | null;
 };
@@ -117,7 +116,6 @@ export async function listCommitsForReport({
       branch: commitChunks.branch,
       commitMessage: commitChunks.commitMessage,
       author: commitChunks.author,
-      diffSummary: commitChunks.diffSummary,
       committedAt: commitChunks.committedAt,
       metadata: commitChunks.metadata,
     })
@@ -212,7 +210,6 @@ const WINDOW_COMMIT_COLUMNS = {
   branch: commitChunks.branch,
   commitMessage: commitChunks.commitMessage,
   author: commitChunks.author,
-  diffSummary: commitChunks.diffSummary,
   committedAt: commitChunks.committedAt,
   metadata: commitChunks.metadata,
 };

@@ -85,7 +85,6 @@ describe("ingestCommits", () => {
           branch: "main",
           commitMessage: "fix: bug in parser",
           author: "t",
-          diffSummary: "fix: bug in parser",
           metadata: {
             filesChanged: ["a.txt"],
             commitUrl: "https://github.com/owner/repo/commit/a",

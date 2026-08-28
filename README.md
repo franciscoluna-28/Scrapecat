@@ -23,7 +23,7 @@ Engineering noise into executive clarity. Scrapecat translates engineering work 
 - **Report Persistence:** A centralized dashboard to visualize, manage, and export historical reporting data.
 
 ## Future Roadmap
-- **RAG on Repositories (WIP):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Commits are already normalized into `commit_chunks` with `diff_summary` text, and the pgvector `embedding` column + HNSW index are in place — but the embedding pipeline and semantic search endpoints are **not implemented yet**.
+- **RAG on Repositories (WIP):** AI agents that understand your entire engineering history — ask questions about code, commits, PRs, and decisions. Commits are already normalized into `commit_chunks` (commit message embedded into the pgvector `embedding` column + HNSW index) — but the semantic search endpoints are **not implemented yet**.
 - **External Integrations:** Connect Slack, Linear, Jira, and Notion so reports cross-reference commits with tickets, messages, and docs.
 - **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
 - **Self-Hosted Storage:** MinIO support alongside Cloudflare R2, with more storage providers to come.

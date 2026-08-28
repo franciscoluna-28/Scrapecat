@@ -31,13 +31,14 @@ const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
   openai: OPENAI_FALLBACK,
 };
 
-// MVP embedding models constrained to the vector(1536) column. OpenRouter's
+// MVP embedding models constrained to the vector(512) column. OpenRouter's
 // embedding list does not expose output dimensions, so this allowlist is the
-// source of truth. All three support a 1536-dim output.
+// source of truth. Both models are Matryoshka-reducible and support a 512-dim
+// output via the `dimensions` param. text-embedding-ada-002 is excluded: it is
+// locked at 1536 dims and rejects `dimensions`.
 const EMBEDDING_MODEL_ALLOWLIST = new Set([
   "openai/text-embedding-3-small",
   "openai/text-embedding-3-large",
-  "openai/text-embedding-ada-002",
 ]);
 
 function isFree(pricing: any): boolean {
