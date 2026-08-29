@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import { env } from "@/config/env";
 import { getProviderConfig, type ProviderName } from "@/shared/integrations/providers/registry";
 
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
 export interface AIMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -15,6 +17,8 @@ export interface AIRequest {
   maxTokens?: number;
   apiKey?: string;
   provider?: string;
+  stream?: boolean;
+  onChunk?: (chunk: string) => void;
 }
 
 export interface AIResponse {
@@ -28,7 +32,16 @@ async function callOpenRouter(
   apiKey: string,
   temperature: number,
   maxTokens: number,
+  onChunk?: (chunk: string) => void,
 ): Promise<AIResponse> {
+  // Streaming goes through the OpenAI SDK against OpenRouter's OpenAI-compatible
+  // endpoint — the SDK's own streaming response is awkward to consume, and the
+  // `openai` package is already a dependency (used for embeddings).
+  if (onChunk) {
+    const client = new OpenAI({ apiKey, baseURL: OPENROUTER_BASE_URL });
+    return streamChatCompletions(client, { model, messages, temperature, maxTokens }, onChunk);
+  }
+
   const openRouter = new OpenRouter({ apiKey });
   const result = await openRouter.chat.send({
     chatRequest: { model, messages, temperature, maxTokens },
@@ -52,8 +65,13 @@ async function callOpenAICompatible(
   baseUrl: string,
   temperature: number,
   maxTokens: number,
+  onChunk?: (chunk: string) => void,
 ): Promise<AIResponse> {
   const client = new OpenAI({ apiKey, baseURL: baseUrl });
+
+  if (onChunk) {
+    return streamChatCompletions(client, { model, messages, temperature, maxTokens }, onChunk);
+  }
 
   const result = await client.chat.completions.create({
     model,
@@ -66,6 +84,40 @@ async function callOpenAICompatible(
     content: result.choices?.[0]?.message?.content ?? "",
     finishReason: result.choices?.[0]?.finish_reason ?? null,
   };
+}
+
+async function streamChatCompletions(
+  client: OpenAI,
+  params: {
+    model: string;
+    messages: AIMessage[];
+    temperature: number;
+    maxTokens: number;
+  },
+  onChunk: (chunk: string) => void,
+): Promise<AIResponse> {
+  let content = "";
+  let finishReason: string | null | undefined;
+
+  const stream = await client.chat.completions.create({
+    model: params.model,
+    messages: params.messages,
+    temperature: params.temperature,
+    max_tokens: params.maxTokens,
+    stream: true,
+  });
+
+  for await (const part of stream) {
+    const delta = part.choices?.[0]?.delta?.content;
+    if (delta) {
+      content += delta;
+      onChunk(delta);
+    }
+    const reason = part.choices?.[0]?.finish_reason;
+    if (reason) finishReason = reason;
+  }
+
+  return { content, finishReason: finishReason ?? null };
 }
 
 export async function callAI(request: AIRequest): Promise<AIResponse> {
@@ -86,7 +138,7 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   }
 
   if (config.sdk === "openrouter") {
-    return callOpenRouter(request.messages, model, apiKey, temperature, maxTokens);
+    return callOpenRouter(request.messages, model, apiKey, temperature, maxTokens, request.onChunk);
   }
 
   if (config.sdk === "openai-compatible") {
@@ -97,6 +149,7 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
       config.baseUrl,
       temperature,
       maxTokens,
+      request.onChunk,
     );
   }
 

@@ -187,6 +187,50 @@ export const credentials = pgTable(
   }),
 );
 
+export type ChatCitation = {
+  commitSha: string;
+  commitMessage: string;
+  author: string | null;
+  committedAt: string;
+  filesChanged: string[];
+  commitUrl: string | null;
+};
+
+export const chatSessions = pgTable(
+  "chat_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    title: text("title").default("New chat").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index("chat_sessions_project_id_idx").on(table.projectId),
+  }),
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .references(() => chatSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    citations: jsonb("citations")
+      .$type<ChatCitation[]>()
+      .default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionIdIdx: index("chat_messages_session_id_idx").on(table.sessionId),
+  }),
+);
+
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
   reportProvider: text("report_provider").default("openrouter").notNull(),

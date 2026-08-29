@@ -26,3 +26,9 @@ export type ReportSummary =
 
 export type ReportDetail =
   paths["/api/v1/reports/{id}"]["get"]["responses"]["200"]["content"]["application/json"];
+
+export type ChatSession =
+  paths["/api/v1/chat/sessions"]["get"]["responses"]["200"]["content"]["application/json"]["sessions"][number];
+
+export type ChatMessage =
+  paths["/api/v1/chat/sessions/{id}/messages"]["get"]["responses"]["200"]["content"]["application/json"]["messages"][number];

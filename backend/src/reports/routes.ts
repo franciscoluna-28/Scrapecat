@@ -23,6 +23,7 @@ import {
   type ReportCommitsCursor,
 } from "@/reports/stores/report-commits-store";
 import { formatDate, startOfDayUtc, endOfDayUtc } from "@/shared/utils";
+import { applyCorsToRawResponse } from "@/shared/cors-raw";
 
 export function toJobResponse(job: ReportJobRow) {
   return {
@@ -92,6 +93,7 @@ export async function streamReportJob(
 
   reply.hijack();
   const res = reply.raw;
+  applyCorsToRawResponse(req.raw, res);
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",

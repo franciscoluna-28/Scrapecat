@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, cosineDistance, desc, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { commitChunks, type CommitChunkMetadata } from "@/db/schema";
 
@@ -127,4 +127,121 @@ export async function listCommitsForProject({
     .from(commitChunks)
     .where(and(...conditions))
     .orderBy(desc(commitChunks.committedAt));
+}
+
+export type CommitSearchResult = {
+  id: string;
+  commitSha: string;
+  commitMessage: string;
+  author: string | null;
+  committedAt: Date;
+  metadata: CommitChunkMetadata;
+  distance: number | null;
+};
+
+/**
+ * Vector search over the HNSW index. Orders by cosine distance ascending (most
+ * similar first); NULL embeddings are excluded by the HNSW index definition.
+ */
+export async function semanticSearchCommits({
+  projectId,
+  embedding,
+  limit,
+  branch,
+  startDate,
+  endDate,
+  tx,
+}: {
+  projectId: string;
+  embedding: number[];
+  limit: number;
+  branch?: string;
+  startDate?: Date;
+  endDate?: Date;
+  tx?: DbOrTx;
+}): Promise<CommitSearchResult[]> {
+  const client = tx || db;
+  const conditions = [
+    eq(commitChunks.projectId, projectId),
+    isNotNull(commitChunks.embedding),
+  ];
+  if (branch) conditions.push(eq(commitChunks.branch, branch));
+  if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));
+  if (endDate) conditions.push(lte(commitChunks.committedAt, endDate));
+
+  const rows = await client
+    .select({
+      id: commitChunks.id,
+      commitSha: commitChunks.commitSha,
+      commitMessage: commitChunks.commitMessage,
+      author: commitChunks.author,
+      committedAt: commitChunks.committedAt,
+      metadata: commitChunks.metadata,
+      distance: cosineDistance(commitChunks.embedding, embedding),
+    })
+    .from(commitChunks)
+    .where(and(...conditions))
+    .orderBy(asc(cosineDistance(commitChunks.embedding, embedding)))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    ...r,
+    metadata: r.metadata ?? {},
+    distance: r.distance as number,
+  }));
+}
+
+/**
+ * Keyword fallback when no embeddings exist for a project (embedding disabled
+ * or not yet backfilled). Matches the commit message or any file path in scope.
+ */
+export async function keywordSearchCommits({
+  projectId,
+  query,
+  limit,
+  branch,
+  startDate,
+  endDate,
+  tx,
+}: {
+  projectId: string;
+  query: string;
+  limit: number;
+  branch?: string;
+  startDate?: Date;
+  endDate?: Date;
+  tx?: DbOrTx;
+}): Promise<CommitSearchResult[]> {
+  const client = tx || db;
+  const pattern = `%${query.replace(/[%_]/g, "")}%`;
+  const conditions = [
+    eq(commitChunks.projectId, projectId),
+    or(
+      ilike(commitChunks.commitMessage, pattern),
+      sql`${commitChunks.metadata}::text ILIKE ${pattern}`,
+    ),
+  ];
+  if (branch) conditions.push(eq(commitChunks.branch, branch));
+  if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));
+  if (endDate) conditions.push(lte(commitChunks.committedAt, endDate));
+
+  const rows = await client
+    .select({
+      id: commitChunks.id,
+      commitSha: commitChunks.commitSha,
+      commitMessage: commitChunks.commitMessage,
+      author: commitChunks.author,
+      committedAt: commitChunks.committedAt,
+      metadata: commitChunks.metadata,
+    })
+    .from(commitChunks)
+    .where(and(...conditions))
+    .orderBy(desc(commitChunks.committedAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    ...r,
+    metadata: r.metadata ?? {},
+    distance: null,
+  }));
 }

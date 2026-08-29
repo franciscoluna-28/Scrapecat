@@ -13,8 +13,25 @@ import { createReport, listReports, getReport, getReportCommits, getReportJobSta
 import { listProjects } from "@/projects/routes";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
+import {
+  createSession as createChatSession,
+  listSessions as listChatSessions,
+  getMessages as getChatMessages,
+  removeSession as deleteChatSession,
+  streamMessage as streamChatMessage,
+} from "@/chat/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
+import {
+  CreateSessionBody,
+  CreateSessionResponse,
+  ChatSessionsQuery,
+  ChatSessionsListResponse,
+  ChatSessionIdParams,
+  ChatMessagesResponse,
+  SendMessageBody,
+  DeleteSessionResponse,
+} from "@/chat/schemas";
 import { HealthResponse } from "@/health/schemas";
 import { VerificationOkResponse } from "@/verification/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
@@ -271,6 +288,52 @@ export async function buildApp() {
       response: { 200: AISettingsGetResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
   }, updateSettingsRoute);
+
+  app.post("/api/v1/chat/sessions", {
+    schema: {
+      description: "Create a new chat session for a project",
+      tags: ["chat"],
+      body: CreateSessionBody,
+      response: { 201: CreateSessionResponse, 400: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse },
+    },
+  }, createChatSession);
+
+  app.get("/api/v1/chat/sessions", {
+    schema: {
+      description: "List chat sessions, optionally filtered by project",
+      tags: ["chat"],
+      querystring: ChatSessionsQuery,
+      response: { 200: ChatSessionsListResponse, 400: ErrorResponse, 500: ErrorResponse },
+    },
+  }, listChatSessions);
+
+  app.get("/api/v1/chat/sessions/:id/messages", {
+    schema: {
+      description: "List messages for a chat session",
+      tags: ["chat"],
+      params: ChatSessionIdParams,
+      response: { 200: ChatMessagesResponse, 400: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse },
+    },
+  }, getChatMessages);
+
+  app.delete("/api/v1/chat/sessions/:id", {
+    schema: {
+      description: "Delete a chat session",
+      tags: ["chat"],
+      params: ChatSessionIdParams,
+      response: { 200: DeleteSessionResponse, 400: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse },
+    },
+  }, deleteChatSession);
+
+  app.post("/api/v1/chat/sessions/:id/messages", {
+    schema: {
+      description: "Send a message and stream the assistant reply (SSE)",
+      tags: ["chat"],
+      params: ChatSessionIdParams,
+      body: SendMessageBody,
+      response: { 400: ErrorResponse, 404: ErrorResponse },
+    },
+  }, streamChatMessage);
 
   return app;
 }
