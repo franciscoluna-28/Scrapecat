@@ -34,7 +34,11 @@ export function RecentProjectsSection() {
         {recent.map((project) => (
           <Link
             key={project.id}
-            href={`/app/repos/${project.providerProjectId}`}
+            href={
+              project.providerProjectId.includes("/")
+                ? `/app/repos/paste?owner=${encodeURIComponent(project.providerOwner)}&repo=${encodeURIComponent(project.repositoryName)}`
+                : `/app/repos/${project.providerProjectId}`
+            }
             className="block"
           >
             <Card className="hover:bg-muted/80 bg-muted/40 transition-colors cursor-pointer ring-0">
@@ -48,7 +52,7 @@ export function RecentProjectsSection() {
                       {project.providerOwner}/{project.repositoryName}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Generated {formatDistanceToNow(new Date(project.updatedAt))} ago
+                      Last use {formatDistanceToNow(new Date(project.updatedAt))} ago
                     </p>
                   </div>
                 </div>

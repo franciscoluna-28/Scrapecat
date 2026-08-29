@@ -4,6 +4,7 @@ import { GitBranch } from "lucide-react";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { RepositoryCard } from "@/src/_features/reports/components/RepositoryCard";
+import { ConnectRepositoryBar } from "@/src/_features/reports/components/ConnectRepositoryBar";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { RecentProjectsSection } from "@/src/_features/reports/components/RecentProjectsSection";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
@@ -27,6 +28,7 @@ export default function RepositoriesPage() {
 
   return (
     <SectionLayout>
+      <ConnectRepositoryBar repositories={repositories as GitHubRepository[]} />
       <RecentProjectsSection />
       <Card className="overflow-hidden">
         <CardContent className="p-0">

@@ -18,13 +18,12 @@ import {
 import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
-import { GitBranch, FileText, Settings, Key, FlaskConical, MessageSquareText } from "lucide-react";
+import { GitBranch, FileText, Settings, Key, MessageSquareText } from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "repositories", label: "Repositories", icon: GitBranch, route: "/app" },
   { id: "reports", label: "Reports", icon: FileText, route: "/app/reports" },
   { id: "chat", label: "Ask AI", icon: MessageSquareText, route: "/app/chat" },
-  { id: "demo", label: "Demo", icon: FlaskConical, route: "/app/demo" },
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
   { id: "settings", label: "Settings", icon: Settings, route: "/app/settings" },
 ] as const;
@@ -37,8 +36,6 @@ function isActive(id: string, pathname: string) {
       return pathname.startsWith("/app/reports");
     case "chat":
       return pathname.startsWith("/app/chat");
-    case "demo":
-      return pathname.startsWith("/app/demo");
     case "credentials":
       return pathname.startsWith("/app/api-keys");
     case "settings":

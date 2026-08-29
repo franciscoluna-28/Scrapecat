@@ -14,6 +14,13 @@ function RepoReportPageContent() {
   const branch = searchParams.get("branch");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const ownerParam = searchParams.get("owner");
+  const repoParam = searchParams.get("repo");
+
+  const githubId = params?.githubId;
+  if (!githubId) {
+    notFound();
+  }
 
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -25,13 +32,24 @@ function RepoReportPageContent() {
     per_page: 100,
   });
 
-  const githubId = params?.githubId;
-  if (!githubId) {
-    notFound();
-  }
+  const accountRepo =
+    (repositories as GitHubRepository[]).find((r) => r.id === githubId) ?? null;
 
-  const repoId = githubId;
-  const repository = (repositories as GitHubRepository[]).find((r) => r.id === repoId) ?? null;
+  // The "paste" route is used for arbitrary public repos pasted by URL — the
+  // repo is fabricated from the query params and ingested clone-on-demand.
+  const isPaste = githubId === "paste" && !!ownerParam && !!repoParam;
+  const repository: GitHubRepository | null =
+    accountRepo ??
+    (isPaste
+      ? {
+          id: `${ownerParam}/${repoParam}`,
+          name: repoParam!,
+          full_name: `${ownerParam}/${repoParam}`,
+          private: false,
+          updated_at: "",
+          owner: { login: ownerParam! },
+        }
+      : null);
 
   const { branches, defaultBranch } = useBranches(
     repository?.owner.login ?? "",
