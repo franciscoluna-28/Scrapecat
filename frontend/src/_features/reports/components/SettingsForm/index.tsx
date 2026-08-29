@@ -9,12 +9,13 @@ import { Label } from "@/src/components/ui/label";
 import { Textarea } from "@/src/components/ui/textarea";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/src/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/src/components/ui/combobox";
 import { GitHubRepository } from "@/src/shared/types";
 import { Book, Loader2, Bookmark } from "lucide-react";
 import { toast } from "sonner";
@@ -173,21 +174,28 @@ export function SettingsForm({
               <Label htmlFor="branch" className="text-sm font-medium">
                 Branch
               </Label>
-              <Select
+              <Combobox
+                items={branches}
+                itemToStringValue={(b) => b}
                 value={selectedBranch}
-                onValueChange={(v) => updateParam("branch", v)}
+                onValueChange={(v) => v && updateParam("branch", v)}
               >
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue placeholder="Select a branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b} value={b}>
-                      {b}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <ComboboxInput
+                  className="mt-1.5"
+                  placeholder="Search branches..."
+                  aria-label="Branch"
+                />
+                <ComboboxContent>
+                  <ComboboxEmpty>No branches found.</ComboboxEmpty>
+                  <ComboboxList>
+                    {(branch) => (
+                      <ComboboxItem key={branch} value={branch}>
+                        {branch}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
             </div>
           </div>
 
