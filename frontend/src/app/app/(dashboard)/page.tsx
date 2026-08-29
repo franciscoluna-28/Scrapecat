@@ -5,6 +5,7 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { RepositoryCard } from "@/src/_features/reports/components/RepositoryCard";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
+import { RecentProjectsSection } from "@/src/_features/reports/components/RecentProjectsSection";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
 import { useRepositories } from "@/src/_features/reports/services/api";
 import { GitHubRepository } from "@/src/shared/types";
@@ -26,6 +27,7 @@ export default function RepositoriesPage() {
 
   return (
     <SectionLayout>
+      <RecentProjectsSection />
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <ScrollArea className="h-[70vh]">
