@@ -21,6 +21,7 @@ const ChatMessageResponse = Type.Object({
   id: Type.String(),
   role: Type.Union([Type.Literal("user"), Type.Literal("assistant")]),
   content: Type.String(),
+  branch: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   citations: Type.Array(ChatCitation),
   createdAt: Type.String({ format: "date-time" }),
 });
@@ -49,6 +50,7 @@ export const ChatMessagesResponse = Type.Object({
 
 export const SendMessageBody = Type.Object({
   content: Type.String({ minLength: 1 }),
+  branch: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 export const DeleteSessionResponse = Type.Object({

@@ -77,7 +77,7 @@ function sendFrame(res: import("node:http").ServerResponse, data: unknown) {
  */
 export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
-  const { content } = req.body as Static<typeof SendMessageBody>;
+  const { content, branch } = req.body as Static<typeof SendMessageBody>;
 
   const session = await chatSessionsStore.getSession({ id });
   if (!session) {
@@ -106,6 +106,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
     const message = await streamChatMessage({
       sessionId: id,
       content,
+      branch,
       onToken: (chunk) => {
         if (closed) return;
         sendFrame(res, { type: "token", content: chunk });

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
@@ -14,9 +15,12 @@ export type RepoArchive = {
 };
 
 const TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
+const archiveLocks = new Map<string, Promise<RepoArchive>>();
 
 function archiveDir(owner: string, repo: string, branch: string): string {
-  return path.join(env.REPO_ARCHIVE_DIR, owner, repo, branch);
+  // Always use an absolute path. The clone runs from the archive parent, so a
+  // relative destination would be resolved twice on Windows.
+  return path.resolve(env.REPO_ARCHIVE_DIR, owner, repo, branch);
 }
 
 function remoteUrl(owner: string, repo: string): string {
@@ -29,6 +33,16 @@ async function isRepo(dir: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function removeIncompleteArchive(dir: string): Promise<void> {
+  try {
+    await fs.rm(dir, { recursive: true, force: true });
+  } catch (error) {
+    throw new Error(
+      `Unable to clean incomplete repository archive at ${dir}: ${(error as Error).message}`,
+    );
   }
 }
 
@@ -48,7 +62,7 @@ async function isRepo(dir: string): Promise<boolean> {
  * diff for the branch is read from disk — no per-item API calls, no
  * pagination, no watermark.
  */
-export async function ensureArchive(opts: {
+async function ensureArchiveUnlocked(opts: {
   owner: string;
   repo: string;
   branch: string;
@@ -60,6 +74,12 @@ export async function ensureArchive(opts: {
   await fs.mkdir(path.dirname(dir), { recursive: true });
 
   const existed = await isRepo(dir);
+  if (!existed) {
+    // A clone interrupted before .git was created can leave the destination
+    // behind. Git refuses to clone into any existing non-empty directory.
+    await removeIncompleteArchive(dir);
+    await fs.mkdir(path.dirname(dir), { recursive: true });
+  }
   await timed(`archive.${existed ? "fetch" : "clone"}`, { owner, repo, branch, url }, async () => {
     if (existed) {
       await runGit({
@@ -75,6 +95,7 @@ export async function ensureArchive(opts: {
         label: "git update-ref",
       });
     } else {
+      const cloneDir = `${dir}.clone-${randomUUID()}`;
       await runGit({
         cwd: path.dirname(dir),
         args: [
@@ -85,11 +106,13 @@ export async function ensureArchive(opts: {
           branch,
           "--no-checkout",
           url,
-          dir,
+          cloneDir,
         ],
         timeoutMs: TRANSFER_TIMEOUT_MS,
         label: "git clone",
       });
+      await fs.rm(dir, { recursive: true, force: true });
+      await fs.rename(cloneDir, dir);
     }
   });
 
@@ -99,4 +122,20 @@ export async function ensureArchive(opts: {
     "archive ready",
   );
   return { owner, repo, branch, dir, tipSha };
+}
+
+export async function ensureArchive(opts: {
+  owner: string;
+  repo: string;
+  branch: string;
+}): Promise<RepoArchive> {
+  const dir = archiveDir(opts.owner, opts.repo, opts.branch);
+  const active = archiveLocks.get(dir);
+  if (active) return active;
+
+  const operation = ensureArchiveUnlocked(opts).finally(() => {
+    if (archiveLocks.get(dir) === operation) archiveLocks.delete(dir);
+  });
+  archiveLocks.set(dir, operation);
+  return operation;
 }

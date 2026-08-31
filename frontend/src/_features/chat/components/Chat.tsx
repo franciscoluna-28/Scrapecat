@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
-import { Components } from "react-markdown";
+import { toast } from "sonner";
 import { Button } from "@/src/components/ui/button";
 import { Card, CardContent } from "@/src/components/ui/card";
-import { Textarea } from "@/src/components/ui/textarea";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
+import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   Combobox,
   ComboboxContent,
@@ -16,87 +14,78 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/src/components/ui/combobox";
-import { Skeleton } from "@/src/components/ui/skeleton";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/src/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/src/components/ai-elements/message";
+import {
+  PromptInput,
+  type PromptInputMessage,
+  PromptInputTextarea,
+  PromptInputSubmit,
+} from "@/src/components/ai-elements/prompt-input";
 import { useProjects } from "@/src/_features/reports/services/projects-api";
+import { useBranches } from "@/src/_features/reports/services/api";
 import {
   useChatSessions,
   useChatMessages,
   useCreateChatSession,
   useDeleteChatSession,
+  prepareProjectBranch,
   streamChatMessage,
 } from "@/src/_features/chat/services/chat-api";
 import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
 import {
-  Send,
   Plus,
   Trash2,
   MessageSquareText,
   Bot,
-  User,
+  BookOpen,
 } from "lucide-react";
 
-const markdownComponents: Components = {
-  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
-  ul: ({ children }) => <ul className="mb-2 list-disc pl-4 space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 list-decimal pl-4 space-y-1">{children}</ol>,
-  li: ({ children }) => <li>{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  code: ({ children }) => (
-    <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] font-mono">
-      {children}
-    </code>
-  ),
-};
-
-function MessageBubble({ message, streaming }: { message: ChatMessage; streaming?: boolean }) {
-  const isUser = message.role === "user";
+function MessageView({
+  message,
+  streaming,
+}: {
+  message: ChatMessage;
+  streaming?: boolean;
+}) {
   return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
-      <div
-        className={`flex size-8 shrink-0 items-center justify-center rounded-lg border ${
-          isUser ? "bg-primary/10" : "bg-muted"
-        }`}
-      >
-        {isUser ? (
-          <User className="size-4 text-muted-foreground" />
+    <Message from={message.role}>
+      <MessageContent>
+        {message.role === "assistant" ? (
+          <>
+            <MessageResponse>{message.content}</MessageResponse>
+            {streaming && (
+              <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
+            )}
+          </>
         ) : (
-          <Bot className="size-4 text-muted-foreground" />
+          <p className="whitespace-pre-wrap">{message.content}</p>
         )}
-      </div>
-      <div className={`min-w-0 max-w-[80%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-2`}>
-        <div
-          className={`rounded-xl px-4 py-2.5 text-sm ${
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted/60 border border-border"
-          }`}
-        >
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
-          ) : (
-            <div className="text-foreground/90 [&_p]:break-words">
-              <ReactMarkdown components={markdownComponents}>
-                {message.content}
-              </ReactMarkdown>
-              {streaming && (
-                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
-              )}
-            </div>
-          )}
+      </MessageContent>
+      {message.role === "assistant" && (
+        <p className="text-[11px] text-muted-foreground">
+          Source scope: {message.branch ?? "all branches"}
+        </p>
+      )}
+      {message.role === "assistant" && message.citations.length > 0 && (
+        <div className="flex w-full flex-wrap gap-2">
+          {message.citations.map((c) => (
+            <CitationCard key={c.commitSha} citation={c} />
+          ))}
         </div>
-        {!isUser && message.citations.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {message.citations.map((c) => (
-              <div key={c.commitSha} className="w-64">
-                <CitationCard citation={c} />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </Message>
   );
 }
 
@@ -107,10 +96,18 @@ export function Chat() {
   const [sessionId, setSessionId] = useState<string>();
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [branch, setBranch] = useState<string | null>(null);
+  const [preparingBranch, setPreparingBranch] = useState<string | null>(null);
 
   const { sessions, isLoading: sessionsLoading } = useChatSessions(projectId);
+  const activeProjectData = projects.find((p) => p.id === projectId);
+  const { branches: remoteBranches, isLoading: branchesLoading } = useBranches(
+    activeProjectData?.providerOwner ?? "",
+    activeProjectData?.repositoryName ?? "",
+  );
+  const branches = remoteBranches.length > 0
+    ? remoteBranches
+    : activeProjectData?.indexedBranches ?? [];
   const { messages: storedMessages, isLoading: messagesLoading } = useChatMessages(sessionId);
   const createSession = useCreateChatSession();
   const deleteSession = useDeleteChatSession();
@@ -123,10 +120,6 @@ export function Chat() {
     [storedMessages, liveMessages],
   );
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.repositoryName])),
     [projects],
@@ -137,6 +130,31 @@ export function Chat() {
     setProjectId(value);
     setSessionId(undefined);
     setLiveMessages([]);
+    setBranch(null);
+  };
+
+  const handleBranchChange = async (value: string | null) => {
+    if (!value) return;
+    if (value === "__all__") {
+      setBranch(null);
+      return;
+    }
+    if (!projectId || preparingBranch) return;
+    setPreparingBranch(value);
+    try {
+      const result = await prepareProjectBranch(projectId, value);
+      setBranch(value);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
+      toast.success(`Ready to chat on ${value}`, {
+        description: `${result.commitsFound} commits processed.`,
+      });
+    } catch (error) {
+      toast.error(`Could not prepare ${value}`, {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setPreparingBranch(null);
+    }
   };
 
   const handleNewChat = () => {
@@ -152,9 +170,9 @@ export function Chat() {
     await deleteSession.mutateAsync(sid);
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || !projectId || isStreaming) return;
+  const handleSend = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || !projectId || isStreaming || preparingBranch) return;
     setInput("");
     setIsStreaming(true);
 
@@ -169,7 +187,8 @@ export function Chat() {
       const userMsg: ChatMessage = {
         id: `local-user-${Date.now()}`,
         role: "user",
-        content: text,
+        content: trimmed,
+        branch,
         citations: [],
         createdAt: new Date().toISOString(),
       };
@@ -177,12 +196,13 @@ export function Chat() {
         id: `local-assistant-${Date.now()}`,
         role: "assistant",
         content: "",
+        branch,
         citations: [],
         createdAt: new Date().toISOString(),
       };
       setLiveMessages((m) => [...m, userMsg, draft]);
 
-      await streamChatMessage(sid, text, (chunk) => {
+      await streamChatMessage(sid, trimmed, branch, (chunk) => {
         if (chunk.type === "token") {
           setLiveMessages((m) => {
             const copy = [...m];
@@ -208,8 +228,11 @@ export function Chat() {
       setLiveMessages((m) => m.filter((msg) => !msg.id.startsWith("local-assistant")));
     } finally {
       setIsStreaming(false);
-      textareaRef.current?.focus();
     }
+  };
+
+  const handleSubmit = (message: PromptInputMessage) => {
+    handleSend(message.text);
   };
 
   const hasSelection = !!projectId;
@@ -235,6 +258,28 @@ export function Chat() {
                 {(id) => (
                   <ComboboxItem key={id} value={id}>
                     {projectMap[id]}
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+
+          <Combobox
+            items={["__all__", ...branches]}
+            itemToStringValue={(value) => value === "__all__" ? "All branches" : value}
+            value={branch ?? "__all__"}
+            onValueChange={handleBranchChange}
+            disabled={branchesLoading || !hasSelection || !!preparingBranch}
+          >
+            <ComboboxInput placeholder={preparingBranch ? `Preparing ${preparingBranch}...` : branchesLoading ? "Loading branches..." : "Filter branch..."} showClear={false} />
+            <ComboboxContent>
+              <ComboboxEmpty>No branches found.</ComboboxEmpty>
+              <ComboboxList>
+                {(value) => (
+                  <ComboboxItem key={value} value={value}>
+                    {value === "__all__"
+                      ? "All branches"
+                      : value}
                   </ComboboxItem>
                 )}
               </ComboboxList>
@@ -309,57 +354,48 @@ export function Chat() {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1">
-              <div className="flex flex-col gap-4 p-4">
+            <Conversation className="flex-1">
+              <ConversationContent>
                 {messagesLoading && messages.length === 0 ? (
                   <div className="space-y-3">
                     <Skeleton className="h-16 w-3/4" />
                     <Skeleton className="h-16 w-1/2" />
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-sm text-muted-foreground">
-                      Ask anything about {activeProject} — for example, when was the
-                      RAG chat added, or what shipped this week.
-                    </p>
-                  </div>
+                  <ConversationEmptyState
+                    icon={<BookOpen className="size-12" />}
+                    title={`Ask about ${activeProject}`}
+                    description="For example, when was the RAG chat added, or what shipped this week."
+                  />
                 ) : (
                   messages.map((m) => (
-                    <MessageBubble
+                    <MessageView
                       key={m.id}
                       message={m}
                       streaming={m.id === streamingId}
                     />
                   ))
                 )}
-                <div ref={bottomRef} />
-              </div>
-            </ScrollArea>
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
             <div className="border-t p-3">
-              <div className="flex gap-2">
-                <Textarea
-                  ref={textareaRef}
+              <PromptInput
+                onSubmit={handleSubmit}
+                className="flex gap-2 items-end"
+              >
+                <PromptInputTextarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
                   placeholder="Ask about this project's commits..."
-                  className="min-h-[44px] max-h-40 flex-1 resize-none"
-                  disabled={isStreaming}
+                  disabled={isStreaming || !!preparingBranch}
+                  className="flex-1"
                 />
-                <Button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isStreaming}
-                  className="self-end"
-                  size="icon"
-                >
-                  <Send className="size-4" />
-                </Button>
-              </div>
+                <PromptInputSubmit
+                  status={isStreaming ? "streaming" : "ready"}
+                  disabled={!input.trim() || isStreaming || !!preparingBranch}
+                />
+              </PromptInput>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
               </p>

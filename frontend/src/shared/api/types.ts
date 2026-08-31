@@ -855,6 +855,7 @@ export interface paths {
                                 providerOwner: string;
                                 repositoryName: string;
                                 defaultBranch: string;
+                                indexedBranches: string[];
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -878,6 +879,76 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/branches/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ingest a project branch before chat retrieval */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        branch: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            branch: string;
+                            commitsFound: number;
+                            chunksWritten: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1362,6 +1433,7 @@ export interface paths {
                                 id: string;
                                 role: "user" | "assistant";
                                 content: string;
+                                branch?: string | null;
                                 citations: {
                                     commitSha: string;
                                     commitMessage: string;
@@ -1426,6 +1498,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         content: string;
+                        branch?: string;
                     };
                 };
             };

@@ -7,6 +7,7 @@ import { ProviderKeyError } from "@/reports/use-cases";
 import { callAI } from "@/reports/ai";
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { retrieveCommits } from "@/chat/retrieval";
+import { parseQueryWindow } from "@/chat/date-window";
 import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
 import * as projectsStore from "@/projects/stores/projects-store";
@@ -18,6 +19,7 @@ function toMessageDTO(row: Awaited<ReturnType<typeof chatSessionsStore.addMessag
     id: row.id,
     role: row.role === "assistant" ? "assistant" : "user",
     content: row.content,
+    branch: row.branch ?? null,
     citations: (row.citations ?? []) as ChatCitation[],
     createdAt: new Date(row.createdAt).toISOString(),
   };
@@ -89,9 +91,10 @@ async function resolveProviderAndKey() {
 export async function streamChatMessage(opts: {
   sessionId: string;
   content: string;
+  branch?: string | null;
   onToken: (chunk: string) => void;
 }): Promise<ChatMessageDTO> {
-  const { sessionId, content, onToken } = opts;
+  const { sessionId, content, branch, onToken } = opts;
 
   const session = await chatSessionsStore.getSession({ id: sessionId });
   if (!session) throw new SessionNotFoundError();
@@ -100,10 +103,13 @@ export async function streamChatMessage(opts: {
 
   await chatSessionsStore.addMessage({ sessionId, role: "user", content });
 
+  const { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
   const citations = await retrieveCommits({
     projectId: session.projectId,
-    query: content,
-    branch: project?.defaultBranch,
+    query: filteredQuery,
+    branch: branch || undefined,
+    startDate: dateWindowStart,
+    endDate: dateWindowEnd,
   });
 
   const history = await chatSessionsStore.listMessages({ sessionId });
@@ -120,7 +126,14 @@ export async function streamChatMessage(opts: {
   const messages: { role: "user" | "assistant" | "system"; content: string }[] = [
     { role: "system", content: buildSystemPrompt(project?.repositoryName) },
     ...priorTurns,
-    { role: "user", content: buildUserMessage(content, citations) },
+    {
+      role: "user",
+      content: buildUserMessage(filteredQuery, citations, {
+        branch: branch ?? null,
+        startDate: dateWindowStart,
+        endDate: dateWindowEnd,
+      }),
+    },
   ];
 
   const result = await callAI({
@@ -136,6 +149,7 @@ export async function streamChatMessage(opts: {
     sessionId,
     role: "assistant",
     content: result.content,
+    branch: branch ?? null,
     citations,
   });
   await chatSessionsStore.touchSession({ id: sessionId });

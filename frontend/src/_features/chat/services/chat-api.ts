@@ -5,6 +5,15 @@ import { apiClient, API_URL } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage, ChatSession } from "@/src/shared/types";
 
+export async function prepareProjectBranch(projectId: string, branch: string) {
+  const response = await apiClient.POST("/api/v1/projects/{id}/branches/prepare", {
+    params: { path: { id: projectId } },
+    body: { branch },
+  });
+  if (response.error) throw response.error;
+  return response.data;
+}
+
 export function useChatSessions(projectId?: string) {
   const query = projectId ? { projectId } : undefined;
   const { data, error, isLoading, isFetching } = useQuery({
@@ -95,12 +104,13 @@ export type StreamChunk =
 export async function streamChatMessage(
   sessionId: string,
   content: string,
+  branch: string | null,
   onChunk: (chunk: StreamChunk) => void,
 ): Promise<ChatMessage> {
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(branch ? { branch } : {}) }),
   });
 
   if (!res.ok || !res.body) {

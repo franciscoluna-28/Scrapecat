@@ -9,6 +9,7 @@ export const ProjectsResponse = Type.Object({
       providerOwner: Type.String(),
       repositoryName: Type.String(),
       defaultBranch: Type.String(),
+      indexedBranches: Type.Array(Type.String()),
       createdAt: Type.String({ format: "date-time" }),
       updatedAt: Type.String({ format: "date-time" }),
     }),
@@ -17,4 +18,14 @@ export const ProjectsResponse = Type.Object({
 
 export const ProjectIdParams = Type.Object({
   id: Type.String(),
+});
+
+export const PrepareBranchBody = Type.Object({
+  branch: Type.String({ minLength: 1 }),
+});
+
+export const PrepareBranchResponse = Type.Object({
+  branch: Type.String(),
+  commitsFound: Type.Integer(),
+  chunksWritten: Type.Integer(),
 });

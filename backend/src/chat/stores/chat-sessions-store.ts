@@ -54,12 +54,14 @@ export async function addMessage({
   sessionId,
   role,
   content,
+  branch,
   citations,
   tx,
 }: {
   sessionId: string;
   role: "user" | "assistant";
   content: string;
+  branch?: string | null;
   citations?: ChatCitation[];
   tx?: DbOrTx;
 }) {
@@ -69,6 +71,7 @@ export async function addMessage({
       sessionId,
       role,
       content,
+      branch: branch ?? null,
       citations: citations ?? [],
     })
     .returning();

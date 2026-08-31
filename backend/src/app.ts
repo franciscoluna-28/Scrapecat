@@ -10,7 +10,8 @@ import { checkVerification } from "@/verification/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits, getReportJobStatus, streamReportJob, getJobCommits } from "@/reports/routes";
-import { listProjects } from "@/projects/routes";
+import { listProjects, prepareBranch } from "@/projects/routes";
+import { PrepareBranchBody, PrepareBranchResponse, ProjectIdParams } from "@/projects/schemas";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 import {
@@ -59,7 +60,6 @@ import {
 } from "@/reports/schemas";
 import {
   ProjectsResponse,
-  ProjectIdParams,
 } from "@/projects/schemas";
 import {
   AddCredentialBody,
@@ -236,6 +236,16 @@ export async function buildApp() {
       response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
+
+  app.post("/api/v1/projects/:id/branches/prepare", {
+    schema: {
+      description: "Ingest a project branch before chat retrieval",
+      tags: ["projects"],
+      params: ProjectIdParams,
+      body: PrepareBranchBody,
+      response: { 200: PrepareBranchResponse, 404: ErrorResponse, 500: ErrorResponse },
+    },
+  }, prepareBranch);
 
   app.get("/api/v1/credentials", {
     schema: {

@@ -36,10 +36,23 @@ export function formatCitationForPrompt(c: ChatCitation): string {
   return lines.join("\n");
 }
 
-export function buildUserMessage(query: string, citations: ChatCitation[]): string {
+export function buildUserMessage(
+  query: string,
+  citations: ChatCitation[],
+  scope?: { branch?: string | null; startDate?: Date; endDate?: Date },
+): string {
   const context = citations.map(formatCitationForPrompt).join("\n");
+  const filters = [
+    scope?.branch ? `Branch: ${scope.branch}` : "Branch: all branches",
+    scope?.startDate ? `From: ${scope.startDate.toISOString()}` : null,
+    scope?.endDate ? `To: ${scope.endDate.toISOString()}` : null,
+  ].filter(Boolean).join("\n");
   return [
     "Answer the question below using only the retrieved commits. Reference commits by SHA.",
+    "If no commits were retrieved, explicitly say that no indexed commits matched the requested branch/date scope. Do not infer that nothing changed outside that scope.",
+    "",
+    "Retrieval scope:",
+    filters,
     "",
     "Retrieved commits:",
     context || "(no relevant commits retrieved)",

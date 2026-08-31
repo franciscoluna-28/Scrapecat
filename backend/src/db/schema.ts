@@ -221,6 +221,7 @@ export const chatMessages = pgTable(
       .notNull(),
     role: text("role").notNull(),
     content: text("content").notNull(),
+    branch: text("branch"),
     citations: jsonb("citations")
       .$type<ChatCitation[]>()
       .default([]),
