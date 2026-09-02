@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Calendar,
+  MessageSquareText,
 } from "lucide-react";
 import { Label } from "@/src/components/ui/label";
 import { Badge } from "@/src/components/ui/badge";
@@ -26,6 +27,7 @@ type Props = {
   branch: string;
   report: string;
   reportId?: string;
+  sessionId?: string | null;
 };
 
 const markdownComponents: Components = {
@@ -76,6 +78,7 @@ export default function ReportClientPage({
   branch,
   report,
   reportId,
+  sessionId,
 }: Props) {
   const currentReport = report;
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -130,12 +133,20 @@ export default function ReportClientPage({
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Period</Label>
               <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <p className="text-sm">
-                  {format(parseISO(startDate), "MMM d, yyyy")} — {endDate ? format(parseISO(endDate), "MMM d, yyyy") : "Present"}
+                  {format(parseISO(startDate), "MMM d, yyyy")} to {endDate ? format(parseISO(endDate), "MMM d, yyyy") : "Present"}
                 </p>
               </div>
             </div>
+            {sessionId && (
+              <a
+                href="/app"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <MessageSquareText className="size-3.5" />
+                Back to chat
+              </a>
+            )}
           </div>
 
           <div className="flex-1 overflow-hidden min-w-0">

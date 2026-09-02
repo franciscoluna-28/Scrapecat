@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
-import { PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
+import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
 import type { Static } from "@sinclair/typebox";
 
 export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
@@ -26,6 +26,26 @@ export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
   } catch (error) {
     console.error("Error listing projects:", error);
     return reply.status(500).send({ error: "Failed to list projects" });
+  }
+}
+
+export async function createProject(req: FastifyRequest, reply: FastifyReply) {
+  const body = req.body as Static<typeof CreateProjectBody>;
+  try {
+    const { project } = await projectsStore.upsertProject({ input: body });
+    return reply.code(201).send({
+      id: project.id,
+      gitProvider: project.gitProvider,
+      providerProjectId: project.providerProjectId,
+      providerOwner: project.providerOwner,
+      repositoryName: project.repositoryName,
+      defaultBranch: project.defaultBranch,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    console.error("Error creating project:", error);
+    return reply.status(500).send({ error: "Failed to create project" });
   }
 }
 

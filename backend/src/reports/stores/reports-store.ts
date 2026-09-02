@@ -5,6 +5,7 @@ import { reports } from "@/db/schema";
 export type ReportInput = {
   id?: string;
   projectId: string;
+  sessionId?: string | null;
   title: string;
   originalMarkdown: string;
   startDate: Date;
@@ -26,6 +27,7 @@ export async function createReport({
     .values({
       id: input.id,
       projectId: input.projectId,
+      sessionId: input.sessionId ?? null,
       title: input.title,
       originalMarkdown: input.originalMarkdown,
       startDate: input.startDate,

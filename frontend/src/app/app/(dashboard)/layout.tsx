@@ -18,24 +18,21 @@ import {
 import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
-import { GitBranch, FileText, Settings, Key, MessageSquareText } from "lucide-react";
+import { FileText, Settings, Key, MessageSquareText } from "lucide-react";
 
 const NAV_ITEMS = [
-  { id: "repositories", label: "Repositories", icon: GitBranch, route: "/app" },
+  { id: "chat", label: "Chat", icon: MessageSquareText, route: "/app" },
   { id: "reports", label: "Reports", icon: FileText, route: "/app/reports" },
-  { id: "chat", label: "Ask AI", icon: MessageSquareText, route: "/app/chat" },
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
   { id: "settings", label: "Settings", icon: Settings, route: "/app/settings" },
 ] as const;
 
 function isActive(id: string, pathname: string) {
   switch (id) {
-    case "repositories":
-      return pathname === "/app" || pathname.startsWith("/app/repos");
+    case "chat":
+      return pathname === "/app";
     case "reports":
       return pathname.startsWith("/app/reports");
-    case "chat":
-      return pathname.startsWith("/app/chat");
     case "credentials":
       return pathname.startsWith("/app/api-keys");
     case "settings":
@@ -48,7 +45,7 @@ function isActive(id: string, pathname: string) {
 function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const activeView = NAV_ITEMS.find((i) => isActive(i.id, pathname))?.id ?? "repositories";
+  const activeView = NAV_ITEMS.find((i) => isActive(i.id, pathname))?.id ?? "chat";
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -64,7 +61,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">Scrapecat</span>
-                      <span className="truncate text-xs text-muted-foreground">Reports</span>
+                      <span className="truncate text-xs text-muted-foreground">Intelligence</span>
                     </div>
                   </a>
                 </SidebarMenuButton>

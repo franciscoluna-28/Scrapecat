@@ -222,6 +222,7 @@ export async function listReports(
           title: report.title,
           repositoryName: project?.repositoryName ?? "",
           branch: report.branch,
+          sessionId: report.sessionId,
           startDate: formatDate(report.startDate),
           endDate: formatDate(report.endDate),
           createdAt: report.createdAt,
@@ -258,6 +259,7 @@ export async function getReport(
       startDate: formatDate(report.startDate),
       endDate: formatDate(report.endDate),
       branch: report.branch,
+      sessionId: report.sessionId,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
     });

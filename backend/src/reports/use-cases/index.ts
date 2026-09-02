@@ -291,6 +291,7 @@ export async function generateReportUseCase(
           input: {
             id: reportId,
             projectId,
+            sessionId: input.sessionId ?? null,
             title: extractReportTitle(generatedReport, input.repository),
             originalMarkdown: generatedReport,
             startDate: new Date(input.startDate),

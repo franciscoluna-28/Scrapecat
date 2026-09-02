@@ -60,6 +60,7 @@ export default function ReportPage() {
       endDate={report.endDate}
       branch={report.branch}
       report={report.originalMarkdown}
+      sessionId={(report as any).sessionId ?? null}
     />
   );
 }

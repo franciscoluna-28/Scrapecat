@@ -11,7 +11,8 @@ import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { createReport, listReports, getReport, getReportCommits, getReportJobStatus, streamReportJob, getJobCommits } from "@/reports/routes";
 import { listProjects, prepareBranch } from "@/projects/routes";
-import { PrepareBranchBody, PrepareBranchResponse, ProjectIdParams } from "@/projects/schemas";
+import { createProject as createProjectRoute } from "@/projects/routes";
+import { PrepareBranchBody, PrepareBranchResponse, ProjectIdParams, CreateProjectBody, CreateProjectResponse } from "@/projects/schemas";
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 import {
@@ -229,13 +230,22 @@ export async function buildApp() {
     },
   }, getReportCommits);
 
-  app.get("/api/v1/projects", {
+app.get("/api/v1/projects", {
     schema: {
       description: "List synced GitHub projects",
       tags: ["projects"],
       response: { 200: ProjectsResponse, 500: ErrorResponse },
     },
   }, listProjects);
+
+  app.post("/api/v1/projects", {
+    schema: {
+      description: "Create or connect a new project",
+      tags: ["projects"],
+      body: CreateProjectBody,
+      response: { 201: CreateProjectResponse, 500: ErrorResponse },
+    },
+  }, createProjectRoute);
 
   app.post("/api/v1/projects/:id/branches/prepare", {
     schema: {

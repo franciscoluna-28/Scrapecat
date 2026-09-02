@@ -143,6 +143,8 @@ export const reports = pgTable("reports", {
   projectId: uuid("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
+  sessionId: uuid("session_id")
+    .references(() => chatSessions.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   originalMarkdown: text("original_markdown").notNull(),
   startDate: timestamp("start_date", { withTimezone: true }).notNull(),

@@ -15,6 +15,7 @@ export const ReportDataInput = Type.Object({
   provider: Type.Optional(
     Type.Union([Type.Literal("openrouter"), Type.Literal("deepseek"), Type.Literal("openai")]),
   ),
+  sessionId: Type.Optional(Type.String({ format: "uuid" })),
 });
 
 export const ReportInputBody = Type.Object({
@@ -68,6 +69,7 @@ const ReportSummary = Type.Object({
   startDate: Type.String(),
   endDate: Type.String(),
   branch: Type.String(),
+  sessionId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
 });
@@ -89,6 +91,7 @@ export const ReportGetResponse = Type.Object({
   startDate: Type.String(),
   endDate: Type.String(),
   branch: Type.String(),
+  sessionId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
 });

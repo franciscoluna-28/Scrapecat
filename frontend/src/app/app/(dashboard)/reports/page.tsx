@@ -64,7 +64,7 @@ export default function ReportsPage() {
                 <div className="text-center py-12">
                   <FileText className="h-12 w-12 text-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">No reports found</h3>
-                  <p className="text-muted-foreground">Generate your first report from a repository settings page.</p>
+                  <p className="text-muted-foreground">Open a project in chat and use the "Generate report" button to create one.</p>
                 </div>
               ) : (
                 reports.map((report) => (

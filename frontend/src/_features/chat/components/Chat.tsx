@@ -42,6 +42,8 @@ import {
   streamChatMessage,
 } from "@/src/_features/chat/services/chat-api";
 import { CitationCard } from "@/src/_features/chat/components/CitationCard";
+import { AddRepositoryDialog } from "@/src/_features/chat/components/AddRepositoryDialog";
+import { GenerateReportDialog } from "@/src/_features/chat/components/GenerateReportDialog";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
 import {
@@ -50,6 +52,8 @@ import {
   MessageSquareText,
   Bot,
   BookOpen,
+  Link2,
+  FileText,
 } from "lucide-react";
 
 function MessageView({
@@ -296,6 +300,39 @@ export function Chat() {
             <Plus className="size-4" />
             New chat
           </Button>
+
+          <div className="flex flex-col gap-1">
+            {!hasSelection ? (
+              <AddRepositoryDialog onProjectSelected={handleProjectChange}>
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Link2 className="size-4" />
+                  Connect repository
+                </Button>
+              </AddRepositoryDialog>
+            ) : (
+              <>
+                <AddRepositoryDialog onProjectSelected={handleProjectChange}>
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    <Link2 className="size-4" />
+                    Switch repository
+                  </Button>
+                </AddRepositoryDialog>
+                <GenerateReportDialog
+                  projectId={projectId!}
+                  repositoryName={activeProject ?? ""}
+                  providerOwner={activeProjectData?.providerOwner ?? ""}
+                  providerProjectId={activeProjectData?.providerProjectId ?? ""}
+                  branch={branch}
+                  sessionId={sessionId}
+                >
+                  <Button variant="default" size="sm" className="w-full justify-start">
+                    <FileText className="size-4" />
+                    Generate report
+                  </Button>
+                </GenerateReportDialog>
+              </>
+            )}
+          </div>
 
           <div className="flex-1 overflow-y-auto space-y-1">
             {sessionsLoading ? (
