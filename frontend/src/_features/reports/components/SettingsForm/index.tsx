@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isToday } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Label } from "@/src/components/ui/label";
@@ -156,7 +156,7 @@ export function SettingsForm({
 
             <div>
               <DatePicker
-                label="End Date (optional)"
+                label="End Date"
                 date={endDate ? parseISO(endDate) : undefined}
                 onSelect={(date) =>
                   updateParam("endDate", date ? format(date, "yyyy-MM-dd") : "")
@@ -166,6 +166,11 @@ export function SettingsForm({
                   (startDate ? date < new Date(startDate) : false)
                 }
               />
+              {endDate && isToday(parseISO(endDate)) && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Includes commits up to ~{format(new Date(), "h:mm a")} (current time)
+                </p>
+              )}
             </div>
           </div>
 
@@ -176,9 +181,9 @@ export function SettingsForm({
               </Label>
               <Combobox
                 items={branches}
-                itemToStringValue={(b) => b}
+                itemToStringValue={(b: string) => b}
                 value={selectedBranch}
-                onValueChange={(v) => v && updateParam("branch", v)}
+                onValueChange={(v: string | null) => v && updateParam("branch", v)}
               >
                 <ComboboxInput
                   className="mt-1.5"
@@ -188,7 +193,7 @@ export function SettingsForm({
                 <ComboboxContent>
                   <ComboboxEmpty>No branches found.</ComboboxEmpty>
                   <ComboboxList>
-                    {(branch) => (
+                    {(branch: string) => (
                       <ComboboxItem key={branch} value={branch}>
                         {branch}
                       </ComboboxItem>
@@ -200,16 +205,14 @@ export function SettingsForm({
           </div>
 
           <div className="border-t pt-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Report model</span>
+            <p className="text-xs text-muted-foreground">
+              Model:{" "}
               <span className="font-medium">
                 {aiSettings
                   ? `${aiSettings.reportModel} · ${aiSettings.reportProvider}`
                   : "Loading..."}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Managed globally in Settings.
+              </span>{" "}
+              (managed in Settings)
             </p>
           </div>
 
@@ -236,7 +239,7 @@ export function SettingsForm({
               placeholder="e.g., Focus on infrastructure, Highlight security changes"
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-20"
+              className="min-h-20 resize-none"
             />
             <p className="text-xs text-muted-foreground">
               Add specific instructions to guide the AI report generation
@@ -245,7 +248,6 @@ export function SettingsForm({
           <PromptPresetsModal
             open={promptPresetsOpen}
             onOpenChange={setPromptPresetsOpen}
-            currentPrompt={customInstructions}
             onSelectPrompt={setCustomInstructions}
           />
         </div>
@@ -274,7 +276,7 @@ export function SettingsForm({
               </>
             ) : (
               <>
-                <Book className="mr-2 h-4 w-4" />
+               
                 Generate Report
               </>
             )}

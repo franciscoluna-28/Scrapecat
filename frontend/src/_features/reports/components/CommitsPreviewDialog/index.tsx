@@ -9,7 +9,7 @@ import {
 } from "@/src/components/ui/dialog";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Button } from "@/src/components/ui/button";
-import { GitCommit } from "lucide-react";
+import { GitCommit, ChevronRight } from "lucide-react";
 import { CommitCard } from "@/src/_features/reports/components/CommitCard";
 import type { RepoCommit } from "@/src/_features/reports/services/api";
 import type { StoredCommit } from "@/src/shared/types";
@@ -32,13 +32,13 @@ export function CommitsPreviewDialog({ commits, commitCount }: Props) {
     <Dialog>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="text-muted-foreground hover:text-foreground px-0"
+          className="gap-1.5"
         >
-          <GitCommit className="h-4 w-4 mr-2" />
-          {commitCount} {commitCount === 1 ? "commit" : "commits"} found for
-          this period
+          <GitCommit className="h-3.5 w-3.5" />
+          {commitCount} {commitCount === 1 ? "commit" : "commits"}
+          <ChevronRight className="h-3 w-3 ml-0.5" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[80vh] p-0">

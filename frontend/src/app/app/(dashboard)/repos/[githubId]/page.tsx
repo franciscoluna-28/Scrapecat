@@ -75,7 +75,7 @@ function RepoReportPageContent() {
             branches={availableBranches}
             selectedBranch={selectedBranch}
             startDate={startDate || today}
-            endDate={endDate ?? undefined}
+            endDate={endDate ?? today}
           />
         </>
       )}

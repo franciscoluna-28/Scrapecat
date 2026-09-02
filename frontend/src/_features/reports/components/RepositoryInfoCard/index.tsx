@@ -8,7 +8,7 @@ interface RepositoryInfoCardProps {
 
 export function RepositoryInfoCard({ repository }: RepositoryInfoCardProps) {
   return (
-    <Card size="sm" className="mt-6 inline-flex">
+    <Card size="sm" className="mt-6 inline-flex px-3">
       <CardContent className="flex items-center gap-4 py-2">
         <div className="flex items-center gap-2">
           <span className="font-semibold">{repository.owner.login}</span>
