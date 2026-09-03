@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useActiveProjectStore } from "@/src/store/active-project";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   Conversation,
@@ -28,16 +29,28 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "@/src/components/ui/empty";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/src/components/ui/combobox";
 import { useProjects } from "@/src/_features/reports/services/projects-api";
+import { useBranches } from "@/src/_features/reports/services/api";
 import {
   useChatMessages,
   useCreateChatSession,
   streamChatMessage,
+  prepareProjectBranch,
 } from "@/src/_features/chat/services/chat-api";
+import { GenerateReportDialog } from "@/src/_features/chat/components/GenerateReportDialog";
 import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
-import { BookOpen, GitBranch, ArrowUp } from "lucide-react";
+import { BookOpen, ArrowUp, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 function MessageView({
   message,
@@ -87,6 +100,40 @@ export function Chat() {
   const branch = searchParams.get("branch");
 
   const activeProject = projects.find((p) => p.id === projectId)?.repositoryName ?? null;
+  const activeProjectData = projects.find((p) => p.id === projectId) ?? null;
+  const { setLastProjectId } = useActiveProjectStore();
+
+  useEffect(() => {
+    if (!projectsLoading && projects.length > 0 && !projectId) {
+      const stored = useActiveProjectStore.getState().lastProjectId;
+      const target = stored && projects.find((p) => p.id === stored) ? stored : projects[0].id;
+      setLastProjectId(target);
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("project", target);
+      router.replace(`/app?${p.toString()}`);
+    }
+  }, [projectsLoading, projects, projectId, router, searchParams, setLastProjectId]);
+
+  useEffect(() => {
+    if (projectId) {
+      setLastProjectId(projectId);
+    }
+  }, [projectId, setLastProjectId]);
+
+  const { branches, isLoading: branchesLoading } = useBranches(
+    activeProjectData?.providerOwner ?? "",
+    activeProjectData?.repositoryName ?? "",
+  );
+
+  const handleBranchChange = async (branchName: string) => {
+    if (!projectId) return;
+    await prepareProjectBranch(projectId, branchName);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
+    toast.success(`Ready to chat on ${branchName}`);
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("branch", branchName);
+    router.push(`/app?${p.toString()}`);
+  };
 
   const { messages: storedMessages, isLoading: messagesLoading } = useChatMessages(sessionId ?? undefined);
   const createSession = useCreateChatSession();
@@ -169,7 +216,7 @@ export function Chat() {
         <div className="flex-1 flex items-center justify-center">
           <Empty className="max-w-md border-0">
             <EmptyMedia>
-              <GitBranch className="size-12 text-muted-foreground" />
+              <FileText className="size-12 text-muted-foreground" />
             </EmptyMedia>
             <EmptyHeader>
               <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
@@ -181,15 +228,48 @@ export function Chat() {
         </div>
       ) : (
         <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2 shrink-0 border-b px-4 py-2">
-            <GitBranch className="size-4 text-muted-foreground" />
-            <span className="font-medium text-sm">{activeProject}</span>
-            {branch && (
-              <>
-                <span className="text-xs text-muted-foreground">/</span>
-                <span className="text-xs text-muted-foreground">{branch}</span>
-              </>
+          <div className="flex items-center gap-2 shrink-0 border-b px-4 py-1.5">
+            <span className="text-xs text-muted-foreground shrink-0">Current branch</span>
+            {branches.length > 0 && (
+              <Combobox
+                items={branches}
+                value={branch ?? branches[0] ?? ""}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  handleBranchChange(v);
+                }}
+                disabled={branchesLoading}
+              >
+                <ComboboxInput placeholder="Filter branch..." showClear={false} className="h-7 text-xs w-40" />
+                <ComboboxContent>
+                  <ComboboxEmpty>No branches found.</ComboboxEmpty>
+                  <ComboboxList>
+                    {(value) => (
+                      <ComboboxItem key={value} value={value}>
+                        {value}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
             )}
+            <div className="ml-auto">
+              {activeProjectData && (
+                <GenerateReportDialog
+                  projectId={projectId}
+                  repositoryName={activeProjectData.repositoryName}
+                  providerOwner={activeProjectData.providerOwner}
+                  providerProjectId={activeProjectData.providerProjectId}
+                  branch={branch}
+                  sessionId={sessionId ?? undefined}
+                >
+                  <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-accent">
+                    <FileText className="size-4" />
+                    Generate report
+                  </button>
+                </GenerateReportDialog>
+              )}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0 px-4">
             {messagesLoading && sessionId && storedMessages.length === 0 ? (
