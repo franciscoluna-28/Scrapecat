@@ -49,7 +49,7 @@ import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { ReportFormMessage } from "@/src/_features/chat/components/ReportFormMessage";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
-import { BookOpen, ArrowUp, FileText } from "lucide-react";
+import { BookOpen, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
 
@@ -121,7 +121,7 @@ export function Chat() {
     }
   }, [projectId, setLastProjectId]);
 
-  const { branches, isLoading: branchesLoading } = useBranches(
+  const { branches, defaultBranch, isLoading: branchesLoading } = useBranches(
     activeProjectData?.providerOwner ?? "",
     activeProjectData?.repositoryName ?? "",
   );
@@ -135,6 +135,15 @@ export function Chat() {
     p.set("branch", branchName);
     router.push(`/app?${p.toString()}`);
   };
+
+  // Auto-set default branch when project loads but no branch in URL
+  useEffect(() => {
+    if (defaultBranch && projectId && !branch) {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("branch", defaultBranch);
+      router.replace(`/app?${p.toString()}`);
+    }
+  }, [defaultBranch, projectId, branch, router, searchParams]);
 
   const { messages: storedMessages, isLoading: messagesLoading } = useChatMessages(sessionId ?? undefined);
   const createSession = useCreateChatSession();
@@ -243,7 +252,7 @@ export function Chat() {
             {branches.length > 0 && (
               <Combobox
                 items={branches}
-                value={branch ?? branches[0] ?? ""}
+                value={branch ?? defaultBranch ?? branches[0] ?? ""}
                 onValueChange={(v) => {
                   if (!v) return;
                   handleBranchChange(v);
@@ -308,14 +317,9 @@ export function Chat() {
                 disabled={isStreaming}
                 className="flex-1"
               />
-              <PromptInputSubmit
-                status={isStreaming ? "streaming" : "ready"}
-                disabled={!input.trim() || isStreaming}
-              >
-                <ArrowUp className="size-4" />
-              </PromptInputSubmit>
+              <button type="submit" className="hidden" />
             </PromptInput>
-            {!showReportForm && messages.length === 0 && (
+            {!showReportForm && (
               <Suggestions className="mt-2">
                 <Suggestion
                   suggestion="generate-report"

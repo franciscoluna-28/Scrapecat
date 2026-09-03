@@ -107,9 +107,12 @@ export default function ReportClientPage({
             sidebarOpen ? "w-96" : "w-0"
           } shrink-0 border-r bg-muted/30 flex flex-col transition-all duration-200 overflow-hidden`}
         >
-          <div className="p-4 border-b flex items-center min-w-0">
-            <a href="/app" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors">
-              <div className="flex aspect-square size-7 items-center justify-center rounded-lg">
+          <div className="p-4 border-b flex items-center gap-2 min-w-0">
+            <button onClick={() => window.location.href = "/app"} className="shrink-0 text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted/50 transition-colors">
+              <ArrowLeft className="size-4" />
+            </button>
+            <a href="/app" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 px-1.5 py-1 transition-colors flex-1 min-w-0">
+              <div className="flex aspect-square size-7 items-center justify-center rounded-lg shrink-0">
                 <Image src={LogoImage} alt="Scrapecat Logo" width={24} height={24} className="size-6" />
               </div>
               <div className="grid text-left text-sm leading-tight">
@@ -138,15 +141,6 @@ export default function ReportClientPage({
                 </p>
               </div>
             </div>
-            {sessionId && (
-              <a
-                href="/app"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <MessageSquareText className="size-3.5" />
-                Back to chat
-              </a>
-            )}
           </div>
 
           <div className="flex-1 overflow-hidden min-w-0">
