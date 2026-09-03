@@ -49,23 +49,11 @@ import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { ReportFormMessage } from "@/src/_features/chat/components/ReportFormMessage";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
-import { BookOpen, ArrowUp, FileText, GitBranch } from "lucide-react";
+import { cn } from "@/src/shared/lib/utils";
+import { BookOpen, ArrowUp, FileText, GitBranch, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
-
-function groupByDay(citations: ChatMessage["citations"]): Map<string, ChatMessage["citations"]> {
-  const groups = new Map<string, ChatMessage["citations"]>();
-  for (const c of citations) {
-    const day = new Date(c.committedAt).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    if (!groups.has(day)) groups.set(day, []);
-    groups.get(day)!.push(c);
-  }
-  return groups;
-}
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 
 function MessageView({
   message,
@@ -74,7 +62,8 @@ function MessageView({
   message: ChatMessage;
   streaming?: boolean;
 }) {
-  const grouped = message.citations.length > 0 ? groupByDay(message.citations) : null;
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const citationCount = message.citations.length;
   return (
     <Message from={message.role}>
       <MessageContent>
@@ -89,24 +78,32 @@ function MessageView({
           <p className="whitespace-pre-wrap">{message.content}</p>
         )}
       </MessageContent>
-      {message.role === "assistant" && (
-        <p className="text-[11px] text-muted-foreground">
-          Source scope: {message.branch ?? "all branches"}
-        </p>
-      )}
-      {message.role === "assistant" && grouped && grouped.size > 0 && (
-        <div className="w-full space-y-3 border-t pt-3 mt-2">
-          {[...grouped.entries()].map(([day, citations]) => (
-            <div key={day}>
-              <p className="text-[11px] font-medium text-muted-foreground mb-1">{day}</p>
-              <div className="space-y-1">
-                {citations.map((c) => (
-                  <CitationCard key={c.commitSha} citation={c} />
-                ))}
-              </div>
+      {message.role === "assistant" && citationCount > 0 && (
+        <Collapsible
+          defaultOpen={false}
+          onOpenChange={setSourcesOpen}
+          className="w-full border-t pt-3 mt-2"
+        >
+          <CollapsibleTrigger className="w-full">
+            <div className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent transition-colors">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Sources Used · {message.branch ?? "all branches"} ({citationCount}{" "}
+                {citationCount === 1 ? "commit retrieved" : "commits retrieved"})
+              </span>
+              <ChevronDown
+                className={cn(
+                  "size-3.5 text-muted-foreground transition-transform",
+                  sourcesOpen && "rotate-180",
+                )}
+              />
             </div>
-          ))}
-        </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-2">
+            {message.citations.map((c) => (
+              <CitationCard key={c.commitSha} citation={c} />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </Message>
   );
