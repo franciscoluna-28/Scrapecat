@@ -45,12 +45,13 @@ import {
   streamChatMessage,
   prepareProjectBranch,
 } from "@/src/_features/chat/services/chat-api";
-import { GenerateReportDialog } from "@/src/_features/chat/components/GenerateReportDialog";
 import { CitationCard } from "@/src/_features/chat/components/CitationCard";
+import { ReportFormMessage } from "@/src/_features/chat/components/ReportFormMessage";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
 import { BookOpen, ArrowUp, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
 
 function MessageView({
   message,
@@ -141,6 +142,7 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
+  const [showReportForm, setShowReportForm] = useState(false);
   const streamingId = liveMessages.find((m) => m.id.startsWith("local-assistant"))?.id;
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
@@ -210,6 +212,14 @@ export function Chat() {
 
   const handleSubmit = (message: PromptInputMessage) => handleSend(message.text);
 
+  const handleSuggestion = (suggestion: string) => {
+    if (suggestion === "generate-report") {
+      setShowReportForm(true);
+    } else {
+      handleSend(suggestion);
+    }
+  };
+
   return (
     <div className="w-full h-full flex flex-col">
       {!projectId ? (
@@ -253,23 +263,6 @@ export function Chat() {
                 </ComboboxContent>
               </Combobox>
             )}
-            <div className="ml-auto">
-              {activeProjectData && (
-                <GenerateReportDialog
-                  projectId={projectId}
-                  repositoryName={activeProjectData.repositoryName}
-                  providerOwner={activeProjectData.providerOwner}
-                  providerProjectId={activeProjectData.providerProjectId}
-                  branch={branch}
-                  sessionId={sessionId ?? undefined}
-                >
-                  <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-accent">
-                    <FileText className="size-4" />
-                    Generate report
-                  </button>
-                </GenerateReportDialog>
-              )}
-            </div>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0 px-4">
             {messagesLoading && sessionId && storedMessages.length === 0 ? (
@@ -279,7 +272,7 @@ export function Chat() {
                   <Skeleton className="h-16 w-2/3" />
                 </div>
               </div>
-            ) : messages.length === 0 ? (
+            ) : messages.length === 0 && !showReportForm ? (
               <ConversationEmptyState
                 icon={<BookOpen className="size-12" />}
                 title={`Ask about ${activeProject}`}
@@ -291,6 +284,16 @@ export function Chat() {
                   {messages.map((m) => (
                     <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
                   ))}
+                  {showReportForm && activeProjectData && (
+                    <ReportFormMessage
+                      projectId={projectId}
+                      repositoryName={activeProjectData.repositoryName}
+                      providerOwner={activeProjectData.providerOwner}
+                      providerProjectId={activeProjectData.providerProjectId}
+                      branch={branch}
+                      sessionId={sessionId ?? undefined}
+                    />
+                  )}
                 </ConversationContent>
                 <ConversationScrollButton />
               </Conversation>
@@ -312,6 +315,17 @@ export function Chat() {
                 <ArrowUp className="size-4" />
               </PromptInputSubmit>
             </PromptInput>
+            {!showReportForm && messages.length === 0 && (
+              <Suggestions className="mt-2">
+                <Suggestion
+                  suggestion="generate-report"
+                  onClick={handleSuggestion}
+                >
+                  <FileText className="size-3" />
+                  Generate report
+                </Suggestion>
+              </Suggestions>
+            )}
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
             </p>
