@@ -6,10 +6,14 @@ import { apiClient, API_URL } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ReportDetail, ReportJob, ReportSummary, StoredCommit } from "@/src/shared/types";
 
-export function useReports(projectId?: string) {
-  const query = projectId ? { projectId } : undefined;
+export function useReports(projectId?: string, startDate?: string, endDate?: string) {
+  const params: Record<string, string> = {};
+  if (projectId) params.projectId = projectId;
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
+  const query = Object.keys(params).length > 0 ? params : undefined;
   const { data, error, isLoading, isFetching } = useQuery({
-    queryKey: queryKeys.reports.list(projectId),
+    queryKey: queryKeys.reports.list(projectId, startDate, endDate),
     queryFn: () =>
       apiClient
         .GET("/api/v1/reports", {

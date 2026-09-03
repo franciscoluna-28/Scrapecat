@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { format, subDays } from "date-fns";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Card, CardContent } from "@/src/components/ui/card";
-import { FileText } from "lucide-react";
+import { FileText, CalendarDays } from "lucide-react";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import {
   Select,
@@ -16,22 +17,46 @@ import { useReports } from "@/src/_features/reports/services/reports-api";
 import { useProjects } from "@/src/_features/reports/services/projects-api";
 import { ReportCard } from "@/src/_features/reports/components/ReportCard";
 
+const PRESETS = [
+  { label: "All time", value: "all", days: null },
+  { label: "Last 7 days", value: "7d", days: 7 },
+  { label: "Last 30 days", value: "30d", days: 30 },
+  { label: "Last 90 days", value: "90d", days: 90 },
+] as const;
+
 export default function ReportsPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
-  const { reports, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(selectedProjectId);
+  const [preset, setPreset] = useState("all");
+
+  const { startDate, endDate } = useMemo(() => {
+    const p = PRESETS.find((p) => p.value === preset);
+    if (p?.days) {
+      return {
+        startDate: format(subDays(new Date(), p.days), "yyyy-MM-dd"),
+        endDate: format(new Date(), "yyyy-MM-dd"),
+      };
+    }
+    return { startDate: undefined, endDate: undefined };
+  }, [preset]);
+
+  const { reports, isFetching: isFetchingReports, hasError: hasReportsError } = useReports(
+    selectedProjectId,
+    startDate,
+    endDate,
+  );
   const { projects } = useProjects();
 
   return (
     <SectionLayout>
-      {projects.length > 0 && (
-        <div className="flex justify-center mb-4">
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        {projects.length > 0 && (
           <Select
             value={selectedProjectId ?? "all"}
             onValueChange={(value) =>
               setSelectedProjectId(value === "all" ? undefined : value)
             }
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-44">
               <SelectValue placeholder="All Projects" />
             </SelectTrigger>
             <SelectContent>
@@ -43,8 +68,24 @@ export default function ReportsPage() {
               ))}
             </SelectContent>
           </Select>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Select value={preset} onValueChange={setPreset}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESETS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
+      </div>
+
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <ScrollArea className="h-[70vh]">

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/src/components/ui/card";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight, FileText, CalendarDays } from "lucide-react";
 import type { ReportSummary } from "@/src/shared/types";
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
 };
 
 export function ReportCard({ report }: Props) {
+  const createdDate = new Date(report.createdAt);
+
   return (
     <Link href={`/app/reports/${report.id}`} className="block">
       <Card className="hover:bg-muted/80 bg-muted/40 transition-colors cursor-pointer ring-0">
@@ -23,8 +26,11 @@ export function ReportCard({ report }: Props) {
               <h3 className="font-semibold truncate">
                 {report.title || report.repositoryName}
               </h3>
-              <div className="text-xs text-muted-foreground">
-                {report.branch}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                <span>{report.branch}</span>
+                <span className="flex items-center gap-1">
+                  {format(createdDate, "MMM d, yyyy")}
+                </span>
               </div>
             </div>
 

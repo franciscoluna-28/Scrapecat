@@ -19,6 +19,7 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
 import { FileText, Settings, Key, MessageSquareText } from "lucide-react";
+import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
 
 const NAV_ITEMS = [
   { id: "chat", label: "Chat", icon: MessageSquareText, route: "/app" },
@@ -87,16 +88,14 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+            <ChatSidebarContent />
           </SidebarContent>
         </Sidebar>
-        <SidebarInset className="flex flex-col">
-          <header className="flex h-12 items-center gap-2 border-b px-4 bg-background/50">
+        <SidebarInset className="flex flex-col h-screen">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/50">
             <SidebarTrigger className="-ml-1" />
-            <h1 className="text-sm hidden">
-              {NAV_ITEMS.find((i) => i.id === activeView)?.label || "Scrapecat"}
-            </h1>
           </header>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-hidden">
             {children}
           </div>
         </SidebarInset>

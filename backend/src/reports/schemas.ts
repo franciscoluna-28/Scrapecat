@@ -59,6 +59,8 @@ export const ReportJobParams = Type.Object({
 
 export const ReportsListQuery = Type.Object({
   projectId: Type.Optional(Type.String()),
+  startDate: Type.Optional(Type.String({ format: "date" })),
+  endDate: Type.Optional(Type.String({ format: "date" })),
 });
 
 const ReportSummary = Type.Object({

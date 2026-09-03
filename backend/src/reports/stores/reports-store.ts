@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { reports } from "@/db/schema";
 
@@ -41,15 +41,31 @@ export async function createReport({
 
 export async function listReports({
   projectId,
+  startDate,
+  endDate,
   tx,
 }: {
   projectId?: string;
+  startDate?: string;
+  endDate?: string;
   tx?: DbOrTx;
 }) {
   const client = tx || db;
-  const query = client.select().from(reports);
+  const conditions = [];
   if (projectId) {
-    query.where(eq(reports.projectId, projectId));
+    conditions.push(eq(reports.projectId, projectId));
+  }
+  if (startDate) {
+    conditions.push(gte(reports.createdAt, new Date(startDate)));
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1);
+    conditions.push(lte(reports.createdAt, end));
+  }
+  const query = client.select().from(reports);
+  if (conditions.length > 0) {
+    query.where(and(...conditions));
   }
   return query.orderBy(desc(reports.updatedAt));
 }

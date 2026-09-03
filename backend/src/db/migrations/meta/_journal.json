@@ -134,6 +134,13 @@
       "when": 1788101768962,
       "tag": "0018_optimal_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788394825552,
+      "tag": "0019_good_the_renegades",
+      "breakpoints": true
     }
   ]
 }

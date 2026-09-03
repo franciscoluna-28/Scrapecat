@@ -393,6 +393,8 @@ export interface paths {
             parameters: {
                 query?: {
                     projectId?: string;
+                    startDate?: string;
+                    endDate?: string;
                 };
                 header?: never;
                 path?: never;
@@ -415,6 +417,7 @@ export interface paths {
                                 startDate: string;
                                 endDate: string;
                                 branch: string;
+                                sessionId?: string | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -473,6 +476,8 @@ export interface paths {
                             customInstructions?: string;
                             model?: string;
                             provider?: "openrouter" | "deepseek" | "openai";
+                            /** Format: uuid */
+                            sessionId?: string;
                         };
                     };
                 };
@@ -720,6 +725,7 @@ export interface paths {
                             startDate: string;
                             endDate: string;
                             branch: string;
+                            sessionId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -878,7 +884,61 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /** @description Create or connect a new project */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @default github */
+                        gitProvider?: "github" | "gitlab";
+                        providerProjectId: string;
+                        providerOwner: string;
+                        repositoryName: string;
+                        /** @default main */
+                        defaultBranch?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            gitProvider: string;
+                            providerProjectId: string;
+                            providerOwner: string;
+                            repositoryName: string;
+                            defaultBranch: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

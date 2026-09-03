@@ -205,10 +205,10 @@ export async function listReports(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { projectId } = req.query as Static<typeof ReportsListQuery>;
+  const { projectId, startDate, endDate } = req.query as Static<typeof ReportsListQuery>;
 
   try {
-    const rows = await reportsStore.listReports({ projectId });
+    const rows = await reportsStore.listReports({ projectId, startDate, endDate });
     const projectIds = [...new Set(rows.map((r) => r.projectId))];
     const projects = await projectsStore.getProjectsByIds({ ids: projectIds });
     const projectById = new Map(projects.map((p) => [p.id, p]));
