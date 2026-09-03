@@ -103,6 +103,7 @@ export function ChatSidebarContent() {
                         setExpanded(!expanded);
                       } else {
                         navigate({ project: p.id, session: null, branch: null });
+                        setExpanded(true);
                       }
                     }}
                   >

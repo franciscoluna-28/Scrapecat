@@ -21,6 +21,14 @@ import {
   type PromptInputMessage,
   PromptInputTextarea,
   PromptInputSubmit,
+  PromptInputHeader,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSelect,
+  PromptInputSelectTrigger,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSelectValue,
 } from "@/src/components/ai-elements/prompt-input";
 import {
   Empty,
@@ -29,14 +37,6 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "@/src/components/ui/empty";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/src/components/ui/combobox";
 import { useProjects } from "@/src/_features/reports/services/projects-api";
 import { useBranches } from "@/src/_features/reports/services/api";
 import {
@@ -49,9 +49,23 @@ import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { ReportFormMessage } from "@/src/_features/chat/components/ReportFormMessage";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
-import { BookOpen, FileText } from "lucide-react";
+import { BookOpen, ArrowUp, FileText, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
+
+function groupByDay(citations: ChatMessage["citations"]): Map<string, ChatMessage["citations"]> {
+  const groups = new Map<string, ChatMessage["citations"]>();
+  for (const c of citations) {
+    const day = new Date(c.committedAt).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day)!.push(c);
+  }
+  return groups;
+}
 
 function MessageView({
   message,
@@ -60,6 +74,7 @@ function MessageView({
   message: ChatMessage;
   streaming?: boolean;
 }) {
+  const grouped = message.citations.length > 0 ? groupByDay(message.citations) : null;
   return (
     <Message from={message.role}>
       <MessageContent>
@@ -79,10 +94,17 @@ function MessageView({
           Source scope: {message.branch ?? "all branches"}
         </p>
       )}
-      {message.role === "assistant" && message.citations.length > 0 && (
-        <div className="flex w-full flex-wrap gap-2">
-          {message.citations.map((c) => (
-            <CitationCard key={c.commitSha} citation={c} />
+      {message.role === "assistant" && grouped && grouped.size > 0 && (
+        <div className="w-full space-y-3 border-t pt-3 mt-2">
+          {[...grouped.entries()].map(([day, citations]) => (
+            <div key={day}>
+              <p className="text-[11px] font-medium text-muted-foreground mb-1">{day}</p>
+              <div className="space-y-1">
+                {citations.map((c) => (
+                  <CitationCard key={c.commitSha} citation={c} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -230,7 +252,7 @@ export function Chat() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col mx-auto">
       {!projectId ? (
         <div className="flex-1 flex items-center justify-center">
           <Empty className="max-w-md border-0">
@@ -247,32 +269,6 @@ export function Chat() {
         </div>
       ) : (
         <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2 shrink-0 border-b px-4 py-1.5">
-            <span className="text-xs text-muted-foreground shrink-0">Current branch</span>
-            {branches.length > 0 && (
-              <Combobox
-                items={branches}
-                value={branch ?? defaultBranch ?? branches[0] ?? ""}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  handleBranchChange(v);
-                }}
-                disabled={branchesLoading}
-              >
-                <ComboboxInput placeholder="Filter branch..." showClear={false} className="h-7 text-xs w-40" />
-                <ComboboxContent>
-                  <ComboboxEmpty>No branches found.</ComboboxEmpty>
-                  <ComboboxList>
-                    {(value) => (
-                      <ComboboxItem key={value} value={value}>
-                        {value}
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
-            )}
-          </div>
           <div className="flex-1 overflow-y-auto min-h-0 px-4">
             {messagesLoading && sessionId && storedMessages.length === 0 ? (
               <div className="flex h-full items-center justify-center">
@@ -289,7 +285,7 @@ export function Chat() {
               />
             ) : (
               <Conversation className="h-full">
-                <ConversationContent>
+                <ConversationContent className="max-w-[800px] mx-auto space-y-2">
                   {messages.map((m) => (
                     <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
                   ))}
@@ -308,24 +304,67 @@ export function Chat() {
               </Conversation>
             )}
           </div>
-          <div className="sticky bottom-0 z-10 bg-background border-t p-3">
-            <PromptInput onSubmit={handleSubmit} className="flex gap-2 items-end">
-              <PromptInputTextarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={`Ask about ${activeProject} commits...`}
-                disabled={isStreaming}
-                className="flex-1"
-              />
-              <button type="submit" className="hidden" />
+          <div className="sticky bottom-0 z-10 bg-background px-3 pt-2 pb-3 max-w-[800px] mx-auto w-full">
+            <PromptInput onSubmit={handleSubmit}>
+              {branches.length > 0 && (
+                <PromptInputHeader>
+                    <PromptInputSelect
+                    value={branch ?? defaultBranch ?? branches[0] ?? ""}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      handleBranchChange(v);
+                    }}
+                  >
+                    <PromptInputSelectTrigger>
+                      <GitBranch className="size-3 shrink-0" />
+                      <PromptInputSelectValue placeholder="Branch" />
+                    </PromptInputSelectTrigger>
+                    <PromptInputSelectContent>
+                      {branches.map((b) => (
+                        <PromptInputSelectItem key={b} value={b}>
+                          {b}
+                        </PromptInputSelectItem>
+                      ))}
+                    </PromptInputSelectContent>
+                  </PromptInputSelect>
+                </PromptInputHeader>
+              )}
+              <PromptInputBody>
+                <PromptInputTextarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={`Ask about ${activeProject} commits...`}
+                  disabled={isStreaming}
+                  className="flex-1"
+                />
+              </PromptInputBody>
+              <PromptInputFooter>
+                <PromptInputSubmit
+                className="ml-auto"
+                  status={isStreaming ? "streaming" : "ready"}
+                  disabled={!input.trim() || isStreaming}
+                >
+                  <ArrowUp className="size-4" />
+                </PromptInputSubmit>
+              </PromptInputFooter>
             </PromptInput>
             {!showReportForm && (
               <Suggestions className="mt-2">
                 <Suggestion
+                  suggestion="What changed in the last 7 days?"
+                  onClick={handleSuggestion}
+                  variant="secondary"
+                />
+                <Suggestion
+                  suggestion="What feature is being built?"
+                  onClick={handleSuggestion}
+                  variant="secondary"
+                />
+                <Suggestion
                   suggestion="generate-report"
                   onClick={handleSuggestion}
+                  variant="default"
                 >
-                  <FileText className="size-3" />
                   Generate report
                 </Suggestion>
               </Suggestions>
