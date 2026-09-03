@@ -85,7 +85,7 @@ function MessageView({
           className="w-full border-t pt-3 mt-2"
         >
           <CollapsibleTrigger className="w-full">
-            <div className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent transition-colors">
+            <div className="flex items-center justify-between rounded-md px-2 py-1.5 cursor-pointer transition-colors">
               <span className="text-[11px] font-medium text-muted-foreground">
                 Sources Used · {message.branch ?? "all branches"} ({citationCount}{" "}
                 {citationCount === 1 ? "commit retrieved" : "commits retrieved"})
@@ -360,7 +360,7 @@ export function Chat() {
                 <Suggestion
                   suggestion="generate-report"
                   onClick={handleSuggestion}
-                  variant="default"
+                  variant="outline"
                 >
                   Generate report
                 </Suggestion>
