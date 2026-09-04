@@ -69,7 +69,7 @@ function MessageView({
       <MessageContent>
         {message.role === "assistant" ? (
           <>
-            <MessageResponse>{message.content}</MessageResponse>
+            <MessageResponse className="[&_a]:inline-flex [&_a]:items-center [&_a]:rounded-md [&_a]:bg-muted [&_a]:px-1.5 [&_a]:py-0.5 [&_a]:font-mono [&_a]:text-xs [&_a]:no-underline [&_a]:hover:bg-accent [&_a]:transition-colors">{message.content}</MessageResponse>
             {streaming && (
               <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
             )}

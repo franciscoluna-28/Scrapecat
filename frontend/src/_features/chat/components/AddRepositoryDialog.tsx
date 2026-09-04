@@ -163,7 +163,6 @@ export function AddRepositoryDialog({ onProjectSelected, children }: Props) {
 
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Link2 className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
               placeholder="Paste a GitHub URL or owner/repo"
