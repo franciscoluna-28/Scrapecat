@@ -9,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from "@/src/components/ui/sidebar";
 import {
   useChatSessions,
@@ -18,17 +19,13 @@ import { AddRepositoryDialog } from "@/src/_features/chat/components/AddReposito
 import { useProjects } from "@/src/_features/reports/services/projects-api";
 import { cn } from "@/src/shared/lib/utils";
 import {
-  MessageSquareText,
-  Link2,
   ChevronRight,
-  FileText,
   Key,
   Settings,
   Trash2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { id: "reports", label: "Reports", icon: FileText, route: "/app/reports" },
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
   { id: "settings", label: "Settings", icon: Settings, route: "/app/settings" },
 ] as const;
@@ -79,14 +76,20 @@ export function ChatSidebarContent() {
             No projects synced yet
           </p>
           <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-            <span className="flex items-center gap-2 text-sm rounded-md px-3 py-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer">
-              <Link2 className="size-4" />
+            <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
               Connect repository
             </span>
           </AddRepositoryDialog>
         </div>
       ) : (
         <>
+          <div className="px-2 py-1">
+            <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
+              <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                Connect repository
+              </span>
+            </AddRepositoryDialog>
+          </div>
           <p className="text-xs font-medium text-muted-foreground">Projects</p>
           <SidebarMenu className="gap-0">
             {projects.map((p) => {
@@ -128,21 +131,18 @@ export function ChatSidebarContent() {
                       ) : (
                         projectSessions.map((s) => (
                           <SidebarMenuSubItem key={s.id}>
-                            <div
-                              className={cn(
-                                "group flex items-center gap-1 rounded px-2 py-1 text-xs cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                s.id === sessionId && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-                              )}
+                            <SidebarMenuSubButton
+                              isActive={s.id === sessionId}
                               onClick={() => handleSessionClick(s.id)}
+                              className="group"
                             >
-                              <MessageSquareText className="size-3 shrink-0 text-muted-foreground" />
-                              <span className="flex-1 truncate">
+                              <span className="flex-1 truncate text-xs">
                                 {s.title === "New chat"
                                   ? new Date(s.updatedAt).toLocaleDateString("en-US")
                                   : s.title}
                               </span>
                               <button
-                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
+                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 ml-auto"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteSession(s.id);
@@ -151,7 +151,7 @@ export function ChatSidebarContent() {
                               >
                                 <Trash2 className="size-3" />
                               </button>
-                            </div>
+                            </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         ))
                       )}
@@ -160,14 +160,6 @@ export function ChatSidebarContent() {
                 </SidebarMenuItem>
               );
             })}
-            <SidebarMenuItem>
-              <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-                <SidebarMenuButton tooltip="Connect repository">
-                  <Link2 className="size-4" />
-                  <span>Connect</span>
-                </SidebarMenuButton>
-              </AddRepositoryDialog>
-            </SidebarMenuItem>
           </SidebarMenu>
 
           <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>

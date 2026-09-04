@@ -3,9 +3,9 @@ import { embedTexts } from "@/projects/embeddings";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 import type { CommitSearchResult } from "@/projects/stores/commit-chunks-store";
 
-export const RETRIEVAL_LIMIT = 50;
+export const RETRIEVAL_LIMIT = 30;
 
-const CANDIDATE_POOL = 200;
+const CANDIDATE_POOL = 120;
 
 const COMMIT_BOOST: Record<string, number> = {
   "feat!": 5,
