@@ -15,6 +15,8 @@ import {
   Message,
   MessageContent,
   MessageResponse,
+  MessageActions,
+  MessageAction,
 } from "@/src/components/ai-elements/message";
 import {
   PromptInput,
@@ -49,7 +51,7 @@ import { CitationCard } from "@/src/_features/chat/components/CitationCard";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
 import { cn } from "@/src/shared/lib/utils";
-import { BookOpen, ArrowUp, GitBranch, ChevronDown } from "lucide-react";
+import { BookOpen, ArrowUp, GitBranch, ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
@@ -82,13 +84,13 @@ function MessageView({
               <MessageResponse>{before}</MessageResponse>
             )}
             {artifact && (
-              <div className="rounded-lg border bg-card p-4 my-2 space-y-2">
+              <div className="rounded-lg border bg-card p-6 my-3 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
                   <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">
                     Report
                   </span>
                 </div>
-                <MessageResponse>{artifact}</MessageResponse>
+                <MessageResponse className="m-6">{artifact}</MessageResponse>
               </div>
             )}
             {streaming && (
@@ -99,6 +101,20 @@ function MessageView({
           <p className="whitespace-pre-wrap">{message.content}</p>
         )}
       </MessageContent>
+      {message.role === "assistant" && (
+        <MessageActions>
+          <MessageAction
+            tooltip="Copy"
+            onClick={() => {
+              const cleaned = message.content.replace(/:::report\n?|:::/g, "").trim();
+              navigator.clipboard.writeText(cleaned);
+              toast.success("Copied to clipboard");
+            }}
+          >
+            <Copy className="size-3.5" />
+          </MessageAction>
+        </MessageActions>
+      )}
       {message.role === "assistant" && citationCount > 0 && (
         <Collapsible
           defaultOpen={false}
