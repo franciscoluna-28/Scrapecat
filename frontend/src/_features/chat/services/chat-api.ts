@@ -141,7 +141,8 @@ export async function streamChatMessage(
           doneMessage = parsed.message;
           onChunk(parsed);
         } else if (parsed.type === "error") {
-          throw new Error(parsed.error);
+          onChunk(parsed);
+          return Promise.reject(new Error(parsed.error));
         }
       } catch (error) {
         if (error instanceof SyntaxError) continue;

@@ -128,7 +128,7 @@ export async function streamChatMessage(opts: {
     ...priorTurns,
     {
       role: "user",
-      content: buildUserMessage(filteredQuery, citations, {
+      content: buildUserMessage(content, citations, {
         branch: branch ?? null,
         startDate: dateWindowStart,
         endDate: dateWindowEnd,
@@ -140,7 +140,7 @@ export async function streamChatMessage(opts: {
     provider,
     model,
     apiKey,
-    maxTokens: 2048,
+    maxTokens: 8192,
     messages,
     onChunk: (chunk) => onToken(chunk),
   });

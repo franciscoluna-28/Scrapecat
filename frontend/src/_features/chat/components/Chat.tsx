@@ -46,14 +46,20 @@ import {
   prepareProjectBranch,
 } from "@/src/_features/chat/services/chat-api";
 import { CitationCard } from "@/src/_features/chat/components/CitationCard";
-import { ReportFormMessage } from "@/src/_features/chat/components/ReportFormMessage";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
 import { cn } from "@/src/shared/lib/utils";
-import { BookOpen, ArrowUp, FileText, GitBranch, ChevronDown } from "lucide-react";
+import { BookOpen, ArrowUp, GitBranch, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
+
+function splitArtifact(content: string): { before: string; artifact: string | null } {
+  const m = content.match(/:::report\n([\s\S]*?)\n:::/);
+  if (!m) return { before: content, artifact: null };
+  const before = content.slice(0, m.index).trim();
+  const artifact = m[1].trim();
+  return { before, artifact };
+}
 
 function MessageView({
   message,
@@ -64,12 +70,26 @@ function MessageView({
 }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const citationCount = message.citations.length;
+  const { before, artifact } = message.role === "assistant" ? splitArtifact(message.content) : { before: message.content, artifact: null };
+
   return (
     <Message from={message.role}>
       <MessageContent>
         {message.role === "assistant" ? (
           <>
-            <MessageResponse className="[&_a]:inline-flex [&_a]:items-center [&_a]:rounded-md [&_a]:bg-muted [&_a]:px-1.5 [&_a]:py-0.5 [&_a]:font-mono [&_a]:text-xs [&_a]:no-underline [&_a]:hover:bg-accent [&_a]:transition-colors">{message.content}</MessageResponse>
+            {before && (
+              <MessageResponse>{before}</MessageResponse>
+            )}
+            {artifact && (
+              <div className="rounded-lg border bg-card p-4 my-2 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">
+                    Report
+                  </span>
+                </div>
+                <MessageResponse>{artifact}</MessageResponse>
+              </div>
+            )}
             {streaming && (
               <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
             )}
@@ -155,7 +175,6 @@ export function Chat() {
     router.push(`/app?${p.toString()}`);
   };
 
-  // Auto-set default branch when project loads but no branch in URL
   useEffect(() => {
     if (defaultBranch && projectId && !branch) {
       const p = new URLSearchParams(searchParams.toString());
@@ -170,7 +189,6 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
-  const [showReportForm, setShowReportForm] = useState(false);
   const streamingId = liveMessages.find((m) => m.id.startsWith("local-assistant"))?.id;
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
@@ -224,6 +242,8 @@ export function Chat() {
             if (idx >= 0) copy[idx] = { ...chunk.message };
             return copy;
           });
+        } else if (chunk.type === "error") {
+          toast.error(chunk.error);
         }
       });
 
@@ -240,21 +260,13 @@ export function Chat() {
 
   const handleSubmit = (message: PromptInputMessage) => handleSend(message.text);
 
-  const handleSuggestion = (suggestion: string) => {
-    if (suggestion === "generate-report") {
-      setShowReportForm(true);
-    } else {
-      handleSend(suggestion);
-    }
-  };
-
   return (
     <div className="w-full h-full flex flex-col mx-auto">
       {!projectId ? (
         <div className="flex-1 flex items-center justify-center">
           <Empty className="max-w-md border-0">
             <EmptyMedia>
-              <FileText className="size-12 text-muted-foreground" />
+              <BookOpen className="size-12 text-muted-foreground" />
             </EmptyMedia>
             <EmptyHeader>
               <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
@@ -274,7 +286,7 @@ export function Chat() {
                   <Skeleton className="h-16 w-2/3" />
                 </div>
               </div>
-            ) : messages.length === 0 && !showReportForm ? (
+            ) : messages.length === 0 ? (
               <ConversationEmptyState
                 icon={<BookOpen className="size-12" />}
                 title={`Ask about ${activeProject}`}
@@ -286,16 +298,6 @@ export function Chat() {
                   {messages.map((m) => (
                     <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
                   ))}
-                  {showReportForm && activeProjectData && (
-                    <ReportFormMessage
-                      projectId={projectId}
-                      repositoryName={activeProjectData.repositoryName}
-                      providerOwner={activeProjectData.providerOwner}
-                      providerProjectId={activeProjectData.providerProjectId}
-                      branch={branch}
-                      sessionId={sessionId ?? undefined}
-                    />
-                  )}
                 </ConversationContent>
                 <ConversationScrollButton />
               </Conversation>
@@ -345,27 +347,6 @@ export function Chat() {
                 </PromptInputSubmit>
               </PromptInputFooter>
             </PromptInput>
-            {!showReportForm && (
-              <Suggestions className="mt-2">
-                <Suggestion
-                  suggestion="What changed in the last 7 days?"
-                  onClick={handleSuggestion}
-                  variant="secondary"
-                />
-                <Suggestion
-                  suggestion="What feature is being built?"
-                  onClick={handleSuggestion}
-                  variant="secondary"
-                />
-                <Suggestion
-                  suggestion="generate-report"
-                  onClick={handleSuggestion}
-                  variant="default"
-                >
-                  Generate report
-                </Suggestion>
-              </Suggestions>
-            )}
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
             </p>
