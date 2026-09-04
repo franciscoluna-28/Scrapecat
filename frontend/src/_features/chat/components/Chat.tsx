@@ -52,6 +52,7 @@ import { cn } from "@/src/shared/lib/utils";
 import { BookOpen, ArrowUp, GitBranch, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
+import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
 
 function splitArtifact(content: string): { before: string; artifact: string | null } {
   const m = content.match(/:::report\n([\s\S]*?)\n:::/);
@@ -260,6 +261,10 @@ export function Chat() {
 
   const handleSubmit = (message: PromptInputMessage) => handleSend(message.text);
 
+  const handleSuggestion = (suggestion: string) => {
+    handleSend(suggestion);
+  };
+
   return (
     <div className="w-full h-full flex flex-col mx-auto">
       {!projectId ? (
@@ -347,6 +352,25 @@ export function Chat() {
                 </PromptInputSubmit>
               </PromptInputFooter>
             </PromptInput>
+            <Suggestions className="mt-2">
+              <Suggestion
+                suggestion="What changed in the last 7 days?"
+                onClick={handleSuggestion}
+                variant="secondary"
+              />
+              <Suggestion
+                suggestion="What feature is being built?"
+                onClick={handleSuggestion}
+                variant="secondary"
+              />
+              <Suggestion
+                suggestion="Summarize this week as a report"
+                onClick={handleSuggestion}
+                variant="default"
+              >
+                Generate report
+              </Suggestion>
+            </Suggestions>
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
             </p>
