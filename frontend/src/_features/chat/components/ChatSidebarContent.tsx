@@ -23,7 +23,9 @@ import {
   Key,
   Settings,
   Trash2,
+  Plus,
 } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
 
 const NAV_ITEMS = [
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
@@ -83,11 +85,12 @@ export function ChatSidebarContent() {
         </div>
       ) : (
         <>
-          <div className="px-2 py-1">
+          <div className="flex py-1">
             <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-              <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+             <Button variant="outline" className="w-full">
+                <Plus className="size-3" />
                 Connect repository
-              </span>
+              </Button>
             </AddRepositoryDialog>
           </div>
           <p className="text-xs font-medium text-muted-foreground">Projects</p>
