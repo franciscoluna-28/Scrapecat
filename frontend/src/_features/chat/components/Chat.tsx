@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActiveProjectStore } from "@/src/store/active-project";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
-  Conversation,
-  ConversationContent,
   ConversationEmptyState,
-  ConversationScrollButton,
 } from "@/src/components/ai-elements/conversation";
 import {
   Message,
@@ -207,14 +204,33 @@ export function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
   const streamingId = liveMessages.find((m) => m.id.startsWith("local-assistant"))?.id;
+  const streamingContentLength = liveMessages.find((m) => m.id.startsWith("local-assistant"))?.content.length ?? 0;
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const forceScrollRef = useRef(false);
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
+
+  useEffect(() => {
+    forceScrollRef.current = true;
+  }, [sessionId]);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const force = forceScrollRef.current;
+    const { top } = el.getBoundingClientRect();
+    if (force || top < window.innerHeight + 400) {
+      forceScrollRef.current = false;
+      el.scrollIntoView({ behavior: force ? "smooth" : "auto", block: "end" });
+    }
+  }, [messages.length, streamingContentLength]);
 
   const handleSend = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || !projectId || isStreaming) return;
     setInput("");
     setIsStreaming(true);
+    forceScrollRef.current = true;
 
     try {
       let sid = sessionId;
@@ -288,7 +304,7 @@ export function Chat() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col mx-auto">
+    <div className="w-full min-h-full flex flex-col mx-auto">
       {!projectId ? (
         <div className="flex-1 flex items-center justify-center">
           <Empty className="max-w-md border-0">
@@ -304,33 +320,33 @@ export function Chat() {
           </Empty>
         </div>
       ) : (
-        <div className="flex flex-col h-full">
-          <div className="flex-1 overflow-y-auto min-h-0 px-4">
-            {messagesLoading && sessionId && storedMessages.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="w-3/4 space-y-3">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-2/3" />
-                </div>
+        <div className="flex flex-col min-h-full">
+          {messagesLoading && sessionId && storedMessages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center px-4">
+              <div className="w-full max-w-[800px] space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-2/3" />
               </div>
-            ) : messages.length === 0 ? (
-              <ConversationEmptyState
-                icon={<BookOpen className="size-12" />}
-                title={`Ask about ${activeProject}`}
-                description="For example, when was the RAG chat added, or what shipped this week."
-              />
-            ) : (
-              <Conversation className="h-full">
-                <ConversationContent className="max-w-[800px] mx-auto space-y-2">
-                  {messages.map((m) => (
-                    <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
-                  ))}
-                </ConversationContent>
-                <ConversationScrollButton />
-              </Conversation>
-            )}
-          </div>
-          <div className="sticky bottom-0 z-10 bg-background px-3 pt-2 pb-3 max-w-[800px] mx-auto w-full">
+            </div>
+          ) : messages.length === 0 ? (
+            <ConversationEmptyState
+              className="flex-1"
+              icon={<BookOpen className="size-12" />}
+              title={`Ask about ${activeProject}`}
+              description="For example, when was the RAG chat added, or what shipped this week."
+            />
+          ) : (
+            <div className="flex-1 px-4 pt-4">
+              <div className="max-w-[800px] mx-auto w-full space-y-2">
+                {messages.map((m) => (
+                  <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
+                ))}
+                <div ref={bottomRef} />
+              </div>
+            </div>
+          )}
+          <div className="sticky bottom-0 z-10 bg-background px-4 pt-2 pb-3">
+            <div className="max-w-[800px] mx-auto w-full">
             <PromptInput onSubmit={handleSubmit}>
               {branches.length > 0 && (
                 <PromptInputHeader>
@@ -396,6 +412,7 @@ export function Chat() {
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
             </p>
+            </div>
           </div>
         </div>
       )}

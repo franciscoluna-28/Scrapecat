@@ -43,11 +43,11 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
             <ChatSidebarContent />
           </SidebarContent>
         </Sidebar>
-        <SidebarInset className="flex flex-col h-screen">
+        <SidebarInset className="flex flex-col h-svh overflow-hidden">
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/50">
             <SidebarTrigger className="-ml-1" />
           </header>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {children}
           </div>
         </SidebarInset>
