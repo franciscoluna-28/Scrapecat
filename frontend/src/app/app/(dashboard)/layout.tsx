@@ -47,7 +47,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/50">
             <SidebarTrigger className="-ml-1" />
           </header>
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div data-chat-scroll className="flex-1 min-h-0 overflow-y-auto">
             {children}
           </div>
         </SidebarInset>

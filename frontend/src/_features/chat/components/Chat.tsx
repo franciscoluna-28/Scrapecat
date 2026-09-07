@@ -210,18 +210,28 @@ export function Chat() {
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
 
+  const getScrollContainer = () =>
+    bottomRef.current?.closest("[data-chat-scroll]") as HTMLElement | null;
+
+  const scrollToBottom = (force: boolean) => {
+    const container = getScrollContainer();
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: force ? "smooth" : "auto" });
+  };
+
   useEffect(() => {
     forceScrollRef.current = true;
   }, [sessionId]);
 
   useEffect(() => {
     const el = bottomRef.current;
-    if (!el) return;
-    const force = forceScrollRef.current;
-    const { top } = el.getBoundingClientRect();
-    if (force || top < window.innerHeight + 400) {
+    const container = getScrollContainer();
+    if (!el || !container) return;
+    const distance = container.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom;
+    if (forceScrollRef.current || distance < 400) {
+      const force = forceScrollRef.current;
       forceScrollRef.current = false;
-      el.scrollIntoView({ behavior: force ? "smooth" : "auto", block: "end" });
+      scrollToBottom(force);
     }
   }, [messages.length, streamingContentLength]);
 
@@ -234,38 +244,35 @@ export function Chat() {
 
     try {
       let sid = sessionId;
-      let isNewSession = false;
       if (!sid) {
         const created = await createSession.mutateAsync(projectId);
         sid = created.id;
-        isNewSession = true;
         const p = new URLSearchParams(searchParams.toString());
         p.set("session", sid);
         router.replace(`/app?${p.toString()}`, { scroll: false });
       }
 
-      if (!isNewSession) {
-        const userMsg: ChatMessage = {
-          id: `local-user-${Date.now()}`,
-          role: "user",
-          content: trimmed,
-          branch,
-          citations: [],
-          createdAt: new Date().toISOString(),
-        };
-        const draft: ChatMessage = {
-          id: `local-assistant-${Date.now()}`,
-          role: "assistant",
-          content: "",
-          branch,
-          citations: [],
-          createdAt: new Date().toISOString(),
-        };
-        setLiveMessages((m) => [...m, userMsg, draft]);
-      }
+      const userMsg: ChatMessage = {
+        id: `local-user-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+        branch,
+        citations: [],
+        createdAt: new Date().toISOString(),
+      };
+      const draft: ChatMessage = {
+        id: `local-assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        branch,
+        citations: [],
+        createdAt: new Date().toISOString(),
+      };
+      setLiveMessages((m) => [...m, userMsg, draft]);
+      requestAnimationFrame(() => scrollToBottom(true));
 
       await streamChatMessage(sid, trimmed, branch, (chunk) => {
-        if (chunk.type === "token" && !isNewSession) {
+        if (chunk.type === "token") {
           setLiveMessages((m) => {
             const copy = [...m];
             const idx = copy.findIndex((msg) => msg.id.startsWith("local-assistant"));
@@ -273,14 +280,12 @@ export function Chat() {
             return copy;
           });
         } else if (chunk.type === "done") {
-          if (!isNewSession) {
-            setLiveMessages((m) => {
-              const copy = [...m];
-              const idx = copy.findIndex((msg) => msg.id.startsWith("local-assistant"));
-              if (idx >= 0) copy[idx] = { ...chunk.message };
-              return copy;
-            });
-          }
+          setLiveMessages((m) => {
+            const copy = [...m];
+            const idx = copy.findIndex((msg) => msg.id.startsWith("local-assistant"));
+            if (idx >= 0) copy[idx] = { ...chunk.message };
+            return copy;
+          });
         } else if (chunk.type === "error") {
           toast.error(chunk.error);
         }
@@ -320,8 +325,8 @@ export function Chat() {
           </Empty>
         </div>
       ) : (
-        <div className="flex flex-col min-h-full">
-          {messagesLoading && sessionId && storedMessages.length === 0 ? (
+        <div className="flex flex-col flex-1">
+          {messagesLoading && sessionId && storedMessages.length === 0 && liveMessages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center px-4">
               <div className="w-full max-w-[800px] space-y-3">
                 <Skeleton className="h-16 w-full" />
@@ -336,7 +341,7 @@ export function Chat() {
               description="For example, when was the RAG chat added, or what shipped this week."
             />
           ) : (
-            <div className="flex-1 px-4 pt-4">
+            <div className="flex-1 flex flex-col justify-center px-4 py-4">
               <div className="max-w-[800px] mx-auto w-full space-y-2">
                 {messages.map((m) => (
                   <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
