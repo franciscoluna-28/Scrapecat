@@ -15,7 +15,7 @@ vi.mock("@/projects/stores/commit-chunks-store", () => ({
   keywordSearchCommits: (...args: unknown[]) => mockKeywordSearch(...args),
 }));
 
-import { retrieveCommits } from "@/chat/retrieval";
+import { MIN_SIMILARITY, retrieveCommits } from "@/chat/retrieval";
 
 const row = {
   id: "1",
@@ -29,6 +29,8 @@ const row = {
   },
   distance: 0.1,
 };
+
+const keywordRow = { ...row, distance: null };
 
 describe("retrieveCommits", () => {
   beforeEach(() => {
@@ -64,7 +66,7 @@ describe("retrieveCommits", () => {
 
   it("falls back to keyword search when no embeddings exist", async () => {
     mockCountChunks.mockResolvedValue(0);
-    mockKeywordSearch.mockResolvedValue([row]);
+    mockKeywordSearch.mockResolvedValue([keywordRow]);
 
     const result = await retrieveCommits({ projectId: "p1", query: "chat" });
 
@@ -79,7 +81,7 @@ describe("retrieveCommits", () => {
     mockCountChunks.mockResolvedValue(5);
     mockEmbedTexts.mockRejectedValue(new Error("no key"));
     mockSemanticSearch.mockResolvedValue([]);
-    mockKeywordSearch.mockResolvedValue([row]);
+    mockKeywordSearch.mockResolvedValue([keywordRow]);
 
     const result = await retrieveCommits({ projectId: "p1", query: "chat" });
 
@@ -94,5 +96,34 @@ describe("retrieveCommits", () => {
     const result = await retrieveCommits({ projectId: "p1", query: "nope" });
 
     expect(result).toEqual([]);
+  });
+
+  it("drops semantic hits below the similarity floor", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([
+      { ...row, commitSha: "strong", distance: 0.1 },
+      { ...row, commitSha: "weak", distance: 0.9 },
+      { ...row, commitSha: "borderline", distance: 1 - MIN_SIMILARITY },
+    ]);
+
+    const result = await retrieveCommits({ projectId: "p1", query: "rag chat" });
+
+    expect(result.map((c) => c.commitSha)).toEqual(["strong", "borderline"]);
+  });
+
+  it("uses the real cosine similarity for ranking", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    // "chore" commit is more similar, but "feat" gets a large importance boost:
+    // feat: 0.5 * 0.5 + 0.5 * 4 = 2.25 vs chore: 0.5 * 0.8 + 0.5 * 0.5 = 0.65
+    mockSemanticSearch.mockResolvedValue([
+      { ...row, commitSha: "chore", commitMessage: "chore: tweak", distance: 0.2 },
+      { ...row, commitSha: "feat", commitMessage: "feat: add thing", distance: 0.5 },
+    ]);
+
+    const result = await retrieveCommits({ projectId: "p1", query: "rag chat" });
+
+    expect(result.map((c) => c.commitSha)).toEqual(["feat", "chore"]);
   });
 });
