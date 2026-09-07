@@ -23,12 +23,17 @@ import {
   PromptInputHeader,
   PromptInputBody,
   PromptInputFooter,
-  PromptInputSelect,
-  PromptInputSelectTrigger,
-  PromptInputSelectContent,
-  PromptInputSelectItem,
-  PromptInputSelectValue,
 } from "@/src/components/ai-elements/prompt-input";
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "@/src/components/ui/combobox";
 import {
   Empty,
   EmptyHeader,
@@ -355,25 +360,32 @@ export function Chat() {
             <PromptInput onSubmit={handleSubmit}>
               {branches.length > 0 && (
                 <PromptInputHeader>
-                    <PromptInputSelect
-                    value={branch ?? defaultBranch ?? branches[0] ?? ""}
+                  <Combobox
+                    items={branches}
+                    value={branch ?? defaultBranch ?? branches[0] ?? null}
                     onValueChange={(v) => {
-                      if (!v) return;
-                      handleBranchChange(v);
+                      if (typeof v === "string" && v) {
+                        handleBranchChange(v);
+                      }
                     }}
                   >
-                    <PromptInputSelectTrigger>
-                      <GitBranch className="size-3 shrink-0" />
-                      <PromptInputSelectValue placeholder="Branch" />
-                    </PromptInputSelectTrigger>
-                    <PromptInputSelectContent>
-                      {branches.map((b) => (
-                        <PromptInputSelectItem key={b} value={b}>
-                          {b}
-                        </PromptInputSelectItem>
-                      ))}
-                    </PromptInputSelectContent>
-                  </PromptInputSelect>
+                    <ComboboxTrigger className="h-7 rounded-md border-none bg-transparent px-2 font-medium text-muted-foreground text-xs shadow-none transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground">
+                      {branch ?? defaultBranch ?? branches[0] ?? "Branch"}
+                    </ComboboxTrigger>
+                    <ComboboxContent className="w-64">
+                      <ComboboxInput placeholder="Search branches..." showTrigger={false} />
+                      <ComboboxList>
+                        <ComboboxCollection>
+                          {(b) => (
+                            <ComboboxItem key={b} value={b} className="text-xs">
+                              {b}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxCollection>
+                      </ComboboxList>
+                      <ComboboxEmpty>No branches found</ComboboxEmpty>
+                    </ComboboxContent>
+                  </Combobox>
                 </PromptInputHeader>
               )}
               <PromptInputBody>
