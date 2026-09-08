@@ -14,14 +14,7 @@ import { ChatMessage } from "@/src/shared/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 import { CommitCitationCard } from "./CommitCitationCard";
 import { cn } from "@/src/shared/lib/utils";
-
-function splitArtifact(content: string): { before: string; artifact: string | null } {
-  const m = content.match(/:::report\n([\s\S]*?)\n:::/);
-  if (!m) return { before: content, artifact: null };
-  const before = content.slice(0, m.index).trim();
-  const artifact = m[1].trim();
-  return { before, artifact };
-}
+import { splitArtifact } from "@/src/shared/utils/repo-url";
 
 export function MessageView({
   message,
