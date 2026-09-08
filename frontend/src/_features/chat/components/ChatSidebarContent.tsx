@@ -78,9 +78,11 @@ export function ChatSidebarContent() {
             No projects synced yet
           </p>
           <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-            <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
-              Connect repository
-            </span>
+          
+          <Button variant="outline" className="w-full my-3">
+                <Plus className="size-3" />
+                Connect repository
+              </Button>
           </AddRepositoryDialog>
         </div>
       ) : (
@@ -164,24 +166,24 @@ export function ChatSidebarContent() {
               );
             })}
           </SidebarMenu>
-
-          <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>
-          <SidebarMenu className="gap-0">
-            {NAV_ITEMS.map((item) => (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  isActive={isActive(item.route)}
-                  onClick={() => router.push(item.route)}
-                  tooltip={item.label}
-                >
-                  <item.icon className="size-4" />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
         </>
       )}
+
+      <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>
+      <SidebarMenu className="gap-0">
+        {NAV_ITEMS.map((item) => (
+          <SidebarMenuItem key={item.id}>
+            <SidebarMenuButton
+              isActive={isActive(item.route)}
+              onClick={() => router.push(item.route)}
+              tooltip={item.label}
+            >
+              <item.icon className="size-4" />
+              <span>{item.label}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+      </SidebarMenu>
     </div>
   );
 }
