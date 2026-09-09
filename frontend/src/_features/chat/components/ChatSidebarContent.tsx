@@ -24,8 +24,20 @@ import {
   Settings,
   Trash2,
   Plus,
+  Globe,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/src/components/ui/dropdown-menu";
 
 const NAV_ITEMS = [
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
@@ -45,6 +57,7 @@ export function ChatSidebarContent() {
   const deleteSession = useDeleteChatSession();
 
   const [expanded, setExpanded] = useState(true);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const navigate = (params: Record<string, string | null>) => {
     const p = new URLSearchParams();
@@ -77,23 +90,69 @@ export function ChatSidebarContent() {
           <p className="text-sm text-muted-foreground text-center">
             No projects synced yet
           </p>
-          <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-          
-          <Button variant="outline" className="w-full my-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full">
                 <Plus className="size-3" />
-                Connect repository
+                New chat
               </Button>
-          </AddRepositoryDialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem onSelect={() => setConnectOpen(true)}>
+                <Globe className="size-4" />
+                Connect repository...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderOpen className="size-4" />
+                  Select existing project
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ) : (
         <>
           <div className="flex py-1">
-            <AddRepositoryDialog onProjectSelected={(id) => navigate({ project: id })}>
-             <Button variant="outline" className="w-full">
-                <Plus className="size-3" />
-                Connect repository
-              </Button>
-            </AddRepositoryDialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Plus className="size-3" />
+                  New chat
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onSelect={() => setConnectOpen(true)}>
+                  <Globe className="size-4" />
+                  Connect repository...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <FolderOpen className="size-4" />
+                    Select existing project
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {projects.length === 0 ? (
+                      <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
+                    ) : (
+                      projects.map((p) => (
+                        <DropdownMenuItem
+                          key={p.id}
+                          onSelect={() => navigate({ project: p.id, session: null, branch: null })}
+                        >
+                          {p.repositoryName}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <p className="text-xs font-medium text-muted-foreground">Projects</p>
           <SidebarMenu className="gap-0">
@@ -168,6 +227,12 @@ export function ChatSidebarContent() {
           </SidebarMenu>
         </>
       )}
+
+      <AddRepositoryDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onProjectSelected={(id) => navigate({ project: id })}
+      />
 
       <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>
       <SidebarMenu className="gap-0">
