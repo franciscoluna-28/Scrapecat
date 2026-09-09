@@ -5,6 +5,7 @@ import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { runGit, authArgs } from "@/repositories/git";
+import { resolveGithubToken } from "@/github/token";
 
 export type RepoArchive = {
   owner: string;
@@ -70,6 +71,7 @@ async function ensureArchiveUnlocked(opts: {
   const { owner, repo, branch } = opts;
   const dir = archiveDir(owner, repo, branch);
   const url = remoteUrl(owner, repo);
+  const token = await resolveGithubToken();
 
   await fs.mkdir(path.dirname(dir), { recursive: true });
 
@@ -84,7 +86,7 @@ async function ensureArchiveUnlocked(opts: {
     if (existed) {
       await runGit({
         cwd: dir,
-        args: [...authArgs(), "fetch", "origin"],
+        args: [...authArgs(token), "fetch", "origin"],
         timeoutMs: TRANSFER_TIMEOUT_MS,
         label: "git fetch",
       });
@@ -99,7 +101,7 @@ async function ensureArchiveUnlocked(opts: {
       await runGit({
         cwd: path.dirname(dir),
         args: [
-          ...authArgs(),
+          ...authArgs(token),
           "clone",
           "--single-branch",
           "--branch",

@@ -1,17 +1,18 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { getGitProvider } from "@/shared/integrations/git-provider";
-import { env } from "@/config/env";
+import { resolveGithubToken } from "@/github/token";
 
 export async function checkVerification(
   _req: FastifyRequest,
   reply: FastifyReply,
 ) {
   try {
-    if (!env.GITHUB_TOKEN) {
-      return reply.send({ status: "error", message: "GITHUB_TOKEN is not configured" });
+    const token = await resolveGithubToken();
+    if (!token) {
+      return reply.send({ status: "error", message: "GitHub token is not configured" });
     }
 
-    const { login, rateLimitRemaining } = await getGitProvider().verifyConnection();
+    const { login, rateLimitRemaining } = await getGitProvider(token).verifyConnection();
 
     return reply.send({
       status: "ok",

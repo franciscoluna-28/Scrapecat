@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { env } from "@/config/env";
 
 const MAX_OUTPUT_BYTES = 100 * 1024 * 1024;
 
@@ -46,10 +45,11 @@ export async function runGit(opts: {
 
 /**
  * Auth flags for GitHub HTTPS. The token travels via an extra HTTP header
- * (the GitHub Actions convention) so it never appears in the URL.
+ * (the GitHub Actions convention) so it never appears in the URL. When no token
+ * is available, an empty array lets git clone public repositories anonymously.
  */
-export function authArgs(): string[] {
-  if (!env.GITHUB_TOKEN) return [];
-  const basic = Buffer.from(`x-access-token:${env.GITHUB_TOKEN}`).toString("base64");
+export function authArgs(token?: string | null): string[] {
+  if (!token) return [];
+  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
   return ["-c", `http.extraheader=AUTHORIZATION: basic ${basic}`];
 }

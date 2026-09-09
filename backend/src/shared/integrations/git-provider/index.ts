@@ -8,18 +8,22 @@ export type {
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
 
-let provider: ReturnType<typeof createProvider> | null = null;
+const providerCache = new Map<string | null, GithubAdapter>();
 
-function createProvider() {
+function createProvider(token: string | null) {
+  const resolved = token || env.GITHUB_TOKEN;
   if (env.GIT_PROVIDER === "github" || !env.GIT_PROVIDER) {
-    return new GithubAdapter(env.GITHUB_TOKEN);
+    return new GithubAdapter(resolved);
   }
-  return new GithubAdapter(env.GITHUB_TOKEN);
+  return new GithubAdapter(resolved);
 }
 
-export function getGitProvider() {
+export function getGitProvider(token?: string | null) {
+  const key = token ?? (env.GITHUB_TOKEN || null);
+  let provider = providerCache.get(key);
   if (!provider) {
-    provider = createProvider();
+    provider = createProvider(key);
+    providerCache.set(key, provider);
   }
   return provider;
 }
