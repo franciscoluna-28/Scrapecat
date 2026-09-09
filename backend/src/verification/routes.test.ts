@@ -17,6 +17,10 @@ vi.mock("@/config/env", () => ({
   },
 }));
 
+vi.mock("@/github/token", () => ({
+  resolveGithubToken: vi.fn(async () => "mock-token"),
+}));
+
 import { buildApp } from "@/app";
 
 describe("GET /api/v1/verification/status", () => {
