@@ -15,7 +15,7 @@ vi.mock("@/projects/stores/commit-chunks-store", () => ({
   keywordSearchCommits: (...args: unknown[]) => mockKeywordSearch(...args),
 }));
 
-import { MIN_SIMILARITY, retrieveCommits } from "@/chat/retrieval";
+import { MIN_SIMILARITY, WINDOWED_MIN_SIMILARITY, retrieveCommits } from "@/chat/retrieval";
 
 const row = {
   id: "1",
@@ -110,6 +110,45 @@ describe("retrieveCommits", () => {
     const result = await retrieveCommits({ projectId: "p1", query: "rag chat" });
 
     expect(result.map((c) => c.commitSha)).toEqual(["strong", "borderline"]);
+  });
+
+  it("uses the relaxed floor for date-scoped questions", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([
+      { ...row, commitSha: "borderline", distance: 1 - WINDOWED_MIN_SIMILARITY },
+      { ...row, commitSha: "weak", distance: 0.95 },
+    ]);
+
+    const windowed = await retrieveCommits({
+      projectId: "p1",
+      query: "what shipped",
+      startDate: new Date("2026-08-01T00:00:00.000Z"),
+      endDate: new Date("2026-08-31T23:59:59.999Z"),
+    });
+    expect(windowed.map((c) => c.commitSha)).toEqual(["borderline"]);
+
+    const unwindowed = await retrieveCommits({ projectId: "p1", query: "what shipped" });
+    expect(unwindowed).toEqual([]);
+  });
+
+  it("falls back to the window's most important commits when nothing clears the floor", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    // Both are topically weak (similarity 0.1) but "feat" outranks "chore".
+    mockSemanticSearch.mockResolvedValue([
+      { ...row, commitSha: "chore", commitMessage: "chore: tweak", distance: 0.9 },
+      { ...row, commitSha: "feat", commitMessage: "feat: add thing", distance: 0.9 },
+    ]);
+
+    const result = await retrieveCommits({
+      projectId: "p1",
+      query: "what shipped in august 2026",
+      startDate: new Date("2026-08-01T00:00:00.000Z"),
+      endDate: new Date("2026-08-31T23:59:59.999Z"),
+    });
+
+    expect(result.map((c) => c.commitSha)).toEqual(["feat", "chore"]);
   });
 
   it("uses the real cosine similarity for ranking", async () => {

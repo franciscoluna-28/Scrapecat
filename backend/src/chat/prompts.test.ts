@@ -18,6 +18,13 @@ describe("chat prompts", () => {
     expect(prompt).toContain("retrieved commits");
   });
 
+  it("anchors the system prompt to the current date", () => {
+    const now = new Date("2026-09-08T12:00:00.000Z");
+    const prompt = buildSystemPrompt(null, now);
+    expect(prompt).toContain("The current date is 2026-09-08");
+    expect(prompt).toContain("MOST RECENT commits");
+  });
+
   it("formats a citation with sha, message, and files", () => {
     const out = formatCitationForPrompt(citation);
     expect(out).toContain("abc123");
@@ -36,5 +43,18 @@ describe("chat prompts", () => {
     const out = buildUserMessage("when was chat added?", [citation]);
     expect(out).toContain("when was chat added?");
     expect(out).toContain("abc123");
+  });
+
+  it("includes the present moment and recency guidance in the user message", () => {
+    const now = new Date("2026-09-08T12:00:00.000Z");
+    const start = new Date("2026-08-09T12:00:00.000Z");
+    const out = buildUserMessage("What feature is being built?", [citation], {
+      startDate: start,
+      endDate: now,
+      now,
+    });
+    expect(out).toContain(`Present moment: ${now.toISOString()}`);
+    expect(out).toContain("closest to the \"To\" date");
+    expect(out).toContain("What feature is being built?");
   });
 });

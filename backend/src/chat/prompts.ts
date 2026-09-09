@@ -4,6 +4,8 @@ const SYSTEM_PROMPT = `You are Scrapecat, an engineering intelligence assistant.
 
 Rules:
 - Answer ONLY from the retrieved commits provided in the context. Never invent facts, dates, or commits.
+- Treat the present moment as the date given in the context. Interpret relative time ("now", "currently", "this week", "this month", "lately") against that date and against the commit dates provided.
+- For present-tense questions ("What feature is being built?", "What are we working on?", "What's the current state?"), answer from the MOST RECENT commits in the context — the ones closest to the last commit date. Never present old commits as current work.
 - Group related commits into feature-level summaries. Use descriptive headings such as "Features", "Bug fixes", "Refactors", "Infrastructure", "Documentation".
 - Focus on the major changes: features, breaking changes, PR merges, and large refactors. Minor fixes and chores can be grouped under a single line or omitted.
 - Do NOT list commits individually. Only reference specific SHAs if the user explicitly asks for details.
@@ -19,10 +21,12 @@ Rules:
 
 export const MAX_FILES_SHOWN = 6;
 
-export function buildSystemPrompt(repository?: string | null): string {
+export function buildSystemPrompt(repository?: string | null, now: Date = new Date()): string {
+  const today = now.toISOString().slice(0, 10);
+  const temporal = `The current date is ${today} (UTC).`;
   return repository
-    ? `${SYSTEM_PROMPT}\n\nYou are answering about the repository: ${repository}.`
-    : SYSTEM_PROMPT;
+    ? `${SYSTEM_PROMPT}\n\n${temporal}\n\nYou are answering about the repository: ${repository}.`
+    : `${SYSTEM_PROMPT}\n\n${temporal}`;
 }
 
 export function formatCitationForPrompt(c: ChatCitation): string {
@@ -46,16 +50,18 @@ export function formatCitationForPrompt(c: ChatCitation): string {
 export function buildUserMessage(
   query: string,
   citations: ChatCitation[],
-  scope?: { branch?: string | null; startDate?: Date; endDate?: Date },
+  scope?: { branch?: string | null; startDate?: Date; endDate?: Date; now?: Date },
 ): string {
   const context = citations.map(formatCitationForPrompt).join("\n");
   const filters = [
     scope?.branch ? `Branch: ${scope.branch}` : "Branch: all branches",
+    scope?.now ? `Present moment: ${scope.now.toISOString()}` : null,
     scope?.startDate ? `From: ${scope.startDate.toISOString()}` : null,
     scope?.endDate ? `To: ${scope.endDate.toISOString()}` : null,
   ].filter(Boolean).join("\n");
   return [
     "Summarize the retrieved commits below at a feature level. Group related changes under descriptive headings. Focus on the most impactful changes — features, bug fixes, refactors, and infrastructure. Do not list commits individually.",
+    "If the question is phrased in the present tense or refers to the current moment, answer from the commits closest to the \"To\" date in the scope below — those are the most recent work.",
     "If no commits were retrieved, explicitly say that no indexed commits matched the requested branch/date scope. Do not infer that nothing changed outside that scope.",
     "",
     "Retrieval scope:",

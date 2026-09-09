@@ -13,6 +13,15 @@ export const RETRIEVAL_LIMIT = 30;
  */
 export const MIN_SIMILARITY = 0.3;
 
+/**
+ * Relaxed floor when the query carries an explicit date window: the window is
+ * the primary filter, so topical similarity matters less. If nothing clears
+ * even this floor, the window's most important commits are returned anyway
+ * (ranked by importance) instead of an empty result — "what shipped in
+ * August" must not fail just because commit messages never say "shipped".
+ */
+export const WINDOWED_MIN_SIMILARITY = 0.15;
+
 const CANDIDATE_POOL = 120;
 
 const COMMIT_BOOST: Record<string, number> = {
@@ -107,15 +116,22 @@ export async function retrieveCommits(opts: {
 
   if (!rows || rows.length === 0) return [];
 
-  const ranked = rows
+  const hasWindow = Boolean(opts.startDate || opts.endDate);
+  const threshold = hasWindow ? WINDOWED_MIN_SIMILARITY : MIN_SIMILARITY;
+
+  const scored = rows
     .map((row, i) => {
       const similarity = similarityOf(row, i);
       return { row, similarity, score: importanceScore(row, similarity) };
     })
-    .filter((s) => s.row.distance == null || s.similarity >= MIN_SIMILARITY)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => s.row);
+    .sort((a, b) => b.score - a.score);
 
-  return ranked.map(toCitation);
+  const relevant = scored.filter(
+    (s) => s.row.distance == null || s.similarity >= threshold,
+  );
+  // Date-scoped questions always get the window's top commits: when nothing
+  // is topically similar enough, importance inside the window wins.
+  const picked = relevant.length > 0 ? relevant : hasWindow ? scored : [];
+
+  return picked.slice(0, limit).map((s) => toCitation(s.row));
 }
