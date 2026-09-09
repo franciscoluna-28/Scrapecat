@@ -27,3 +27,14 @@ export function parseRepoUrl(input: string): ParsedRepoUrl | null {
 
   return { owner, repo };
 }
+
+/** 
+ * Splits the content into a string before the artifact and the artifact itself.
+ */
+export function splitArtifact(content: string): { before: string; artifact: string | null } {
+  const m = content.match(/:::report\n([\s\S]*?)\n:::/);
+  if (!m) return { before: content, artifact: null };
+  const before = content.slice(0, m.index).trim();
+  const artifact = m[1].trim();
+  return { before, artifact };
+}

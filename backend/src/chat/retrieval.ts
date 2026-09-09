@@ -5,6 +5,23 @@ import type { CommitSearchResult } from "@/projects/stores/commit-chunks-store";
 
 export const RETRIEVAL_LIMIT = 30;
 
+/**
+ * Minimum cosine similarity (1 - cosine distance) for a semantic-search hit to
+ * be cited. Small or precise questions therefore cite only commits that are
+ * actually about the topic instead of always filling up to RETRIEVAL_LIMIT.
+ * Keyword hits are exempt: they matched the query text literally.
+ */
+export const MIN_SIMILARITY = 0.3;
+
+/**
+ * Relaxed floor when the query carries an explicit date window: the window is
+ * the primary filter, so topical similarity matters less. If nothing clears
+ * even this floor, the window's most important commits are returned anyway
+ * (ranked by importance) instead of an empty result — "what shipped in
+ * August" must not fail just because commit messages never say "shipped".
+ */
+export const WINDOWED_MIN_SIMILARITY = 0.15;
+
 const CANDIDATE_POOL = 120;
 
 const COMMIT_BOOST: Record<string, number> = {
@@ -32,6 +49,15 @@ function importanceScore(row: CommitSearchResult, similarity: number): number {
   else if (files >= 10) boost += 2;
   else if (files >= 5) boost += 1;
   return similarity * 0.5 + boost * 0.5;
+}
+
+function similarityOf(row: CommitSearchResult, index: number): number {
+  if (row.distance == null) {
+    // Keyword fallback has no score — rank position is the only signal.
+    return 1 - index / CANDIDATE_POOL;
+  }
+  // pgvector cosine distance is in [0, 2]; clamp similarity into [0, 1].
+  return Math.min(1, Math.max(0, 1 - row.distance));
 }
 
 function toCitation(row: CommitSearchResult): ChatCitation {
@@ -90,14 +116,22 @@ export async function retrieveCommits(opts: {
 
   if (!rows || rows.length === 0) return [];
 
-  const scored = rows
-    .map((row, i) => ({
-      row,
-      score: importanceScore(row, 1 - i / CANDIDATE_POOL),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => s.row);
+  const hasWindow = Boolean(opts.startDate || opts.endDate);
+  const threshold = hasWindow ? WINDOWED_MIN_SIMILARITY : MIN_SIMILARITY;
 
-  return scored.map(toCitation);
+  const scored = rows
+    .map((row, i) => {
+      const similarity = similarityOf(row, i);
+      return { row, similarity, score: importanceScore(row, similarity) };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const relevant = scored.filter(
+    (s) => s.row.distance == null || s.similarity >= threshold,
+  );
+  // Date-scoped questions always get the window's top commits: when nothing
+  // is topically similar enough, importance inside the window wins.
+  const picked = relevant.length > 0 ? relevant : hasWindow ? scored : [];
+
+  return picked.slice(0, limit).map((s) => toCitation(s.row));
 }

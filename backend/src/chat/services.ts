@@ -114,9 +114,15 @@ export async function streamChatMessage(opts: {
 
   let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
 
-  // If no explicit date window was parsed and the query asks for "latest"/"recent",
-  // use the latest commit in the project as the anchor instead of "now".
-  if (!dateWindowStart && !dateWindowEnd && /\b(latest|recent|newest|last changes|recent changes)\b/i.test(content)) {
+  // If no explicit date window was parsed and the query is phrased in the
+  // present tense or asks for "latest"/"recent", anchor the window at the
+  // latest commit in the project instead of "now" — present-tense questions
+  // refer to the most recent work, not the repo's entire history.
+  if (
+    !dateWindowStart &&
+    !dateWindowEnd &&
+    /\b(latest|recent|newest|last changes|recent changes|being built|being worked on|currently|right now|in progress|what.?s new|ship(?:ped|ping|s)?|landed|merged)\b/i.test(content)
+  ) {
     const latest = await getLatestCommitDate({ projectId: session.projectId, branch: branch ?? undefined });
     if (latest) {
       dateWindowEnd = latest;
@@ -152,6 +158,7 @@ export async function streamChatMessage(opts: {
         branch: branch ?? null,
         startDate: dateWindowStart,
         endDate: dateWindowEnd,
+        now: new Date(),
       }),
     },
   ];

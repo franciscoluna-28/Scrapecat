@@ -20,7 +20,7 @@ type Props = {
   citation: ChatMessage["citations"][number];
 };
 
-export function CitationCard({ citation }: Props) {
+export function CommitCitationCard({ citation }: Props) {
   const shortSha = citation.commitSha.slice(0, 7);
   const message =
     citation.commitMessage.length > 100
