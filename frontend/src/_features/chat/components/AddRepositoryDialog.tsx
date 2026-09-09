@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useAddRepository } from "@/src/_features/chat/hooks/useAddRepository";
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
+import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
+import { useGitHubConnection } from "@/src/_features/chat/services/git-api";
 import type { GitHubRepository } from "@/src/shared/types";
 
 type Props = {
@@ -28,6 +30,9 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
     connectByUrl,
   } = useAddRepository(onProjectSelected);
 
+  const { connection } = useGitHubConnection();
+  const connected = connection?.connected ?? false;
+
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange ?? internalSetOpen;
 
@@ -46,25 +51,40 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           </DialogDescription>
         </DialogHeader>
 
-        <RepositoryUrlInput
-          value={value}
-          onValueChange={onValueChange}
-          onConnect={connectByUrl}
-          connecting={connecting}
-          error={error}
-        />
+        {!connected ? (
+          <div className="space-y-4">
+            <GitHubConnectForm />
+            <p className="text-xs text-muted-foreground">
+              Connect GitHub first to browse and clone repositories.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-md border p-3">
+              <GitHubConnectForm />
+            </div>
 
-        <div className="text-xs text-muted-foreground">
-          Or select from your repositories:
-        </div>
+            <RepositoryUrlInput
+              value={value}
+              onValueChange={onValueChange}
+              onConnect={connectByUrl}
+              connecting={connecting}
+              error={error}
+            />
 
-        <RepositoryList
-          repositories={repositories as GitHubRepository[]}
-          isLoading={isFetching}
-          existingProjectIds={existingProjectIds}
-          connecting={connecting}
-          onSelect={connectByRepo}
-        />
+            <div className="text-xs text-muted-foreground">
+              Or select from your repositories:
+            </div>
+
+            <RepositoryList
+              repositories={repositories as GitHubRepository[]}
+              isLoading={isFetching}
+              existingProjectIds={existingProjectIds}
+              connecting={connecting}
+              onSelect={connectByRepo}
+            />
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

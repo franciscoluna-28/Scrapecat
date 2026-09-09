@@ -9,9 +9,10 @@ import {
 } from "@/src/components/ui/select";
 import { Label } from "@/src/components/ui/label";
 import { Input } from "@/src/components/ui/input";
-import { Card, CardContent } from "@/src/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
+import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
 import { AISettingsManager } from "@/src/_features/settings/components/AISettingsManager";
 
 export default function SettingsPage() {
@@ -28,6 +29,15 @@ export default function SettingsPage() {
 
   return (
     <SectionLayout>
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-base">GitHub Connection</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <GitHubConnectForm />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-6 space-y-6">
           <div>

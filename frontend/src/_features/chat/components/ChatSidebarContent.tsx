@@ -87,8 +87,8 @@ export function ChatSidebarContent() {
         </div>
       ) : projects.length === 0 ? (
         <div className="space-y-3 py-4">
-          <p className="text-sm text-muted-foreground text-center">
-            No projects synced yet
+          <p className="text-xs text-muted-foreground text-center">
+            No projects synced yet...
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

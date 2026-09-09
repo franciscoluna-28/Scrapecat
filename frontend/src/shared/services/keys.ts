@@ -41,6 +41,10 @@ export const queryKeys = {
   credentials: {
     all: ["credentials"] as const,
   },
+  github: {
+    all: ["github"] as const,
+    connection: ["github", "connection"] as const,
+  },
   chat: {
     all: ["chat"] as const,
     sessions: (projectId?: string) => ["chat", "sessions", { projectId }] as const,
