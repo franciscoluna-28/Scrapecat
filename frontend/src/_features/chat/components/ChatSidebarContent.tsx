@@ -231,7 +231,7 @@ export function ChatSidebarContent() {
       <AddRepositoryDialog
         open={connectOpen}
         onOpenChange={setConnectOpen}
-        onProjectSelected={(id) => navigate({ project: id })}
+        onProjectSelected={(id) => { setConnectOpen(false); navigate({ project: id }); }}
       />
 
       <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>
