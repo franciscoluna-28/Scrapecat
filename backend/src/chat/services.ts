@@ -8,6 +8,7 @@ import { callAI } from "@/chat/ai";
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { retrieveCommits } from "@/chat/retrieval";
 import { parseQueryWindow } from "@/chat/date-window";
+import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
 import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
 import * as projectsStore from "@/projects/stores/projects-store";
@@ -112,6 +113,22 @@ export async function streamChatMessage(opts: {
   }
 
   let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
+
+  // Temporal keywords like "last", "latest", "recent" with no explicit date:
+  // anchor the window at the latest commit so the date-prefixed embedding
+  // aligns and the SQL filter excludes old irrelevant results.
+  if (
+    !dateWindowStart &&
+    !dateWindowEnd &&
+    /\b(last|lates?t|recent|newest|what.?s new|being built|currently|right now|in progress)\b/i.test(content)
+  ) {
+    const DAY_MS = 86_400_000;
+    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: branch ?? undefined });
+    if (latest) {
+      dateWindowEnd = latest;
+      dateWindowStart = new Date(latest.getTime() - 45 * DAY_MS);
+    }
+  }
 
   const citations = await retrieveCommits({
     projectId: session.projectId,
