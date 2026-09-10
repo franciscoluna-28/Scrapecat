@@ -1,7 +1,7 @@
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import { commitChunks } from "@/db/schema";
-import { contentHashOf } from "@/projects/stores/commit-chunks-store";
+import { contentHashOf, embeddingSource } from "@/projects/stores/commit-chunks-store";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { embedTexts } from "@/projects/embeddings";
@@ -11,6 +11,7 @@ export async function listPendingChunks(projectId: string) {
     .select({
       id: commitChunks.id,
       commitMessage: commitChunks.commitMessage,
+      committedAt: commitChunks.committedAt,
       contentHash: commitChunks.contentHash,
     })
     .from(commitChunks)
@@ -23,6 +24,10 @@ export async function listPendingChunks(projectId: string) {
         ),
       ),
     );
+}
+
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 export async function embedNewChunks(projectId: string, opts?: { batchSize?: number }) {
@@ -38,10 +43,11 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   for (let i = 0; i < pending.length; i += batchSize) {
     const batch = pending.slice(i, i + batchSize);
     const batchStart = performance.now();
-    const vectors = await embedTexts(batch.map((r) => r.commitMessage));
+    const texts = batch.map((r) => `${fmtDate(r.committedAt)} ${r.commitMessage}`);
+    const vectors = await embedTexts(texts);
 
     for (let j = 0; j < batch.length; j++) {
-      const hash = batch[j].contentHash ?? contentHashOf(batch[j].commitMessage);
+      const hash = batch[j].contentHash ?? contentHashOf(embeddingSource(batch[j].committedAt, batch[j].commitMessage));
       await db
         .update(commitChunks)
         .set({

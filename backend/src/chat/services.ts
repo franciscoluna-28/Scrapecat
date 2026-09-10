@@ -13,6 +13,7 @@ import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
+import type { IngestProgress } from "@/repositories/ingest";
 
 const HISTORY_LIMIT = 20;
 
@@ -95,8 +96,9 @@ export async function streamChatMessage(opts: {
   content: string;
   branch?: string | null;
   onToken: (chunk: string) => void;
+  onProgress?: IngestProgress;
 }): Promise<ChatMessageDTO> {
-  const { sessionId, content, branch, onToken } = opts;
+  const { sessionId, content, branch, onToken, onProgress } = opts;
 
   const session = await chatSessionsStore.getSession({ id: sessionId });
   if (!session) throw new SessionNotFoundError();
@@ -107,26 +109,24 @@ export async function streamChatMessage(opts: {
 
   // Ensure the branch is ingested before retrieval
   if (branch) {
-    await prepareProjectBranch(session.projectId, branch).catch(() => {});
+    await prepareProjectBranch(session.projectId, branch, onProgress).catch(() => {});
   }
-
-  const DAY_MS = 86_400_000;
 
   let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
 
-  // If no explicit date window was parsed and the query is phrased in the
-  // present tense or asks for "latest"/"recent", anchor the window at the
-  // latest commit in the project instead of "now" — present-tense questions
-  // refer to the most recent work, not the repo's entire history.
+  // Temporal keywords like "last", "latest", "recent" with no explicit date:
+  // anchor the window at the latest commit so the date-prefixed embedding
+  // aligns and the SQL filter excludes old irrelevant results.
   if (
     !dateWindowStart &&
     !dateWindowEnd &&
-    /\b(latest|recent|newest|last changes|recent changes|being built|being worked on|currently|right now|in progress|what.?s new|ship(?:ped|ping|s)?|landed|merged)\b/i.test(content)
+    /\b(last|lates?t|recent|newest|what.?s new|being built|currently|right now|in progress)\b/i.test(content)
   ) {
+    const DAY_MS = 86_400_000;
     const latest = await getLatestCommitDate({ projectId: session.projectId, branch: branch ?? undefined });
     if (latest) {
       dateWindowEnd = latest;
-      dateWindowStart = new Date(latest.getTime() - 30 * DAY_MS);
+      dateWindowStart = new Date(latest.getTime() - 45 * DAY_MS);
     }
   }
 
