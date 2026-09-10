@@ -8,6 +8,7 @@ import {
   streamChatMessage,
   useChatMessages,
   useCreateChatSession,
+  type StreamChunk,
 } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import type { ChatMessage } from "@/src/shared/types";
@@ -33,6 +34,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
+  const [ingestionProgress, setIngestionProgress] = useState<StreamChunk & { type: "progress" } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
 
@@ -102,6 +104,11 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       requestAnimationFrame(() => scrollToBottom(true));
 
       await streamChatMessage(sid, trimmed, branch, (chunk) => {
+        if (chunk.type === "progress") {
+          setIngestionProgress(chunk);
+        } else {
+          setIngestionProgress(null);
+        }
         if (chunk.type === "token") {
           setLiveMessages((m) => {
             const copy = [...m];
@@ -122,10 +129,12 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       });
 
       setLiveMessages([]);
+      setIngestionProgress(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(sid) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
     } catch {
+      setIngestionProgress(null);
       setLiveMessages((m) => m.filter((msg) => !msg.id.startsWith(STREAMING_PREFIX)));
     } finally {
       setIsStreaming(false);
@@ -137,6 +146,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     messagesLoading,
     streamingId,
     isStreaming,
+    ingestionProgress,
     input,
     setInput,
     sendMessage,

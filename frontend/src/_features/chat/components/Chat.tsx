@@ -76,7 +76,7 @@ export function Chat() {
     router.push(`/app?${p.toString()}`);
   };
 
-  const { messages, messagesLoading, streamingId, isStreaming, input, setInput, sendMessage, bottomRef } =
+  const { messages, messagesLoading, streamingId, isStreaming, ingestionProgress, input, setInput, sendMessage, bottomRef } =
     useAIChat({ projectId, sessionId, branch });
 
   return (
@@ -103,6 +103,7 @@ export function Chat() {
             isLoading={messagesLoading}
             sessionId={sessionId}
             projectName={activeProject}
+            ingestionProgress={ingestionProgress}
             bottomRef={bottomRef}
           />
           <div className="sticky bottom-0 z-10 bg-background px-4 pt-2 pb-3">

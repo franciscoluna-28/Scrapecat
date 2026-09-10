@@ -107,6 +107,10 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       sessionId: id,
       content,
       branch,
+      onProgress: (stage, msg, done, total) => {
+        if (closed) return;
+        sendFrame(res, { type: "progress", stage, message: msg, done, total });
+      },
       onToken: (chunk) => {
         if (closed) return;
         sendFrame(res, { type: "token", content: chunk });
