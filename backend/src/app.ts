@@ -15,6 +15,11 @@ import { PrepareBranchBody, PrepareBranchResponse, ProjectIdParams, CreateProjec
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 import {
+  createGitHubToken,
+  getGitHubConnection,
+  deleteGitHubConnection,
+} from "@/github/routes";
+import {
   createSession as createChatSession,
   listSessions as listChatSessions,
   getMessages as getChatMessages,
@@ -56,6 +61,7 @@ import {
   VerifyCredentialResponse,
 } from "@/credentials/schemas";
 import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
+import { GitHubConnectionResponse, AddGitHubTokenBody } from "@/github/schemas";
 
 export async function buildApp() {
   const app = Fastify({ logger: { level: env.LOG_LEVEL } });
@@ -104,6 +110,31 @@ export async function buildApp() {
       response: { 200: VerificationOkResponse },
     },
   }, checkVerification);
+
+  app.post("/api/v1/github/token", {
+    schema: {
+      description: "Store a GitHub Personal Access Token (connect GitHub account)",
+      tags: ["github"],
+      body: AddGitHubTokenBody,
+      response: { 201: GitHubConnectionResponse, 400: ErrorResponse },
+    },
+  }, createGitHubToken);
+
+  app.get("/api/v1/github/connection", {
+    schema: {
+      description: "GitHub connection status (stored token / env token / none)",
+      tags: ["github"],
+      response: { 200: GitHubConnectionResponse, 400: ErrorResponse },
+    },
+  }, getGitHubConnection);
+
+  app.delete("/api/v1/github/connection", {
+    schema: {
+      description: "Disconnect GitHub (removes stored token)",
+      tags: ["github"],
+      response: { 204: {}, 404: ErrorResponse },
+    },
+  }, deleteGitHubConnection);
 
   app.get("/api/v1/models", {
     schema: {

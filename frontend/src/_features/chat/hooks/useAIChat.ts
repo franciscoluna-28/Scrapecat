@@ -72,9 +72,11 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
 
     try {
       let sid = sessionId;
+      let isNewSession = false;
       if (!sid) {
         const created = await createSession.mutateAsync(projectId);
         sid = created.id;
+        isNewSession = true;
         const p = new URLSearchParams(searchParams.toString());
         p.set("session", sid);
         router.replace(`/app?${p.toString()}`, { scroll: false });
@@ -96,7 +98,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         citations: [],
         createdAt: new Date().toISOString(),
       };
-      setLiveMessages((m) => [...m, userMsg, draft]);
+      setLiveMessages((m) => [...m, ...(!isNewSession ? [userMsg] : []), draft]);
       requestAnimationFrame(() => scrollToBottom(true));
 
       await streamChatMessage(sid, trimmed, branch, (chunk) => {
@@ -119,10 +121,10 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         }
       });
 
+      setLiveMessages([]);
       await queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(sid) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
-      setLiveMessages([]);
     } catch {
       setLiveMessages((m) => m.filter((msg) => !msg.id.startsWith(STREAMING_PREFIX)));
     } finally {

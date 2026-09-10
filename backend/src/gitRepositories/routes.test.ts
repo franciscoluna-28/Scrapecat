@@ -21,6 +21,10 @@ vi.mock("@/repositories/git-reader", () => ({
   listCommitsInRange: (...args: unknown[]) => mockListCommitsInRange(...args),
 }));
 
+vi.mock("@/github/token", () => ({
+  resolveGithubToken: vi.fn(async () => null),
+}));
+
 import { buildApp } from "@/app";
 
 describe("GET /api/v1/repositories", () => {

@@ -28,7 +28,7 @@ export function BranchSelector({ branches, value, onValueChange }: BranchSelecto
         }
       }}
     >
-      <ComboboxTrigger className="h-7 rounded-md border-none bg-transparent px-2 font-medium text-muted-foreground text-xs shadow-none transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground">
+      <ComboboxTrigger className="h-7 rounded-md border-none bg-transparent px-2 font-medium text-muted-foreground text-xs min-w-16 shadow-none transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground">
         {value ?? "Branch"}
       </ComboboxTrigger>
       <ComboboxContent className="w-64">

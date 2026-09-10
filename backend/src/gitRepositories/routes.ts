@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { getGitProvider } from "@/shared/integrations/git-provider";
+import { resolveGithubToken } from "@/github/token";
 import { ensureArchive } from "@/repositories/archive-service";
 import { listCommitsInRange } from "@/repositories/git-reader";
 import type { Static } from "@sinclair/typebox";
@@ -21,7 +22,7 @@ export async function listRepositories(
   const { type, sort, direction, per_page } = req.query as Static<typeof RepositoriesQuery>;
 
   try {
-    const repositories = await getGitProvider().listRepositories({
+    const repositories = await getGitProvider(await resolveGithubToken()).listRepositories({
       type: type || "all",
       sort: sort || "updated",
       direction: direction || "desc",
@@ -41,7 +42,7 @@ export async function listBranches(
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
 
   try {
-    const provider = getGitProvider();
+    const provider = getGitProvider(await resolveGithubToken());
     const [branches, defaultBranch] = await Promise.all([
       provider.listBranches(owner, repo),
       provider.getDefaultBranch(owner, repo),
@@ -63,7 +64,7 @@ export async function listCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { limit, startDate, endDate, branch } = req.query as Static<typeof CommitsQuery>;
-  const ref = branch || (await getGitProvider().getDefaultBranch(owner, repo));
+  const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
     const archive = await ensureArchive({ owner, repo, branch: ref });
@@ -103,7 +104,7 @@ export async function countCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { startDate, endDate, branch } = req.query as Static<typeof CommitsCountQuery>;
-  const ref = branch || (await getGitProvider().getDefaultBranch(owner, repo));
+  const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
     const archive = await ensureArchive({ owner, repo, branch: ref });
