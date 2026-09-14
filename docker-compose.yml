@@ -16,6 +16,14 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: scrapecat-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   backend-dev:
     container_name: scrapecat-backend
     build:
@@ -41,6 +49,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   frontend-dev:
     container_name: scrapecat-ui
@@ -62,3 +72,4 @@ services:
 volumes:
   postgres_data:
   repo_archives:
+  ollama_data:

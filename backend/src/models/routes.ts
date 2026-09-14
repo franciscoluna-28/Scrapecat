@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import type { Static } from "@sinclair/typebox";
 import { ModelsQuery } from "@/models/schemas";
+import { env } from "@/config/env";
 
 const OPENROUTER_FALLBACK = [
   { id: "google/gemma-4-31b-it", name: "GPT-5.6 Luna", free: false, description: "" },
@@ -26,9 +27,17 @@ const OPENAI_FALLBACK = [
   { id: "o3-mini", name: "o3-mini", free: false, description: "" },
 ];
 
+const OLLAMA_CHAT_FALLBACK = [
+  { id: "llama3", name: "Llama 3", free: true, description: "" },
+  { id: "mistral", name: "Mistral", free: true, description: "" },
+  { id: "codellama", name: "Code Llama", free: true, description: "" },
+  { id: "phi3", name: "Phi-3", free: true, description: "" },
+];
+
 const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
   deepseek: DEEPSEEK_FALLBACK,
   openai: OPENAI_FALLBACK,
+  ollama: OLLAMA_CHAT_FALLBACK,
 };
 
 // MVP embedding models constrained to the vector(512) column. OpenRouter's
@@ -40,6 +49,10 @@ const EMBEDDING_MODEL_ALLOWLIST = new Set([
   "openai/text-embedding-3-small",
   "openai/text-embedding-3-large",
 ]);
+
+const OLLAMA_EMBEDDING_MODELS = [
+  { id: "nomic-embed-text", name: "Nomic Embed Text", free: true, description: "768-dim local embedding model" },
+];
 
 function isFree(pricing: any): boolean {
   return !pricing || (pricing?.prompt == 0 && pricing?.completion == 0);
@@ -73,6 +86,9 @@ export async function listModels(
   const { provider, modality = "chat" } = req.query as Static<typeof ModelsQuery>;
 
   if (modality === "embeddings") {
+    if (provider === "ollama") {
+      return reply.send({ models: OLLAMA_EMBEDDING_MODELS.map((m) => ({ ...m, provider: "ollama" })) });
+    }
     const models = await fetchOpenRouterEmbeddingModels();
     return reply.send({ models });
   }

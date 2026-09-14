@@ -49,9 +49,9 @@ export async function verifyCredential(provider: string, key: string): Promise<b
   if (!config) return false;
 
   try {
-    const res = await fetch(config.verifyUrl, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
+    const headers: Record<string, string> = {};
+    if (key) headers.Authorization = `Bearer ${key}`;
+    const res = await fetch(config.verifyUrl, { headers });
     return res.status === 200;
   } catch {
     return false;

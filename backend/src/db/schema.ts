@@ -15,6 +15,7 @@ const AVAILABLE_CREDENTIAL_PROVIDERS = [
   "openai",
   "openrouter",
   "deepseek",
+  "ollama",
   "github",
   "gitlab",
 ] as const;
@@ -32,7 +33,7 @@ export type GitProvider = (typeof gitProviderEnum)["enumValues"][number];
 
 export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(512)";
+    return "vector(768)";
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`; 

@@ -36,6 +36,9 @@ export async function updateAISettings(input: AISettingsInput): Promise<AISettin
   if (!isProviderSupported(input.reportProvider)) {
     throw new Error(`Unsupported provider: ${input.reportProvider}`);
   }
+  if (!isProviderSupported(input.embeddingProvider)) {
+    throw new Error(`Unsupported embedding provider: ${input.embeddingProvider}`);
+  }
 
   await settingsStore.upsertSettings({
     id: GLOBAL_SETTINGS_ID,
