@@ -12,7 +12,7 @@ Scrapecat is an engineering intelligence assistant that answers questions about 
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements
 - **Data Source:** Native GitHub REST via `Octokit`, local git archive for commit ingestion
-- **Intelligence:** OpenRouter API (Google Gemma 4, DeepSeek, GPT-4o, etc.)
+- **Intelligence:** OpenRouter API (Google Gemma 4, DeepSeek, GPT-4o, etc.) or Ollama (local LLMs)
 - **Package Manager:** pnpm workspaces
 
 ## Core Features
@@ -50,6 +50,28 @@ We use OpenRouter's API for LLM access. The free tier works out of the box.
 - 1. Sign up at [OpenRouter](https://openrouter.ai/keys) and create a free API key.
 - 2. Default model: `google/gemma-4-31b-it` — supports chat, summaries, and report artifacts.
 
+### 3. Ollama (Local Alternative)
+
+Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
+
+**Setup:**
+
+1. Install Ollama from [ollama.com](https://ollama.com/download)
+2. Pull the required models:
+   ```bash
+   ollama pull llama3.2:1b    # Chat model (1.3GB, 1.2B params)
+   ollama pull nomic-embed-text  # Embedding model (274MB)
+   ```
+3. Verify Ollama is running: `curl http://localhost:11434/api/tags`
+4. In the **Settings UI** (`/settings`):
+   - Set **Report Provider** to `Ollama (Local)` → select `llama3.2:1b`
+   - Set **Embedding Provider** to `Ollama (Local)` → select `nomic-embed-text`
+5. The API key field can be set to `ollama` (placeholder, no real key needed)
+
+**Available models are fetched automatically** from your local Ollama instance — only installed models appear in the dropdown.
+
+> **Docker users:** When running in Docker, the backend connects to Ollama via `host.docker.internal`. If Ollama is running on your host machine, no extra config is needed.
+
 ## Environment Setup
 
 ```bash
@@ -62,6 +84,8 @@ Required values in `backend/.env`:
 |---|---|
 | `OPENROUTER_API_KEY` | LLM access — get a free key at [openrouter.ai/keys](https://openrouter.ai/keys) |
 | `GITHUB_TOKEN` | Repository data access — create one at [github.com/settings/tokens](https://github.com/settings/tokens) |
+
+> **Using Ollama?** No additional env vars needed — just ensure Ollama is running locally and select it in the Settings UI.
 
 ## Local Deployment
 
