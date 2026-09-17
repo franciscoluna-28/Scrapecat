@@ -16,6 +16,14 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: scrapecat-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   backend-dev:
     container_name: scrapecat-backend
     build:
@@ -37,10 +45,13 @@ services:
       - HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000
       - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - REPO_ARCHIVE_DIR=/app/repos
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   frontend-dev:
     container_name: scrapecat-ui
@@ -62,3 +73,4 @@ services:
 volumes:
   postgres_data:
   repo_archives:
+  ollama_data:

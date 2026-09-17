@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { Loader2, Save } from "lucide-react";
-import { PROVIDERS } from "@/src/shared/constants";
+import { PROVIDERS, EMBEDDING_PROVIDERS } from "@/src/shared/constants";
 import { ModelSelector } from "@/src/_features/settings/components/ModelSelector";
 import type { AISettings } from "@/src/shared/services/ai-settings";
 
@@ -26,6 +26,8 @@ type AISettingsCardProps = {
   setReportProvider: (value: AISettings["reportProvider"]) => void;
   reportModel: string;
   setReportModel: (value: string) => void;
+  embeddingProvider: AISettings["embeddingProvider"];
+  setEmbeddingProvider: (value: AISettings["embeddingProvider"]) => void;
   embeddingModel: string;
   setEmbeddingModel: (value: string) => void;
   chatModels: Model[];
@@ -43,6 +45,8 @@ export function AISettingsCard({
   setReportProvider,
   reportModel,
   setReportModel,
+  embeddingProvider,
+  setEmbeddingProvider,
   embeddingModel,
   setEmbeddingModel,
   chatModels,
@@ -107,6 +111,29 @@ export function AISettingsCard({
 
         <div className="border-t pt-4 space-y-3">
           <div className="max-w-xs">
+            <Label htmlFor="embedding-provider" className="text-sm font-medium">
+              Embedding Provider
+            </Label>
+            <Select
+              value={embeddingProvider}
+              onValueChange={(v) =>
+                setEmbeddingProvider(v as AISettings["embeddingProvider"])
+              }
+            >
+              <SelectTrigger id="embedding-provider" className="mt-1.5">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMBEDDING_PROVIDERS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="max-w-xs">
             <Label htmlFor="embedding-model" className="text-sm font-medium">
               Embeddings Model
             </Label>
@@ -120,8 +147,9 @@ export function AISettingsCard({
               />
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              OpenRouter · limited to 512-dimension models. Changing it applies
-              to newly synced commits; existing embeddings keep their model.
+              {embeddingProvider === "ollama"
+                ? "Local model · 768 dimensions · runs on your machine"
+                : "OpenRouter · 768-dimension models. Changing it applies to newly synced commits; existing embeddings keep their model."}
             </p>
           </div>
         </div>

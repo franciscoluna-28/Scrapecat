@@ -15,6 +15,7 @@ import { AISettingsCard } from "@/src/_features/settings/components/AISettingsCa
 type Draft = {
   reportProvider: AISettings["reportProvider"];
   reportModel: string;
+  embeddingProvider: AISettings["embeddingProvider"];
   embeddingModel: string;
 };
 
@@ -22,6 +23,7 @@ function draftFrom(settings?: AISettings): Draft {
   return {
     reportProvider: settings?.reportProvider ?? "openrouter",
     reportModel: settings?.reportModel ?? "",
+    embeddingProvider: settings?.embeddingProvider ?? "openrouter",
     embeddingModel: settings?.embeddingModel ?? "",
   };
 }
@@ -43,11 +45,13 @@ export function AISettingsManager() {
     setDraft(draftFrom(settings));
   }
 
-  const { reportProvider, reportModel, embeddingModel } = draft;
+  const { reportProvider, reportModel, embeddingProvider, embeddingModel } = draft;
   const setReportProvider = (reportProvider: AISettings["reportProvider"]) =>
     setDraft((d) => ({ ...d, reportProvider }));
   const setReportModel = (reportModel: string) =>
     setDraft((d) => ({ ...d, reportModel }));
+  const setEmbeddingProvider = (embeddingProvider: AISettings["embeddingProvider"]) =>
+    setDraft((d) => ({ ...d, embeddingProvider }));
   const setEmbeddingModel = (embeddingModel: string) =>
     setDraft((d) => ({ ...d, embeddingModel }));
 
@@ -59,12 +63,13 @@ export function AISettingsManager() {
   const {
     models: embeddingModels,
     isLoading: embeddingModelsLoading,
-  } = useModels("openrouter", "embeddings");
+  } = useModels(embeddingProvider, "embeddings");
 
   const dirty =
     !!settings &&
     (reportProvider !== settings.reportProvider ||
       reportModel !== settings.reportModel ||
+      embeddingProvider !== settings.embeddingProvider ||
       embeddingModel !== settings.embeddingModel);
 
   const handleSave = async () => {
@@ -77,7 +82,7 @@ export function AISettingsManager() {
       await updateSettings.mutateAsync({
         reportProvider,
         reportModel,
-        embeddingProvider: "openrouter",
+        embeddingProvider,
         embeddingModel,
       });
       toast.success("AI settings saved");
@@ -114,6 +119,8 @@ export function AISettingsManager() {
       setReportProvider={setReportProvider}
       reportModel={reportModel}
       setReportModel={setReportModel}
+      embeddingProvider={embeddingProvider}
+      setEmbeddingProvider={setEmbeddingProvider}
       embeddingModel={embeddingModel}
       setEmbeddingModel={setEmbeddingModel}
       chatModels={chatModels}

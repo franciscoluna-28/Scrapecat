@@ -15,6 +15,7 @@ const AVAILABLE_CREDENTIAL_PROVIDERS = [
   "openai",
   "openrouter",
   "deepseek",
+  "ollama",
   "github",
   "gitlab",
 ] as const;
@@ -32,7 +33,7 @@ export type GitProvider = (typeof gitProviderEnum)["enumValues"][number];
 
 export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(512)";
+    return "vector(768)";
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`; 
@@ -98,7 +99,7 @@ export const commitChunks = pgTable(
     branch: text("branch").notNull().default("main"),
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
-    embedding: vector("embedding"),
+    embedding: vector("embedding", { dimensions: 768 }),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
     metadata: jsonb("metadata")

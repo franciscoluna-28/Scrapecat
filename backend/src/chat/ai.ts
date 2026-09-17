@@ -130,7 +130,7 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   const temperature = request.temperature ?? 0.1;
   const maxTokens = request.maxTokens ?? 4096;
 
-  if (!apiKey) {
+  if (!apiKey && provider !== "ollama") {
     throw new Error(`Missing API key for provider: ${provider}`);
   }
 
@@ -139,11 +139,13 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   }
 
   if (config.sdk === "openai-compatible") {
+    const baseUrl =
+      provider === "ollama" ? `${env.OLLAMA_BASE_URL}/v1` : config.baseUrl;
     return callOpenAICompatible(
       request.messages,
       model,
-      apiKey,
-      config.baseUrl,
+      apiKey || "ollama",
+      baseUrl,
       temperature,
       maxTokens,
       request.onChunk,

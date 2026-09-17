@@ -141,6 +141,13 @@
       "when": 1788394825552,
       "tag": "0019_good_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789605884850,
+      "tag": "0020_shiny_captain_midlands",
+      "breakpoints": true
     }
   ]
 }

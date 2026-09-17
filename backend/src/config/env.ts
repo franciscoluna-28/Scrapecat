@@ -8,6 +8,8 @@ const envSchema = z.object({
   AI_MODEL: z.string().default("openai/gpt-5.6-luna"),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
+  OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
+  OLLAMA_API_KEY: z.string().default("ollama"),
   GITHUB_TOKEN: z.string().default(""),
   GIT_PROVIDER: z.enum(["github", "gitlab"]).default("github"),
   ENCRYPTION_KEY: z.string().min(1, "ENCRYPTION_KEY is required (use: openssl rand -base64 32)"),
