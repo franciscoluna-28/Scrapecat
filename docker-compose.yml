@@ -45,6 +45,7 @@ services:
       - HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000
       - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - REPO_ARCHIVE_DIR=/app/repos
     depends_on:
       db:

@@ -1,3 +1,4 @@
+import { env } from "@/config/env";
 import { getProviderConfig, isProviderSupported } from "@/shared/integrations/providers/registry";
 import { encrypt, decrypt, maskApiKey } from "@/credentials/encryption";
 import type { CredentialProvider } from "@/db/schema";
@@ -49,9 +50,12 @@ export async function verifyCredential(provider: string, key: string): Promise<b
   if (!config) return false;
 
   try {
+    const verifyUrl =
+      provider === "ollama" ? `${env.OLLAMA_BASE_URL}/api/tags` : config.verifyUrl;
+    if (!verifyUrl) return false;
     const headers: Record<string, string> = {};
     if (key) headers.Authorization = `Bearer ${key}`;
-    const res = await fetch(config.verifyUrl, { headers });
+    const res = await fetch(verifyUrl, { headers });
     return res.status === 200;
   } catch {
     return false;

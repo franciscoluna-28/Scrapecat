@@ -139,11 +139,13 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
   }
 
   if (config.sdk === "openai-compatible") {
+    const baseUrl =
+      provider === "ollama" ? `${env.OLLAMA_BASE_URL}/v1` : config.baseUrl;
     return callOpenAICompatible(
       request.messages,
       model,
       apiKey || "ollama",
-      config.baseUrl,
+      baseUrl,
       temperature,
       maxTokens,
       request.onChunk,

@@ -21,10 +21,10 @@ export const PROVIDER_REGISTRY = {
   },
   ollama: {
     sdk: "openai-compatible",
-    defaultModel: "llama3",
-    baseUrl: "http://localhost:11434/v1",
+    defaultModel: "llama3.2:1b",
+    baseUrl: "",
     envKey: "OLLAMA_API_KEY",
-    verifyUrl: "http://localhost:11434/api/tags",
+    verifyUrl: "",
   },
 } as const;
 

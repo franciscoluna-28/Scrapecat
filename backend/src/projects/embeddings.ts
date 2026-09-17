@@ -28,7 +28,12 @@ export async function embedTexts(
     (env as unknown as Record<string, string>)[config.envKey] ||
     "";
 
-  const baseURL = "baseUrl" in config ? config.baseUrl : "https://openrouter.ai/api/v1";
+  const baseURL =
+    provider === "ollama"
+      ? `${env.OLLAMA_BASE_URL}/v1`
+      : "baseUrl" in config
+        ? config.baseUrl
+        : "https://openrouter.ai/api/v1";
 
   const client = new OpenAI({ apiKey: apiKey || "ollama", baseURL });
   const start = performance.now();
