@@ -27,36 +27,43 @@ const OPENAI_FALLBACK = [
   { id: "o3-mini", name: "o3-mini", free: false, description: "" },
 ];
 
-const OLLAMA_CHAT_FALLBACK = [
-  { id: "llama3", name: "Llama 3", free: true, description: "" },
-  { id: "mistral", name: "Mistral", free: true, description: "" },
-  { id: "codellama", name: "Code Llama", free: true, description: "" },
-  { id: "phi3", name: "Phi-3", free: true, description: "" },
-];
-
 const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
   deepseek: DEEPSEEK_FALLBACK,
   openai: OPENAI_FALLBACK,
-  ollama: OLLAMA_CHAT_FALLBACK,
 };
 
-// MVP embedding models constrained to the vector(512) column. OpenRouter's
-// embedding list does not expose output dimensions, so this allowlist is the
-// source of truth. Both models are Matryoshka-reducible and support a 512-dim
-// output via the `dimensions` param. text-embedding-ada-002 is excluded: it is
-// locked at 1536 dims and rejects `dimensions`.
-const EMBEDDING_MODEL_ALLOWLIST = new Set([
-  "openai/text-embedding-3-small",
-  "openai/text-embedding-3-large",
-]);
-
-const OLLAMA_EMBEDDING_MODELS = [
-  { id: "nomic-embed-text", name: "Nomic Embed Text", free: true, description: "768-dim local embedding model" },
-];
+async function fetchOllamaModels(modality: "chat" | "embeddings"): Promise<Array<{ id: string; name: string; free: boolean; description: string; provider: string }>> {
+  try {
+    const res = await fetch(`${env.OLLAMA_BASE_URL}/api/tags`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const models = data?.models || [];
+    return models
+      .filter((m: any) => {
+        if (modality === "embeddings") return m.capabilities?.includes("embedding");
+        return m.capabilities?.includes("completion");
+      })
+      .map((m: any) => ({
+        id: m.name.replace(/:latest$/, ""),
+        name: m.name.replace(/:latest$/, ""),
+        free: true,
+        description: `${m.details?.parameter_size || ""} · ${m.details?.quantization_level || ""}`.trim(),
+        provider: "ollama",
+      }));
+  } catch {
+    return [];
+  }
+}
 
 function isFree(pricing: any): boolean {
   return !pricing || (pricing?.prompt == 0 && pricing?.completion == 0);
 }
+
+// MVP embedding models constrained to the vector(768) column.
+const EMBEDDING_MODEL_ALLOWLIST = new Set([
+  "openai/text-embedding-3-small",
+  "openai/text-embedding-3-large",
+]);
 
 async function fetchOpenRouterEmbeddingModels() {
   try {
@@ -85,10 +92,12 @@ export async function listModels(
 ) {
   const { provider, modality = "chat" } = req.query as Static<typeof ModelsQuery>;
 
+  if (provider === "ollama") {
+    const models = await fetchOllamaModels(modality);
+    return reply.send({ models });
+  }
+
   if (modality === "embeddings") {
-    if (provider === "ollama") {
-      return reply.send({ models: OLLAMA_EMBEDDING_MODELS.map((m) => ({ ...m, provider: "ollama" })) });
-    }
     const models = await fetchOpenRouterEmbeddingModels();
     return reply.send({ models });
   }
@@ -117,8 +126,6 @@ export async function listModels(
     }
   } catch {}
 
-  // The MVP default model must always be pickable even though the live fetch
-  // only returns free models.
   const MVP_DEFAULT = "google/gemma-4-31b-it";
   if (!openrouterModels.some((m) => m.id === MVP_DEFAULT)) {
     openrouterModels = [
