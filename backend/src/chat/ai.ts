@@ -173,6 +173,7 @@ export function cleanResponse(rawContent: string): string {
 
 export class ProviderKeyError extends Error {
   readonly status = 400;
+
   constructor(provider: string) {
     const envKey = getProviderConfig(provider)?.envKey ?? "the provider's env key";
     super(
