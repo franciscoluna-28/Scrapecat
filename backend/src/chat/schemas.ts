@@ -51,6 +51,8 @@ export const ChatMessagesResponse = Type.Object({
 export const SendMessageBody = Type.Object({
   content: Type.String({ minLength: 1 }),
   branch: Type.Optional(Type.String({ minLength: 1 })),
+  model: Type.Optional(Type.String({ minLength: 1 })),
+  provider: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 export const DeleteSessionResponse = Type.Object({

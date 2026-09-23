@@ -22,3 +22,7 @@ export function useModels(provider?: string, modality?: "chat" | "embeddings") {
     error: error ?? null,
   };
 }
+
+export function useAllModels() {
+  return useModels(undefined, "chat");
+}

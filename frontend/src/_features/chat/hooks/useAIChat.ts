@@ -11,6 +11,7 @@ import {
   type StreamChunk,
 } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
+import { useChatModelStore } from "@/src/store/chat-model";
 import type { ChatMessage } from "@/src/shared/types";
 
 const STREAMING_PREFIX = "local-assistant";
@@ -26,6 +27,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const createSession = useCreateChatSession();
+  const { provider: modelProvider, model: modelId } = useChatModelStore();
 
   const { messages: storedMessages, isLoading: messagesLoading } = useChatMessages(
     sessionId ?? undefined,
@@ -126,7 +128,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         } else if (chunk.type === "error") {
           toast.error(chunk.error);
         }
-      });
+      }, modelId ?? undefined, modelProvider ?? undefined);
 
       setLiveMessages([]);
       setIngestionProgress(null);
