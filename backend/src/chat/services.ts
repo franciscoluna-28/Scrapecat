@@ -28,7 +28,7 @@ function toMessageDTO(row: Awaited<ReturnType<typeof chatSessionsStore.addMessag
   };
 }
 
-export async function createChatSession(projectId: string) {
+export async function createChatSession(projectId: string, anonymousId: string) {
   const project = await projectsStore.getProjectById({ id: projectId });
   if (!project) {
     throw new Error("Project not found");
@@ -36,6 +36,7 @@ export async function createChatSession(projectId: string) {
   const row = await chatSessionsStore.createSession({
     projectId,
     title: "New chat",
+    anonymousId,
   });
   return {
     id: row.id,
@@ -46,8 +47,8 @@ export async function createChatSession(projectId: string) {
   };
 }
 
-export async function listChatSessions(projectId?: string) {
-  const rows = await chatSessionsStore.listSessions({ projectId });
+export async function listChatSessions(projectId?: string, anonymousId?: string) {
+  const rows = await chatSessionsStore.listSessions({ projectId, anonymousId });
   return rows.map((r) => ({
     id: r.id,
     projectId: r.projectId,

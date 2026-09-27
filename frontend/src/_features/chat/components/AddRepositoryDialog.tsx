@@ -6,6 +6,7 @@ import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUr
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
 import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
 import { useGitHubConnection } from "@/src/_features/chat/services/git-api";
+import { IS_DEMO } from "@/src/shared/constants";
 import type { GitHubRepository } from "@/src/shared/types";
 
 type Props = {
@@ -51,7 +52,9 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           </DialogDescription>
         </DialogHeader>
 
-        {!connected ? (
+        {/* Demo mode never asks visitors for a GitHub token — server-side env
+            keys handle GitHub. BYOK is hidden entirely. */}
+        {!connected && !IS_DEMO ? (
           <div className="space-y-4">
             <GitHubConnectForm />
             <p className="text-xs text-muted-foreground">

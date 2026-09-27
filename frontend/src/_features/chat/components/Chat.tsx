@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActiveProjectStore } from "@/src/store/active-project";
@@ -19,6 +19,7 @@ import { useBranches } from "@/src/_features/chat/services/git-api";
 import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
+import { IS_DEMO, DEMO_DEFAULT_REPO } from "@/src/shared/constants";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
@@ -47,7 +48,13 @@ export function Chat() {
   useEffect(() => {
     if (!projectsLoading && projects.length > 0 && !projectId) {
       const stored = useActiveProjectStore.getState().lastProjectId;
-      const target = stored && projects.find((p) => p.id === stored) ? stored : projects[0].id;
+      // Demo always onboard onto the demo repo (formbricks by default) so the
+      // first interaction is a loaded repo, not setup.
+      const demoDefault = IS_DEMO
+        ? projects.find((p) => p.repositoryName === DEMO_DEFAULT_REPO)
+        : undefined;
+      const target =
+        (demoDefault ?? projects.find((p) => p.id === stored))?.id ?? projects[0].id;
       setLastProjectId(target);
       const p = new URLSearchParams(searchParams.toString());
       p.set("project", target);
@@ -80,6 +87,23 @@ export function Chat() {
 
   const { messages, messagesLoading, streamingId, isStreaming, ingestionProgress, input, setInput, sendMessage, bottomRef } =
     useAIChat({ projectId, sessionId, branch });
+
+  // Demo: canned questions navigate here with a `q` param; send it once the
+  // project is ready, then drop the param so it isn't re-run on refresh.
+  const q = searchParams.get("q");
+  const autoSentRef = useRef<string | null>(null);
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
+  useEffect(() => {
+    if (!projectId || !q || isStreaming || messagesLoading) return;
+    if (autoSentRef.current === q) return;
+    autoSentRef.current = q;
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("q");
+    router.replace(`/app?${p.toString()}`, { scroll: false });
+    void sendMessageRef.current(q);
+  }, [q, projectId, isStreaming, messagesLoading, router, searchParams]);
 
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
@@ -123,7 +147,9 @@ export function Chat() {
               />
               <ChatSuggestions onSelect={sendMessage} />
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
+                {IS_DEMO
+                  ? "Demo mode: read-only commit metadata (messages, dates, authors, file names). No code, no API keys, no write access."
+                  : "Answers are grounded in the project’s ingested commits. Sources are shown as citations."}
               </p>
             </div>
           </div>

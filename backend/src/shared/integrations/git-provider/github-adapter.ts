@@ -63,6 +63,21 @@ export class GithubAdapter implements GitProvider {
   }
 
   /**
+   * Search public repositories without authentication. Used when no GitHub
+   * token is configured so the demo still works with public repos.
+   */
+  async searchPublicRepositories(query: string, perPage = 10): Promise<Repository[]> {
+    const unauthed = new MyOctokit();
+    const { data } = await unauthed.request("GET /search/repositories", {
+      q: `${query} is:public`,
+      sort: "updated",
+      order: "desc",
+      per_page: perPage,
+    });
+    return (data.items || []).map(toRepository);
+  }
+
+  /**
    * Lists every branch of a repository, walking pages with a simple loop.
    * Discovery only — commits are read from the local archive, never the API.
    */

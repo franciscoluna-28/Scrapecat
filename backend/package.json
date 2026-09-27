@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "build:demo": "pnpm demo:data && pnpm build",
+    "demo:data": "tsx scripts/build-demo-data.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:reset": "tsx scripts/reset-db.ts",
@@ -16,6 +18,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/swagger": "^9.4.2",
     "@fastify/swagger-ui": "^5.2.2",
     "@octokit/core": "^7.0.6",

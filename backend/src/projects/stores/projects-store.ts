@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db, DbOrTx, Tx } from "@/db/client";
+import { db, DbOrTx, Tx, isInMemoryMode } from "@/db/client";
+import * as memory from "@/db/memory";
 import { projects, type GitProvider } from "@/db/schema";
 import { commitChunks } from "@/db/schema";
 
@@ -18,6 +19,7 @@ export async function upsertProject({
   input: ProjectInput;
   tx?: Tx;
 }) {
+  if (isInMemoryMode) return memory.upsertProject({ input });
   const gitProvider = input.gitProvider ?? "github";
   const [row] = await (tx || db)
     .insert(projects)
@@ -45,6 +47,7 @@ export async function upsertProject({
 }
 
 export async function listProjects(opts?: { tx?: DbOrTx }) {
+  if (isInMemoryMode) return memory.listProjects();
   const client = opts?.tx || db;
   return client
     .select()
@@ -53,6 +56,7 @@ export async function listProjects(opts?: { tx?: DbOrTx }) {
 }
 
 export async function listIndexedBranches(projectId: string, tx?: DbOrTx) {
+  if (isInMemoryMode) return memory.listIndexedBranches(projectId);
   const client = tx || db;
   const rows = await client
     .selectDistinct({ branch: commitChunks.branch })
@@ -68,6 +72,7 @@ export async function getProjectById({
   id: string;
   tx?: DbOrTx;
 }) {
+  if (isInMemoryMode) return memory.getProjectById({ id });
   const [row] = await (tx || db)
     .select()
     .from(projects)
@@ -86,6 +91,9 @@ export async function getProjectByProviderId({
   providerProjectId: string;
   tx?: DbOrTx;
 }) {
+  if (isInMemoryMode) {
+    return memory.getProjectByProviderId({ gitProvider, providerProjectId });
+  }
   const client = tx || db;
   const [row] = await client
     .select()
@@ -107,6 +115,7 @@ export async function getProjectsByIds({
   ids: string[],
   tx?: DbOrTx
 }) {
+  if (isInMemoryMode) return memory.getProjectsByIds({ ids });
   if (ids.length === 0) return [];
   const client = tx || db;
   return client.select().from(projects).where(inArray(projects.id, ids));
