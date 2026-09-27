@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_URL } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
+import { getAnonymousId } from "@/src/shared/lib/anonymous-id";
 import type { ChatMessage, ChatSession } from "@/src/shared/types";
 
 export async function prepareProjectBranch(projectId: string, branch: string) {
@@ -109,7 +110,10 @@ export async function streamChatMessage(
 ): Promise<ChatMessage> {
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-anonymous-id": getAnonymousId(),
+    },
     body: JSON.stringify({ content, ...(branch ? { branch } : {}) }),
   });
 
