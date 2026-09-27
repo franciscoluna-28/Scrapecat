@@ -7,6 +7,7 @@ import {
   getLatestCredential,
   deleteCredentialById,
 } from "@/credentials/stores/credentials-store";
+import { env } from "@/config/env";
 import type { CredentialProvider } from "@/db/schema";
 
 const GITHUB_PROVIDER: CredentialProvider = "github";
@@ -29,6 +30,9 @@ async function verifyTokenWithGitHub(token: string): Promise<string | null> {
 }
 
 export async function createGitHubToken(req: FastifyRequest, reply: FastifyReply) {
+  if (env.isDemoMode) {
+    return reply.status(403).send({ error: "GitHub token is managed by the server in demo mode" });
+  }
   const { token } = req.body as { token: string };
 
   const login = await verifyTokenWithGitHub(token);
@@ -65,6 +69,9 @@ export async function getGitHubConnection(_req: FastifyRequest, reply: FastifyRe
 }
 
 export async function deleteGitHubConnection(_req: FastifyRequest, reply: FastifyReply) {
+  if (env.isDemoMode) {
+    return reply.status(403).send({ error: "GitHub token is managed by the server in demo mode" });
+  }
   const stored = await getLatestCredential(GITHUB_PROVIDER);
   if (!stored) {
     return reply.status(404).send({ error: "No connected GitHub account found" });

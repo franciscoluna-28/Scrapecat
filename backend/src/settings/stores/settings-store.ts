@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, isInMemoryMode } from "@/db/client";
+import * as memory from "@/db/memory";
 import { appSettings } from "@/db/schema";
 
 export type SettingsInput = {
@@ -11,6 +12,7 @@ export type SettingsInput = {
 };
 
 export async function getSettings(id: string) {
+  if (isInMemoryMode) return memory.getSettings(id);
   const [row] = await db
     .select()
     .from(appSettings)
@@ -20,6 +22,7 @@ export async function getSettings(id: string) {
 }
 
 export async function upsertSettings(input: SettingsInput) {
+  if (isInMemoryMode) return memory.upsertSettings(input);
   const [row] = await db
     .insert(appSettings)
     .values(input)

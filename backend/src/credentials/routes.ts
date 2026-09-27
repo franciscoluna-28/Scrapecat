@@ -7,6 +7,7 @@ import {
   verifyCredential,
 } from "@/credentials/services";
 import { AddCredentialBody, VerifyCredentialBody, CredentialIdParams } from "@/credentials/schemas";
+import { env } from "@/config/env";
 
 export async function listKeys(
   req: FastifyRequest,
@@ -15,6 +16,8 @@ export async function listKeys(
   const provider = (req.query as { provider?: string }).provider;
 
   try {
+    // Demo deployments don't expose BYOK — the server's env keys are used.
+    if (env.isDemoMode) return reply.send({ keys: [] });
     const keys = await listCredentials(provider);
     return reply.send({ keys });
   } catch (error) {
@@ -27,6 +30,9 @@ export async function addKey(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
+  if (env.isDemoMode) {
+    return reply.status(403).send({ error: "API keys are managed by the server in demo mode" });
+  }
   const { provider, key } = req.body as Static<typeof AddCredentialBody>;
 
   try {
@@ -45,6 +51,9 @@ export async function deleteKey(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
+  if (env.isDemoMode) {
+    return reply.status(403).send({ error: "API keys are managed by the server in demo mode" });
+  }
   const { id } = req.params as Static<typeof CredentialIdParams>;
 
   try {

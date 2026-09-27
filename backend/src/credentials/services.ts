@@ -1,5 +1,7 @@
 import { getProviderConfig, isProviderSupported } from "@/shared/integrations/providers/registry";
 import { encrypt, decrypt, maskApiKey } from "@/credentials/encryption";
+import { env } from "@/config/env";
+import { isInMemoryMode } from "@/db/client";
 import type { CredentialProvider } from "@/db/schema";
 import * as credentialsStore from "@/credentials/stores/credentials-store";
 
@@ -60,6 +62,15 @@ export async function verifyCredential(provider: string, key: string): Promise<b
 
 export async function resolveApiKey(provider: string): Promise<string | null> {
   if (!isProviderSupported(provider)) return null;
+
+  // In-memory mode has no credentials table — resolve straight from env vars.
+  if (isInMemoryMode) {
+    const config = getProviderConfig(provider);
+    const value = config
+      ? (env as unknown as Record<string, string>)[config.envKey] ?? ""
+      : "";
+    return value || null;
+  }
 
   const row = await credentialsStore.getLatestCredential(provider as CredentialProvider);
   if (!row) return null;
