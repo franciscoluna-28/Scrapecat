@@ -22,12 +22,19 @@ export async function listRepositories(
   const { type, sort, direction, per_page } = req.query as Static<typeof RepositoriesQuery>;
 
   try {
-    const repositories = await getGitProvider(await resolveGithubToken()).listRepositories({
-      type: type || "all",
-      sort: sort || "updated",
-      direction: direction || "desc",
-      perPage: per_page,
-    });
+    const token = await resolveGithubToken();
+    if (token) {
+      const repositories = await getGitProvider(token).listRepositories({
+        type: type || "all",
+        sort: sort || "updated",
+        direction: direction || "desc",
+        perPage: per_page,
+      });
+      return reply.send(repositories);
+    }
+    // No token — fall back to public repo search so demo works without API keys
+    const provider = getGitProvider(null);
+    const repositories = await provider.searchPublicRepositories("stars:>100", per_page || 10);
     return reply.send(repositories);
   } catch (error) {
     console.error("Error fetching repositories:", error);
