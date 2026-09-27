@@ -119,7 +119,7 @@ describe("chat routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ sessions: [session] });
-    expect(mockListSessions).toHaveBeenCalledWith(PROJECT_ID);
+    expect(mockListSessions).toHaveBeenCalledWith(PROJECT_ID, "anonymous");
   });
 
   it("returns messages for a session", async () => {

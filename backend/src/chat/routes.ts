@@ -17,10 +17,15 @@ import {
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { applyCorsToRawResponse } from "@/shared/cors-raw";
 
+function getAnonymousId(req: FastifyRequest): string {
+  return (req.headers["x-anonymous-id"] as string) || "anonymous";
+}
+
 export async function createSession(req: FastifyRequest, reply: FastifyReply) {
   const { projectId } = req.body as Static<typeof CreateSessionBody>;
+  const anonymousId = getAnonymousId(req);
   try {
-    const session = await createChatSession(projectId);
+    const session = await createChatSession(projectId, anonymousId);
     return reply.status(201).send(session);
   } catch (error) {
     const message = (error as Error)?.message ?? "Failed to create chat session";
@@ -31,8 +36,9 @@ export async function createSession(req: FastifyRequest, reply: FastifyReply) {
 
 export async function listSessions(req: FastifyRequest, reply: FastifyReply) {
   const { projectId } = req.query as Static<typeof ChatSessionsQuery>;
+  const anonymousId = getAnonymousId(req);
   try {
-    const sessions = await listChatSessions(projectId);
+    const sessions = await listChatSessions(projectId, anonymousId);
     return reply.send({ sessions });
   } catch {
     return reply.status(500).send({ error: "Failed to list chat sessions" });
@@ -41,6 +47,7 @@ export async function listSessions(req: FastifyRequest, reply: FastifyReply) {
 
 export async function getMessages(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
+  const anonymousId = getAnonymousId(req);
   try {
     const messages = await getChatMessages(id);
     if (!messages) {
@@ -54,7 +61,15 @@ export async function getMessages(req: FastifyRequest, reply: FastifyReply) {
 
 export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
+  const anonymousId = getAnonymousId(req);
   try {
+    const session = await chatSessionsStore.getSession({ id });
+    if (!session) {
+      return reply.status(404).send({ error: "Chat session not found" });
+    }
+    if (session.anonymousId && session.anonymousId !== anonymousId) {
+      return reply.status(403).send({ error: "Access denied" });
+    }
     const deleted = await deleteChatSession(id);
     if (!deleted) {
       return reply.status(404).send({ error: "Chat session not found" });
@@ -78,10 +93,14 @@ function sendFrame(res: import("node:http").ServerResponse, data: unknown) {
 export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
   const { content, branch } = req.body as Static<typeof SendMessageBody>;
+  const anonymousId = getAnonymousId(req);
 
   const session = await chatSessionsStore.getSession({ id });
   if (!session) {
     return reply.status(404).send({ error: "Chat session not found" });
+  }
+  if (session.anonymousId && session.anonymousId !== anonymousId) {
+    return reply.status(403).send({ error: "Access denied" });
   }
 
   reply.hijack();
