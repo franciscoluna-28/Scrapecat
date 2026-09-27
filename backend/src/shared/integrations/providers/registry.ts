@@ -19,6 +19,13 @@ export const PROVIDER_REGISTRY = {
     envKey: "OPENAI_API_KEY",
     verifyUrl: "https://api.openai.com/v1/models",
   },
+  ollama: {
+    sdk: "openai-compatible",
+    defaultModel: "llama3.2:1b",
+    baseUrl: "",
+    envKey: "OLLAMA_API_KEY",
+    verifyUrl: "",
+  },
 } as const;
 
 export type ProviderName = keyof typeof PROVIDER_REGISTRY;

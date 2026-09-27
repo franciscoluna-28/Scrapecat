@@ -1,66 +1,26 @@
 import type { ChatCitation } from "@/db/schema";
 import { embedTexts } from "@/projects/embeddings";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
-import type { CommitSearchResult } from "@/projects/stores/commit-chunks-store";
 
-export const RETRIEVAL_LIMIT = 30;
+export const RETRIEVAL_LIMIT = 20;
 
-/**
- * Minimum cosine similarity (1 - cosine distance) for a semantic-search hit to
- * be cited. Small or precise questions therefore cite only commits that are
- * actually about the topic instead of always filling up to RETRIEVAL_LIMIT.
- * Keyword hits are exempt: they matched the query text literally.
- */
-export const MIN_SIMILARITY = 0.3;
+/** Cosine distance threshold: rows beyond this are too unrelated to cite. */
+export const MAX_COSINE_DISTANCE = 0.45;
 
-/**
- * Relaxed floor when the query carries an explicit date window: the window is
- * the primary filter, so topical similarity matters less. If nothing clears
- * even this floor, the window's most important commits are returned anyway
- * (ranked by importance) instead of an empty result — "what shipped in
- * August" must not fail just because commit messages never say "shipped".
- */
-export const WINDOWED_MIN_SIMILARITY = 0.15;
-
-const CANDIDATE_POOL = 120;
-
-const COMMIT_BOOST: Record<string, number> = {
-  "feat!": 5,
-  feat: 4,
-  "fix!": 4,
-  "refactor!": 3,
-  breaking: 4,
-  fix: 2,
-  refactor: 1,
-  docs: 0.5,
-  chore: 0.5,
-  test: 0.5,
-};
-
-function importanceScore(row: CommitSearchResult, similarity: number): number {
-  let boost = 0;
-  const msg = row.commitMessage;
-  const prefix = msg.match(/^(\w+!?)(?:\(.+?\))?!?/)?.[1];
-  if (prefix) boost = COMMIT_BOOST[prefix.toLowerCase()] ?? 0;
-  if (msg.startsWith("Merge pull request")) boost += 3;
-  if (/breaking|BREAKING/i.test(msg)) boost += 4;
-  const files = row.metadata?.filesChanged?.length ?? 0;
-  if (files >= 20) boost += 3;
-  else if (files >= 10) boost += 2;
-  else if (files >= 5) boost += 1;
-  return similarity * 0.5 + boost * 0.5;
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
-function similarityOf(row: CommitSearchResult, index: number): number {
-  if (row.distance == null) {
-    // Keyword fallback has no score — rank position is the only signal.
-    return 1 - index / CANDIDATE_POOL;
-  }
-  // pgvector cosine distance is in [0, 2]; clamp similarity into [0, 1].
-  return Math.min(1, Math.max(0, 1 - row.distance));
+function queryText(opts: { query: string; startDate?: Date; endDate?: Date }): string {
+  // Stored embeddings are "YYYY-MM-DD <message>". Only prepend a date
+  // when the caller explicitly set a window — that date is derived from
+  // actual commits so it aligns. Unscoped queries (e.g. "last feature")
+  // embed raw text so the vector match is purely topical.
+  const date = opts.endDate ?? opts.startDate;
+  return date ? `${fmtDate(date)} ${opts.query}` : opts.query;
 }
 
-function toCitation(row: CommitSearchResult): ChatCitation {
+function toCitation(row: commitChunksStore.CommitSearchResult): ChatCitation {
   return {
     commitSha: row.commitSha,
     commitMessage: row.commitMessage,
@@ -86,14 +46,14 @@ export async function retrieveCommits(opts: {
     embeddedOnly: true,
   });
 
-  let rows: (CommitSearchResult & { _similarity?: number })[] | null = null;
+  let rows: commitChunksStore.CommitSearchResult[] | null = null;
   if (embeddedCount > 0) {
     try {
-      const [embedding] = await embedTexts([opts.query]);
+      const [embedding] = await embedTexts([queryText(opts)]);
       rows = await commitChunksStore.semanticSearchCommits({
         projectId: opts.projectId,
         embedding,
-        limit: CANDIDATE_POOL,
+        limit,
         branch: opts.branch,
         startDate: opts.startDate,
         endDate: opts.endDate,
@@ -104,34 +64,21 @@ export async function retrieveCommits(opts: {
   }
 
   if (!rows || rows.length === 0) {
+    // Keyword is a coarse text-match fallback — keep the ceiling low
+    // since it has no real distance signal to filter on.
     rows = await commitChunksStore.keywordSearchCommits({
       projectId: opts.projectId,
       query: opts.query,
-      limit: CANDIDATE_POOL,
+      limit: 10,
       branch: opts.branch,
       startDate: opts.startDate,
       endDate: opts.endDate,
     });
   }
 
-  if (!rows || rows.length === 0) return [];
-
-  const hasWindow = Boolean(opts.startDate || opts.endDate);
-  const threshold = hasWindow ? WINDOWED_MIN_SIMILARITY : MIN_SIMILARITY;
-
-  const scored = rows
-    .map((row, i) => {
-      const similarity = similarityOf(row, i);
-      return { row, similarity, score: importanceScore(row, similarity) };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const relevant = scored.filter(
-    (s) => s.row.distance == null || s.similarity >= threshold,
-  );
-  // Date-scoped questions always get the window's top commits: when nothing
-  // is topically similar enough, importance inside the window wins.
-  const picked = relevant.length > 0 ? relevant : hasWindow ? scored : [];
-
-  return picked.slice(0, limit).map((s) => toCitation(s.row));
+  // Keyword results (distance = null) have no vector score, only a coarse
+  // text match. Include them but keep the ceiling low — they're a fallback.
+  return rows
+    .filter((r) => r.distance == null || r.distance <= MAX_COSINE_DISTANCE)
+    .map(toCitation);
 }

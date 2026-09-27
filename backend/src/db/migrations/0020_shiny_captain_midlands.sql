@@ -1,0 +1,1 @@
+ALTER TABLE "commit_chunks" ALTER COLUMN "embedding" SET DATA TYPE vector(768);

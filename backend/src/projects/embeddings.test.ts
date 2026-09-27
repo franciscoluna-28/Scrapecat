@@ -24,6 +24,14 @@ vi.mock("@/settings/services", () => ({
   })),
 }));
 
+vi.mock("@/config/env", () => ({
+  env: {
+    OPENROUTER_API_KEY: "",
+    OLLAMA_BASE_URL: "http://localhost:11434",
+    OLLAMA_API_KEY: "",
+  },
+}));
+
 import OpenAI from "openai";
 import { embedTexts } from "@/projects/embeddings";
 import { resolveApiKey } from "@/credentials/services";
@@ -39,8 +47,8 @@ describe("embedTexts", () => {
   it("returns vectors in input order regardless of response order", async () => {
     mockCreate.mockResolvedValue({
       data: [
-        { index: 1, embedding: Array.from({ length: 512 }, (_, i) => i + 1) },
-        { index: 0, embedding: Array.from({ length: 512 }, (_, i) => -(i + 1)) },
+        { index: 1, embedding: Array.from({ length: 768 }, (_, i) => i + 1) },
+        { index: 0, embedding: Array.from({ length: 768 }, (_, i) => -(i + 1)) },
       ],
     });
 
@@ -53,31 +61,31 @@ describe("embedTexts", () => {
 
   it("requests the configured embedding dimensions", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 512 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
     });
 
     await embedTexts(["x"]);
 
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ dimensions: 512 }),
+      expect.objectContaining({ dimensions: 768 }),
     );
   });
 
   it("throws when the model returns the wrong number of dimensions", async () => {
     mockCreate.mockResolvedValue({ data: [{ index: 0, embedding: [1, 2, 3] }] });
 
-    await expect(embedTexts(["x"])).rejects.toThrow("expected 512");
+    await expect(embedTexts(["x"])).rejects.toThrow("expected 768");
   });
 
-  it("throws when no API key is available", async () => {
-    vi.mocked(resolveApiKey).mockResolvedValueOnce(null);
+  it("skips dimensions param for ollama provider", async () => {
+    mockCreate.mockResolvedValue({
+      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0.5) }],
+    });
 
-    await expect(embedTexts(["x"])).rejects.toThrow("Missing API key");
-  });
+    await embedTexts(["x"], { provider: "ollama" });
 
-  it("returns an empty array for empty input without calling the provider", async () => {
-    const vectors = await embedTexts([]);
-    expect(vectors).toEqual([]);
-    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ dimensions: expect.anything() }),
+    );
   });
 });

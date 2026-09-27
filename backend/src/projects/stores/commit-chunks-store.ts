@@ -18,6 +18,15 @@ export function contentHashOf(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** The text actually fed to the embedding model: date + message. */
+export function embeddingSource(date: Date, message: string): string {
+  return `${fmtDate(date)} ${message}`;
+}
+
 export async function upsertCommitChunks({
   inputs,
   tx,
@@ -37,7 +46,7 @@ export async function upsertCommitChunks({
         branch: i.branch ?? "main",
         commitMessage: i.commitMessage,
         author: i.author ?? null,
-        contentHash: contentHashOf(i.commitMessage),
+        contentHash: contentHashOf(embeddingSource(i.committedAt, i.commitMessage)),
         metadata: i.metadata ?? {},
         committedAt: i.committedAt,
       })),

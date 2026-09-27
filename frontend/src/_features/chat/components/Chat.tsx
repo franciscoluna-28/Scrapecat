@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActiveProjectStore } from "@/src/store/active-project";
+import { useChatBranchStore } from "@/src/store/chat-branch";
 import { BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,10 +30,10 @@ export function Chat() {
   const queryClient = useQueryClient();
   const { projects, isLoading: projectsLoading } = useProjects();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
+  const { getBranch, setBranch } = useChatBranchStore();
 
   const projectId = searchParams.get("project");
   const sessionId = searchParams.get("session");
-  const branch = searchParams.get("branch");
 
   const activeProjectData = projects.find((p) => p.id === projectId) ?? null;
   const activeProject = activeProjectData?.repositoryName ?? null;
@@ -41,6 +42,8 @@ export function Chat() {
     activeProjectData?.providerOwner ?? "",
     activeProjectData?.repositoryName ?? "",
   );
+
+  const branch = projectId ? getBranch(projectId, defaultBranch) : null;
 
   useEffect(() => {
     if (!projectsLoading && projects.length > 0 && !projectId) {
@@ -66,24 +69,23 @@ export function Chat() {
   }, [projectId, setLastProjectId]);
 
   useEffect(() => {
-    if (defaultBranch && projectId && !branch) {
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("branch", defaultBranch);
-      router.replace(`/app?${p.toString()}`);
+    if (defaultBranch && projectId) {
+      const stored = getBranch(projectId, null);
+      if (!stored) {
+        setBranch(projectId, defaultBranch);
+      }
     }
-  }, [defaultBranch, projectId, branch, router, searchParams]);
+  }, [defaultBranch, projectId, getBranch, setBranch]);
 
   const handleBranchChange = async (branchName: string) => {
     if (!projectId) return;
     await prepareProjectBranch(projectId, branchName);
     await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
     toast.success(`Ready to chat on ${branchName}`);
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("branch", branchName);
-    router.push(`/app?${p.toString()}`);
+    setBranch(projectId, branchName);
   };
 
-  const { messages, messagesLoading, streamingId, isStreaming, input, setInput, sendMessage, bottomRef } =
+  const { messages, messagesLoading, streamingId, isStreaming, ingestionProgress, input, setInput, sendMessage, bottomRef } =
     useAIChat({ projectId, sessionId, branch });
 
   // Demo: canned questions navigate here with a `q` param; send it once the
@@ -127,6 +129,7 @@ export function Chat() {
             isLoading={messagesLoading}
             sessionId={sessionId}
             projectName={activeProject}
+            ingestionProgress={ingestionProgress}
             bottomRef={bottomRef}
           />
           <div className="sticky bottom-0 z-10 bg-background px-4 pt-2 pb-3">

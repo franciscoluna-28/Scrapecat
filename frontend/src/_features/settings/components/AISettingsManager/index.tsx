@@ -13,15 +13,13 @@ import { useModels } from "@/src/shared/services/ai-models";
 import { AISettingsCard } from "@/src/_features/settings/components/AISettingsCard";
 
 type Draft = {
-  reportProvider: AISettings["reportProvider"];
-  reportModel: string;
+  embeddingProvider: AISettings["embeddingProvider"];
   embeddingModel: string;
 };
 
 function draftFrom(settings?: AISettings): Draft {
   return {
-    reportProvider: settings?.reportProvider ?? "openrouter",
-    reportModel: settings?.reportModel ?? "",
+    embeddingProvider: settings?.embeddingProvider ?? "openrouter",
     embeddingModel: settings?.embeddingModel ?? "",
   };
 }
@@ -43,46 +41,37 @@ export function AISettingsManager() {
     setDraft(draftFrom(settings));
   }
 
-  const { reportProvider, reportModel, embeddingModel } = draft;
-  const setReportProvider = (reportProvider: AISettings["reportProvider"]) =>
-    setDraft((d) => ({ ...d, reportProvider }));
-  const setReportModel = (reportModel: string) =>
-    setDraft((d) => ({ ...d, reportModel }));
+  const { embeddingProvider, embeddingModel } = draft;
+  const setEmbeddingProvider = (embeddingProvider: AISettings["embeddingProvider"]) =>
+    setDraft((d) => ({ ...d, embeddingProvider }));
   const setEmbeddingModel = (embeddingModel: string) =>
     setDraft((d) => ({ ...d, embeddingModel }));
 
   const {
-    models: chatModels,
-    isLoading: chatModelsLoading,
-  } = useModels(reportProvider);
-
-  const {
     models: embeddingModels,
     isLoading: embeddingModelsLoading,
-  } = useModels("openrouter", "embeddings");
+  } = useModels(embeddingProvider, "embeddings");
 
   const dirty =
     !!settings &&
-    (reportProvider !== settings.reportProvider ||
-      reportModel !== settings.reportModel ||
+    (embeddingProvider !== settings.embeddingProvider ||
       embeddingModel !== settings.embeddingModel);
 
   const handleSave = async () => {
-    if (!reportModel || !embeddingModel) {
-      toast.error("Select a model for both report generation and embeddings");
+    if (!embeddingModel) {
+      toast.error("Select an embedding model");
       return;
     }
 
     try {
       await updateSettings.mutateAsync({
-        reportProvider,
-        reportModel,
-        embeddingProvider: "openrouter",
+        ...settings!,
+        embeddingProvider,
         embeddingModel,
       });
-      toast.success("AI settings saved");
+      toast.success("Embedding settings saved");
     } catch {
-      toast.error("Failed to save AI settings");
+      toast.error("Failed to save settings");
     }
   };
 
@@ -91,7 +80,6 @@ export function AISettingsManager() {
       <Card>
         <CardContent className="p-6 space-y-3">
           <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </CardContent>
       </Card>
@@ -102,7 +90,7 @@ export function AISettingsManager() {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <p className="text-sm text-red-600">Failed to load AI settings</p>
+          <p className="text-sm text-red-600">Failed to load settings</p>
         </CardContent>
       </Card>
     );
@@ -110,14 +98,10 @@ export function AISettingsManager() {
 
   return (
     <AISettingsCard
-      reportProvider={reportProvider}
-      setReportProvider={setReportProvider}
-      reportModel={reportModel}
-      setReportModel={setReportModel}
+      embeddingProvider={embeddingProvider}
+      setEmbeddingProvider={setEmbeddingProvider}
       embeddingModel={embeddingModel}
       setEmbeddingModel={setEmbeddingModel}
-      chatModels={chatModels}
-      chatModelsLoading={chatModelsLoading}
       embeddingModels={embeddingModels}
       embeddingModelsLoading={embeddingModelsLoading}
       mounted={mounted}

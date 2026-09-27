@@ -5,15 +5,13 @@ import { IS_DEMO, DEMO_QUESTIONS } from "@/src/shared/constants";
 
 type ChatSuggestionItem = {
   suggestion: string;
-  label?: string;
   variant: "default" | "secondary";
 };
 
 const CHAT_SUGGESTIONS: ChatSuggestionItem[] = [
   {
-    suggestion: "Summarize this week as a report",
-    label: "Generate report",
-    variant: "default",
+    suggestion: "What has engineering built this week?",
+    variant: "secondary",
   },
   { suggestion: "What changed in the last 7 days?", variant: "secondary" },
   { suggestion: "What feature is being built?", variant: "secondary" },
@@ -43,9 +41,7 @@ export function ChatSuggestions({ onSelect }: ChatSuggestionsProps) {
           suggestion={item.suggestion}
           onClick={onSelect}
           variant={item.variant}
-        >
-          {item.label}
-        </Suggestion>
+        />
       ))}
     </Suggestions>
   );

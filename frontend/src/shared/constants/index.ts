@@ -6,6 +6,12 @@ export const PROVIDERS = [
   },
   { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-chat" },
   { id: "openai", label: "OpenAI", defaultModel: "gpt-4o" },
+  { id: "ollama", label: "Ollama (Local)", defaultModel: "llama3.2:1b" },
+] as const;
+
+export const EMBEDDING_PROVIDERS = [
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "ollama", label: "Ollama (Local)" },
 ] as const;
 
 // Demo mode is opt-in via NEXT_PUBLIC_DEMO_MODE="true". When enabled the UI

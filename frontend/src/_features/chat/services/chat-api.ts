@@ -96,7 +96,8 @@ export function useDeleteChatSession() {
 export type StreamChunk =
   | { type: "token"; content: string }
   | { type: "done"; message: ChatMessage }
-  | { type: "error"; error: string };
+  | { type: "error"; error: string }
+  | { type: "progress"; stage: string; message: string; done?: number; total?: number };
 
 /**
  * Streams an assistant reply over SSE via fetch. Calls `onChunk` for each frame;
@@ -107,6 +108,8 @@ export async function streamChatMessage(
   content: string,
   branch: string | null,
   onChunk: (chunk: StreamChunk) => void,
+  model?: string,
+  provider?: string,
 ): Promise<ChatMessage> {
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
@@ -115,6 +118,13 @@ export async function streamChatMessage(
       "x-anonymous-id": getAnonymousId(),
     },
     body: JSON.stringify({ content, ...(branch ? { branch } : {}) }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content,
+      ...(branch ? { branch } : {}),
+      ...(model ? { model } : {}),
+      ...(provider ? { provider } : {}),
+    }),
   });
 
   if (!res.ok || !res.body) {
@@ -140,6 +150,8 @@ export async function streamChatMessage(
       try {
         const parsed = JSON.parse(line.replace(/^data:\s*/, "")) as StreamChunk;
         if (parsed.type === "token") {
+          onChunk(parsed);
+        } else if (parsed.type === "progress") {
           onChunk(parsed);
         } else if (parsed.type === "done") {
           doneMessage = parsed.message;

@@ -186,7 +186,7 @@ export async function ingestCommits(opts: {
   }
 
   let embedded = 0;
-  if (chunksWritten > 0) {
+  {
     onProgress?.("embedding", "Embedding commit summaries");
     const result = await timed("ingest.embedNewChunks", base, () =>
       embedNewChunks(projectId),
