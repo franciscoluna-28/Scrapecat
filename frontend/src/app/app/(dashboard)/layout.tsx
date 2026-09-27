@@ -16,10 +16,12 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
 import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
+import { DemoOnboarding } from "@/src/_features/demo/components/DemoOnboarding";
 
 function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider delayDuration={0}>
+      <DemoOnboarding />
       <SidebarProvider defaultOpen={true}>
         <Sidebar collapsible="icon">
           <SidebarHeader>

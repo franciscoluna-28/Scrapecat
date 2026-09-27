@@ -1,6 +1,7 @@
 "use client";
 
 import { Suggestions, Suggestion } from "@/src/components/ai-elements/suggestion";
+import { IS_DEMO, DEMO_QUESTIONS } from "@/src/shared/constants";
 
 type ChatSuggestionItem = {
   suggestion: string;
@@ -23,9 +24,20 @@ type ChatSuggestionsProps = {
 };
 
 export function ChatSuggestions({ onSelect }: ChatSuggestionsProps) {
+  // Demo deployments surface the canned questions so a visitor can click one
+  // and immediately get a report with commit citations. The open-source app
+  // keeps its default suggestions.
+  const items: ChatSuggestionItem[] = IS_DEMO
+    ? DEMO_QUESTIONS.map((q) => ({
+        suggestion: q.suggestion,
+        label: q.label,
+        variant: "secondary" as const,
+      }))
+    : CHAT_SUGGESTIONS;
+
   return (
     <Suggestions className="mt-2">
-      {CHAT_SUGGESTIONS.map((item) => (
+      {items.map((item) => (
         <Suggestion
           key={item.suggestion}
           suggestion={item.suggestion}
