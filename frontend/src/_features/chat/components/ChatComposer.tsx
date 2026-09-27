@@ -50,7 +50,7 @@ export function ChatComposer({
           <PromptInputTextarea
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
-            placeholder={`Ask about ${projectName} commits...`}
+            placeholder={projectName ? `Ask about ${projectName} commits...` : "Ask about commits..."}
             disabled={isStreaming}
             className="flex-1"
           />
