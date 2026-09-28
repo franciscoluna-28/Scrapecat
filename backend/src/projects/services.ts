@@ -5,6 +5,8 @@ import { countChunksForProject } from "@/projects/stores/commit-chunks-store";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
+import { getGitProvider } from "@/shared/integrations/git-provider";
+import { resolveGithubToken } from "@/github/token";
 
 /**
  * Ingests a project branch, but is database-first: the database is the source
@@ -16,6 +18,10 @@ import { logger } from "@/shared/logger";
  *   falls back to whatever is already stored.
  * - Self-hosted: clone the branch archive and read commits + file diffs from
  *   local git, falling back to stored rows if the clone/fetch fails.
+ *
+ * Returns the branch actually ingested — in demo mode the stored default can be
+ * stale (repos move between `main` and `master`), so the real default is
+ * resolved on failure and used for both ingestion and retrieval.
  */
 export async function prepareProjectBranch(projectId: string, branch: string, onProgress?: IngestProgress) {
   const project = await projectsStore.getProjectById({ id: projectId });
@@ -34,20 +40,42 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
-  const ingestOpts = {
-    owner: project.providerOwner,
-    repo: project.repositoryName,
-    branch,
-    projectId,
-    onProgress,
-  };
+  const ingest = (ref: string) =>
+    env.isDemoMode
+      ? ingestCommitsFromApi({
+          owner: project.providerOwner,
+          repo: project.repositoryName,
+          branch: ref,
+          projectId,
+          onProgress,
+        })
+      : ingestCommits({
+          owner: project.providerOwner,
+          repo: project.repositoryName,
+          branch: ref,
+          projectId,
+          onProgress,
+        });
 
   try {
-    const result = env.isDemoMode
-      ? await ingestCommitsFromApi(ingestOpts)
-      : await ingestCommits(ingestOpts);
-    return { branch, ...result };
+    return { branch, ...(await ingest(branch)) };
   } catch (error) {
+    // Demo: the stored default branch can be stale. Resolve the repo's true
+    // default and retry once so a `main`/`master` mismatch self-corrects.
+    if (env.isDemoMode) {
+      try {
+        const actual = await getGitProvider(await resolveGithubToken()).getDefaultBranch(
+          project.providerOwner,
+          project.repositoryName,
+        );
+        if (actual && actual !== branch && isDemoBranchAllowed(actual, project.defaultBranch)) {
+          logger.warn({ projectId, branch, actual }, "ingest failed; retrying with repo default branch");
+          return { branch: actual, ...(await ingest(actual)) };
+        }
+      } catch {
+        // fall through to stored rows
+      }
+    }
     // Fallback to the database whenever ingestion fails — a visitor should
     // still get answers from already-ingested commits.
     if (existing > 0) {

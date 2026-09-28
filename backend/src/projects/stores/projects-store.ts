@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { projects, type GitProvider } from "@/db/schema";
 import { commitChunks } from "@/db/schema";
@@ -94,6 +94,37 @@ export async function getProjectByProviderId({
       and(
         eq(projects.gitProvider, gitProvider),
         eq(projects.providerProjectId, providerProjectId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Finds a project by its human-readable owner/repo, case-insensitively. Used to
+ * reuse an existing project no matter which id format created it (the external
+ * id has historically been `owner/repo` or the numeric provider id).
+ */
+export async function getProjectByOwnerRepo({
+  gitProvider,
+  providerOwner,
+  repositoryName,
+  tx,
+}: {
+  gitProvider: GitProvider;
+  providerOwner: string;
+  repositoryName: string;
+  tx?: DbOrTx;
+}) {
+  const client = tx || db;
+  const [row] = await client
+    .select()
+    .from(projects)
+    .where(
+      and(
+        eq(projects.gitProvider, gitProvider),
+        sql`lower(${projects.providerOwner}) = lower(${providerOwner})`,
+        sql`lower(${projects.repositoryName}) = lower(${repositoryName})`,
       ),
     )
     .limit(1);

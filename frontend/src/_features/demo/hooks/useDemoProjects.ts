@@ -55,10 +55,10 @@ export function useDemoProjects() {
       const res = await apiClient.POST("/api/v1/projects", {
         body: {
           gitProvider: "github",
-          providerProjectId: `${demo.owner}/${demo.repo}`,
+          providerProjectId: demo.id,
           providerOwner: demo.owner,
           repositoryName: demo.repo,
-          defaultBranch: "main",
+          defaultBranch: demo.defaultBranch,
         },
       });
       if (res.error || !res.data) return null;
