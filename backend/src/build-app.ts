@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import type { FastifyError } from "fastify";
+import type { FastifyError, FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
@@ -66,8 +66,8 @@ import {
 import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
 import { GitHubConnectionResponse, AddGitHubTokenBody } from "@/github/schemas";
 
-export async function buildApp() {
-  const app = Fastify({ logger: { level: env.LOG_LEVEL } });
+export async function buildApp(instance?: FastifyInstance) {
+  const app = instance ?? Fastify({ logger: { level: env.LOG_LEVEL } });
 
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
     if (error.validation) {
