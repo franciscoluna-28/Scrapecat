@@ -54,10 +54,8 @@ export function Chat() {
     const stored = useActiveProjectStore.getState().lastProjectId;
     const target = projects.find((p) => p.id === stored)?.id ?? projects[0].id;
     setLastProjectId(target);
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("project", target);
-    router.replace(`/app?${p.toString()}`);
-  }, [projectId, projectsLoading, projects, isDemo, router, searchParams, setLastProjectId]);
+    router.replace(`/app?project=${target}`);
+  }, [projectId, projectsLoading, projects, isDemo, router, setLastProjectId]);
 
   useEffect(() => {
     if (projectId) {
@@ -78,9 +76,7 @@ export function Chat() {
     const id = await ensureProject(demo);
     if (id) {
       setLastProjectId(id);
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("project", id);
-      router.push(`/app?${p.toString()}`);
+      router.push(`/app?project=${id}`);
     }
   };
 
@@ -106,7 +102,7 @@ export function Chat() {
     if (!projectId || !q || isStreaming || messagesLoading) return;
     if (autoSentRef.current === q) return;
     autoSentRef.current = q;
-    const p = new URLSearchParams(searchParams.toString());
+    const p = new URLSearchParams(window.location.search);
     p.delete("q");
     router.replace(`/app?${p.toString()}`, { scroll: false });
     void sendMessageRef.current(q);
