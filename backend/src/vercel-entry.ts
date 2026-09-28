@@ -1,13 +1,19 @@
-import type { FastifyInstance } from "fastify";
 import { buildApp } from "@/build-app";
+import { env } from "@/config/env";
+import { logger } from "@/shared/logger";
 
 /**
- * Builds the Fastify app for the Vercel serverless entry. Exported rather than
- * auto-started: the root `server.ts` (the file Vercel detects) imports `fastify`
- * and owns the `listen()` call. This module is bundled by
- * `scripts/build-vercel.mjs`, which resolves the `@/` path aliases Vercel's Node
- * runtime does not support.
+ * Vercel serverless entry. Never imported by the Node/dev runtime — Vercel
+ * bundles this file (via `scripts/build-vercel.mjs`) into `dist/vercel-entry.mjs`
+ * and runs it through the root `server.ts` import.
+ *
+ * Vercel injects env vars directly, so there is no `dotenv` import here.
+ * `app.listen()` is what Vercel captures to route requests into Fastify.
  */
-export function buildVercelApp(instance?: FastifyInstance): Promise<FastifyInstance> {
-  return buildApp(instance);
+async function main() {
+  const app = await buildApp();
+  await app.listen({ port: env.PORT });
+  logger.info({ port: env.PORT }, "backend listening (vercel)");
 }
+
+main();
