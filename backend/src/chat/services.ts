@@ -110,10 +110,14 @@ export async function streamChatMessage(opts: {
 
   await chatSessionsStore.addMessage({ sessionId, role: "user", content });
 
-  // Ensure the branch is ingested before retrieval
-  if (branch) {
-    await prepareProjectBranch(session.projectId, branch, onProgress).catch(() => {});
-  }
+  // Fall back to the project's default branch when the client omits one.
+  const requestedBranch = branch || project?.defaultBranch || "main";
+
+  // Ensure the branch is ingested before retrieval. `prepareProjectBranch`
+  // returns the branch actually ingested (demo self-corrects a stale
+  // main/master default), so retrieval uses the same ref.
+  const prepared = await prepareProjectBranch(session.projectId, requestedBranch, onProgress).catch(() => null);
+  const effectiveBranch = prepared?.branch || requestedBranch;
 
   let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
 
@@ -126,7 +130,7 @@ export async function streamChatMessage(opts: {
     hasTemporalIntent(content)
   ) {
     const DAY_MS = 86_400_000;
-    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: branch ?? undefined });
+    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
     if (latest) {
       dateWindowEnd = latest;
       dateWindowStart = new Date(latest.getTime() - 45 * DAY_MS);
@@ -136,7 +140,7 @@ export async function streamChatMessage(opts: {
   const citations = await retrieveCommits({
     projectId: session.projectId,
     query: filteredQuery,
-    branch: branch || undefined,
+    branch: effectiveBranch,
     startDate: dateWindowStart,
     endDate: dateWindowEnd,
   });
@@ -158,7 +162,7 @@ export async function streamChatMessage(opts: {
     {
       role: "user",
       content: buildUserMessage(content, citations, {
-        branch: branch ?? null,
+        branch: effectiveBranch,
         startDate: dateWindowStart,
         endDate: dateWindowEnd,
         now: new Date(),
@@ -179,7 +183,7 @@ export async function streamChatMessage(opts: {
     sessionId,
     role: "assistant",
     content: result.content,
-    branch: branch ?? null,
+    branch: effectiveBranch,
     citations,
   });
   await chatSessionsStore.touchSession({ id: sessionId });

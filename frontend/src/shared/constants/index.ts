@@ -20,14 +20,24 @@ export const EMBEDDING_PROVIDERS = [
 // unless the env var is set.
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-export type DemoProject = { owner: string; repo: string; label: string };
+export type DemoProject = {
+  /** GitHub numeric repository id — the stable, unique external id. */
+  id: string;
+  owner: string;
+  repo: string;
+  label: string;
+  defaultBranch: string;
+};
 
 // The fixed repositories demo visitors can chat with. They are always shown in
 // the sidebar, and the first one (formbricks) is auto-selected on load so a
-// visitor never starts from an empty workspace.
+// visitor never starts from an empty workspace. `id` is the GitHub numeric repo
+// id (must stay in sync with the backend's canonical id) and `defaultBranch`
+// must match the repo's actual default (formbricks → main, Scrapecat → master)
+// so ingestion targets a branch that exists.
 export const DEMO_PROJECTS: DemoProject[] = [
-  { owner: "formbricks", repo: "formbricks", label: "formbricks" },
-  { owner: "franciscoluna-28", repo: "Scrapecat", label: "Scrapecat" },
+  { id: "500289888", owner: "formbricks", repo: "formbricks", label: "formbricks", defaultBranch: "main" },
+  { id: "1228095278", owner: "franciscoluna-28", repo: "Scrapecat", label: "Scrapecat", defaultBranch: "master" },
 ];
 
 // The repo visitors always land on first in demo mode.

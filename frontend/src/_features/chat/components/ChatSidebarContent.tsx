@@ -164,7 +164,7 @@ export function ChatSidebarContent() {
         </div>
       ) : (
         <>
-          {ALLOW_ADD_REPOS && (
+          {ALLOW_ADD_REPOS && !IS_DEMO && (
             <div className="flex py-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
