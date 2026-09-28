@@ -19,7 +19,8 @@ import { useBranches } from "@/src/_features/chat/services/git-api";
 import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
-import { IS_DEMO, DEMO_DEFAULT_REPO } from "@/src/shared/constants";
+import { useDemoProjects } from "@/src/_features/demo/hooks/useDemoProjects";
+import { IS_DEMO } from "@/src/shared/constants";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
@@ -29,8 +30,10 @@ export function Chat() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { projects, isLoading: projectsLoading } = useProjects();
+  const { isDemo, defaultProject, ensureProject } = useDemoProjects();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
   const { getBranch, setBranch } = useChatBranchStore();
+  const demoBootstrapped = useRef(false);
 
   const projectId = searchParams.get("project");
   const sessionId = searchParams.get("session");
@@ -46,21 +49,42 @@ export function Chat() {
   const branch = projectId ? getBranch(projectId, defaultBranch) : null;
 
   useEffect(() => {
-    if (!projectsLoading && projects.length > 0 && !projectId) {
-      const stored = useActiveProjectStore.getState().lastProjectId;
-      // Demo always onboard onto the demo repo (formbricks by default) so the
-      // first interaction is a loaded repo, not setup.
-      const demoDefault = IS_DEMO
-        ? projects.find((p) => p.repositoryName === DEMO_DEFAULT_REPO)
-        : undefined;
-      const target =
-        (demoDefault ?? projects.find((p) => p.id === stored))?.id ?? projects[0].id;
-      setLastProjectId(target);
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("project", target);
-      router.replace(`/app?${p.toString()}`);
+    if (projectId || projectsLoading) return;
+
+    // Demo always lands on a working project: ensure the default demo repo
+    // exists, then select it. Visitors never start from an empty workspace.
+    if (isDemo) {
+      if (demoBootstrapped.current) return;
+      demoBootstrapped.current = true;
+      void (async () => {
+        const target = await ensureProject(defaultProject);
+        if (!target) return;
+        setLastProjectId(target);
+        const p = new URLSearchParams(searchParams.toString());
+        p.set("project", target);
+        router.replace(`/app?${p.toString()}`);
+      })();
+      return;
     }
-  }, [projectsLoading, projects, projectId, router, searchParams, setLastProjectId]);
+
+    if (projects.length === 0) return;
+    const stored = useActiveProjectStore.getState().lastProjectId;
+    const target = projects.find((p) => p.id === stored)?.id ?? projects[0].id;
+    setLastProjectId(target);
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("project", target);
+    router.replace(`/app?${p.toString()}`);
+  }, [
+    projectId,
+    projectsLoading,
+    projects,
+    isDemo,
+    defaultProject,
+    ensureProject,
+    router,
+    searchParams,
+    setLastProjectId,
+  ]);
 
   useEffect(() => {
     if (projectId) {
@@ -116,7 +140,9 @@ export function Chat() {
             <EmptyHeader>
               <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
               <EmptyDescription className="text-sm text-muted-foreground">
-                Select or connect a repository from the sidebar to start asking questions about your code history.
+                {IS_DEMO
+                  ? "Demo mode: ask about the recent commits of a public repo. Pick one from the sidebar to get started — answers cite real commits."
+                  : "Select or connect a repository from the sidebar to start asking questions about your code history."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

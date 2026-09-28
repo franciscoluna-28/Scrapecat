@@ -30,6 +30,10 @@ import {
 import { Button } from "@/src/components/ui/button";
 import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
 import {
+  useDemoProjects,
+  type DemoProjectEntry,
+} from "@/src/_features/demo/hooks/useDemoProjects";
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -56,9 +60,36 @@ export function ChatSidebarContent() {
 
   const { sessions, isLoading: sessionsLoading } = useChatSessions(projectId ?? undefined);
   const deleteSession = useDeleteChatSession();
+  const { isDemo, demoProjects, ensureProject } = useDemoProjects();
 
   const [expanded, setExpanded] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [openingDemo, setOpeningDemo] = useState<string | null>(null);
+
+  // In demo mode the two fixed demo repos are always listed, backed by a real
+  // project once it has been ingested. Other (visitor-added) projects follow.
+  const fixedDemoIds = new Set(
+    demoProjects.map((d) => d.projectId).filter((id): id is string => !!id),
+  );
+  type ProjectEntry = {
+    key: string;
+    label: string;
+    projectId: string | null;
+    demo?: DemoProjectEntry;
+  };
+  const projectEntries: ProjectEntry[] = [
+    ...(isDemo
+      ? demoProjects.map((d) => ({
+          key: `${d.owner}/${d.repo}`,
+          label: d.label,
+          projectId: d.projectId,
+          demo: d,
+        }))
+      : []),
+    ...projects
+      .filter((p) => !fixedDemoIds.has(p.id))
+      .map((p) => ({ key: p.id, label: p.repositoryName, projectId: p.id })),
+  ];
 
   const navigate = (params: Record<string, string | null>) => {
     const p = new URLSearchParams();
@@ -77,19 +108,34 @@ export function ChatSidebarContent() {
     await deleteSession.mutateAsync(sid);
   };
 
+  const handleDemoClick = async (demo: DemoProjectEntry) => {
+    if (demo.projectId) {
+      navigate({ project: demo.projectId, session: null, branch: null });
+      return;
+    }
+    // Wait for the project list so we don't create a duplicate row.
+    if (openingDemo || projectsLoading) return;
+    setOpeningDemo(demo.repo);
+    const id = await ensureProject(demo);
+    setOpeningDemo(null);
+    if (id) navigate({ project: id, session: null, branch: null });
+  };
+
   const isActive = (route: string) => pathname.startsWith(route);
 
   return (
     <div className="flex flex-col gap-2 px-3 py-2">
-      {projectsLoading ? (
+      {projectsLoading && projectEntries.length === 0 ? (
         <div className="space-y-2">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-6 w-full" />
         </div>
-      ) : projects.length === 0 ? (
+      ) : projectEntries.length === 0 ? (
         <div className="space-y-3 py-4">
           <p className="text-xs text-muted-foreground text-center">
-            No projects synced yet...
+            {IS_DEMO
+              ? "Demo mode: pick a public repo to ask about its recent commits."
+              : "No projects synced yet..."}
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -139,17 +185,21 @@ export function ChatSidebarContent() {
                       Select existing project
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
-                      {projects.length === 0 ? (
+                      {projectEntries.filter((e) => e.projectId).length === 0 ? (
                         <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
                       ) : (
-                        projects.map((p) => (
-                          <DropdownMenuItem
-                            key={p.id}
-                            onSelect={() => navigate({ project: p.id, session: null, branch: null })}
-                          >
-                            {p.repositoryName}
-                          </DropdownMenuItem>
-                        ))
+                        projectEntries
+                          .filter((e) => e.projectId)
+                          .map((e) => (
+                            <DropdownMenuItem
+                              key={e.key}
+                              onSelect={() =>
+                                navigate({ project: e.projectId as string, session: null, branch: null })
+                              }
+                            >
+                              {e.label}
+                            </DropdownMenuItem>
+                          ))
                       )}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
@@ -159,20 +209,22 @@ export function ChatSidebarContent() {
           )}
           <p className="text-xs font-medium text-muted-foreground">Projects</p>
           <SidebarMenu className="gap-0">
-            {projects.map((p) => {
-              const isActiveProject = p.id === projectId;
+            {projectEntries.map((entry) => {
+              const isActiveProject = entry.projectId !== null && entry.projectId === projectId;
               const projectSessions = isActiveProject ? sessions : [];
 
               return (
-                <SidebarMenuItem key={p.id}>
+                <SidebarMenuItem key={entry.key}>
                   <SidebarMenuButton
                     isActive={isActiveProject}
-                    tooltip={p.repositoryName}
+                    tooltip={entry.label}
                     onClick={() => {
-                      if (isActiveProject) {
+                      if (entry.demo) {
+                        void handleDemoClick(entry.demo);
+                      } else if (isActiveProject) {
                         setExpanded(!expanded);
-                      } else {
-                        navigate({ project: p.id, session: null, branch: null });
+                      } else if (entry.projectId) {
+                        navigate({ project: entry.projectId, session: null, branch: null });
                         setExpanded(true);
                       }
                     }}
@@ -183,7 +235,10 @@ export function ChatSidebarContent() {
                         isActiveProject && expanded && "rotate-90",
                       )}
                     />
-                    <span className="truncate">{p.repositoryName}</span>
+                    <span className="truncate">{entry.label}</span>
+                    {entry.demo && !entry.projectId && openingDemo === entry.demo.repo && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">Loading...</span>
+                    )}
                   </SidebarMenuButton>
                   {isActiveProject && expanded && (
                     <SidebarMenuSub>

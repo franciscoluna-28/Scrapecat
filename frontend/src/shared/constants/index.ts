@@ -20,8 +20,18 @@ export const EMBEDDING_PROVIDERS = [
 // unless the env var is set.
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
+export type DemoProject = { owner: string; repo: string; label: string };
+
+// The fixed repositories demo visitors can chat with. They are always shown in
+// the sidebar, and the first one (formbricks) is auto-selected on load so a
+// visitor never starts from an empty workspace.
+export const DEMO_PROJECTS: DemoProject[] = [
+  { owner: "formbricks", repo: "formbricks", label: "formbricks" },
+  { owner: "franciscoluna-28", repo: "Scrapecat", label: "Scrapecat" },
+];
+
 // The repo visitors always land on first in demo mode.
-export const DEMO_DEFAULT_REPO = "formbricks";
+export const DEMO_DEFAULT_REPO = DEMO_PROJECTS[0].repo;
 
 export const DEMO_QUESTIONS: { suggestion: string; label: string }[] = [
   { suggestion: "What shipped in the last 30 days?", label: "What shipped recently?" },
