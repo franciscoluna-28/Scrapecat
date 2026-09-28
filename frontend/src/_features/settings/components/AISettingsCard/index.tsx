@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { Loader2, Save } from "lucide-react";
-import { PROVIDERS, EMBEDDING_PROVIDERS } from "@/src/shared/constants";
+import { EMBEDDING_PROVIDERS } from "@/src/shared/constants";
 import { ModelSelector } from "@/src/_features/settings/components/ModelSelector";
 import type { AISettings } from "@/src/shared/services/ai-settings";
 
@@ -22,16 +22,10 @@ type Model = {
 };
 
 type AISettingsCardProps = {
-  reportProvider: AISettings["reportProvider"];
-  setReportProvider: (value: AISettings["reportProvider"]) => void;
-  reportModel: string;
-  setReportModel: (value: string) => void;
   embeddingProvider: AISettings["embeddingProvider"];
   setEmbeddingProvider: (value: AISettings["embeddingProvider"]) => void;
   embeddingModel: string;
   setEmbeddingModel: (value: string) => void;
-  chatModels: Model[];
-  chatModelsLoading: boolean;
   embeddingModels: Model[];
   embeddingModelsLoading: boolean;
   mounted: boolean;
@@ -41,16 +35,10 @@ type AISettingsCardProps = {
 };
 
 export function AISettingsCard({
-  reportProvider,
-  setReportProvider,
-  reportModel,
-  setReportModel,
   embeddingProvider,
   setEmbeddingProvider,
   embeddingModel,
   setEmbeddingModel,
-  chatModels,
-  chatModelsLoading,
   embeddingModels,
   embeddingModelsLoading,
   mounted,
@@ -62,54 +50,14 @@ export function AISettingsCard({
     <Card>
       <CardContent className="p-6 space-y-6">
         <div>
-          <h3 className="text-base font-semibold">AI Settings</h3>
+          <h3 className="text-base font-semibold">Embeddings</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Choose the models Scrapecat uses across the app. Changes here apply
-            globally.
+            Configure the embedding model used for commit indexing. Chat model is
+            selected per-conversation in the chat footer.
           </p>
         </div>
 
         <div className="space-y-3">
-          <div className="max-w-xs">
-            <Label htmlFor="report-provider" className="text-sm font-medium">
-              Report Generation Provider
-            </Label>
-            <Select
-              value={reportProvider}
-              onValueChange={(v) =>
-                setReportProvider(v as AISettings["reportProvider"])
-              }
-            >
-              <SelectTrigger id="report-provider" className="mt-1.5">
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {PROVIDERS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="max-w-xs">
-            <Label htmlFor="report-model" className="text-sm font-medium">
-              Report Generation Model
-            </Label>
-            <div className="mt-1.5">
-              <ModelSelector
-                models={chatModels}
-                selectedModel={reportModel}
-                onModelChange={setReportModel}
-                loading={chatModelsLoading}
-                mounted={mounted}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t pt-4 space-y-3">
           <div className="max-w-xs">
             <Label htmlFor="embedding-provider" className="text-sm font-medium">
               Embedding Provider

@@ -35,6 +35,13 @@ const UNIT_MS: Record<string, number> = {
 const REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
 const escape = (s: string) => s.replace(REGEX_ESCAPE, "\\$&");
 
+const TEMPORAL_KEYWORDS = /\b(last|lates?t|recent|newest|what.?s new|being built|currently|right now|in progress)\b/i;
+
+/** Returns true when the user query implies recency without an explicit date. */
+export function hasTemporalIntent(text: string): boolean {
+  return TEMPORAL_KEYWORDS.test(text);
+}
+
 const DAY_MS = 86_400_000;
 
 function monthNumber(name: string): number | undefined {

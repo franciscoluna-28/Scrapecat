@@ -7,7 +7,7 @@ import { ProviderKeyError } from "@/chat/ai";
 import { callAI } from "@/chat/ai";
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { retrieveCommits } from "@/chat/retrieval";
-import { parseQueryWindow } from "@/chat/date-window";
+import { parseQueryWindow, hasTemporalIntent } from "@/chat/date-window";
 import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
 import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
@@ -28,7 +28,7 @@ function toMessageDTO(row: Awaited<ReturnType<typeof chatSessionsStore.addMessag
   };
 }
 
-export async function createChatSession(projectId: string) {
+export async function createChatSession(projectId: string, anonymousId: string) {
   const project = await projectsStore.getProjectById({ id: projectId });
   if (!project) {
     throw new Error("Project not found");
@@ -36,6 +36,7 @@ export async function createChatSession(projectId: string) {
   const row = await chatSessionsStore.createSession({
     projectId,
     title: "New chat",
+    anonymousId,
   });
   return {
     id: row.id,
@@ -46,8 +47,8 @@ export async function createChatSession(projectId: string) {
   };
 }
 
-export async function listChatSessions(projectId?: string) {
-  const rows = await chatSessionsStore.listSessions({ projectId });
+export async function listChatSessions(projectId?: string, anonymousId?: string) {
+  const rows = await chatSessionsStore.listSessions({ projectId, anonymousId });
   return rows.map((r) => ({
     id: r.id,
     projectId: r.projectId,
@@ -71,10 +72,10 @@ export async function deleteChatSession(id: string) {
   return true;
 }
 
-async function resolveProviderAndKey() {
+async function resolveProviderAndKey(override?: { provider?: string; model?: string }) {
   const settings = await getAISettings();
-  const provider = settings.reportProvider;
-  const model = settings.reportModel;
+  const provider = override?.provider || settings.reportProvider;
+  const model = override?.model || settings.reportModel;
   const providerConfig = getProviderConfig(provider);
   if (!providerConfig) throw new ProviderKeyError(provider);
   const storedKey = await resolveApiKey(provider);
@@ -95,10 +96,12 @@ export async function streamChatMessage(opts: {
   sessionId: string;
   content: string;
   branch?: string | null;
+  model?: string;
+  provider?: string;
   onToken: (chunk: string) => void;
   onProgress?: IngestProgress;
 }): Promise<ChatMessageDTO> {
-  const { sessionId, content, branch, onToken, onProgress } = opts;
+  const { sessionId, content, branch, model, provider, onToken, onProgress } = opts;
 
   const session = await chatSessionsStore.getSession({ id: sessionId });
   if (!session) throw new SessionNotFoundError();
@@ -120,7 +123,7 @@ export async function streamChatMessage(opts: {
   if (
     !dateWindowStart &&
     !dateWindowEnd &&
-    /\b(last|lates?t|recent|newest|what.?s new|being built|currently|right now|in progress)\b/i.test(content)
+    hasTemporalIntent(content)
   ) {
     const DAY_MS = 86_400_000;
     const latest = await getLatestCommitDate({ projectId: session.projectId, branch: branch ?? undefined });
@@ -147,7 +150,7 @@ export async function streamChatMessage(opts: {
   // below by the context-augmented version.
   const priorTurns = prior.slice(0, -1);
 
-  const { provider, model, apiKey } = await resolveProviderAndKey();
+  const { provider: resolvedProvider, model: resolvedModel, apiKey } = await resolveProviderAndKey({ provider, model });
 
   const messages: { role: "user" | "assistant" | "system"; content: string }[] = [
     { role: "system", content: buildSystemPrompt(project?.repositoryName) },
@@ -164,8 +167,8 @@ export async function streamChatMessage(opts: {
   ];
 
   const result = await callAI({
-    provider,
-    model,
+    provider: resolvedProvider,
+    model: resolvedModel,
     apiKey,
     maxTokens: 8192,
     messages,

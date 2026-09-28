@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
 const mockProvider = {
   listRepositories: vi.fn(),
+  searchPublicRepositories: vi.fn(),
   listBranches: vi.fn(),
   getDefaultBranch: vi.fn(async () => "main"),
 };
@@ -40,7 +41,7 @@ describe("GET /api/v1/repositories", () => {
 
   it("returns repositories list", async () => {
     const repos: any = [{ name: "repo1", owner: "user1", fullName: "user1/repo1" }];
-    mockProvider.listRepositories.mockResolvedValue(repos);
+    mockProvider.searchPublicRepositories.mockResolvedValue(repos);
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(200);
@@ -48,23 +49,18 @@ describe("GET /api/v1/repositories", () => {
   });
 
   it("passes query parameters", async () => {
-    mockProvider.listRepositories.mockResolvedValue([]);
+    mockProvider.searchPublicRepositories.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories?type=public&sort=full_name&direction=asc&per_page=5",
     });
 
-    expect(mockProvider.listRepositories).toHaveBeenCalledWith({
-      type: "public",
-      sort: "full_name",
-      direction: "asc",
-      perPage: 5,
-    });
+    expect(mockProvider.searchPublicRepositories).toHaveBeenCalledWith("stars:>100", 5);
   });
 
   it("returns 500 on error", async () => {
-    mockProvider.listRepositories.mockRejectedValue(new Error("API error"));
+    mockProvider.searchPublicRepositories.mockRejectedValue(new Error("API error"));
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(500);

@@ -3,10 +3,11 @@ import postgres from "postgres";
 import { env } from "@/config/env";
 import * as schema from "@/db/schema";
 
-const queryClient = postgres(env.DATABASE_URL);
-export const db = drizzle(queryClient, { schema });
+const liveDb = drizzle(postgres(env.DATABASE_URL), { schema });
 
-export type DbClient = typeof db;
+export const db = liveDb;
+
+export type DbClient = typeof liveDb;
 
 export type Tx = Parameters<Parameters<DbClient["transaction"]>[0]>[0];
 

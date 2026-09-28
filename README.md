@@ -33,6 +33,14 @@ Scrapecat is an engineering intelligence assistant that answers questions about 
 
 AI is increasing commit velocity, not reducing it. Scrapecat is the missing layer that translates engineering output into something every department can actually understand.
 
+## Demo Mode (public concept demo)
+
+Scrapecat ships a serverless-first **demo profile** used for the public, hosted
+concept demo (targeting Cloudflare Workers). It reads public repos over the
+GitHub REST API — no git binary or disk — serves every read from PostgreSQL, and
+locks visitors to a pre-ingested repository set. It is opt-in via env vars and
+does not change the self-hosted product. See [`docs/demo.md`](./docs/demo.md).
+
 ## Getting Started
 
 ### 1. GitHub API Configuration

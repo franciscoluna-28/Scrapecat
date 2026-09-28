@@ -66,6 +66,14 @@ export async function resolveApiKey(provider: string): Promise<string | null> {
   if (!isProviderSupported(provider)) return null;
 
   const row = await credentialsStore.getLatestCredential(provider as CredentialProvider);
-  if (!row) return null;
-  return decrypt(row.encryptedKey);
+  if (row) {
+    return decrypt(row.encryptedKey);
+  }
+
+  // Fallback to env vars when no stored credential exists.
+  const config = getProviderConfig(provider);
+  const value = config
+    ? (env as unknown as Record<string, string>)[config.envKey] ?? ""
+    : "";
+  return value || null;
 }

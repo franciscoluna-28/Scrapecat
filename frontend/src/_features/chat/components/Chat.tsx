@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActiveProjectStore } from "@/src/store/active-project";
+import { useChatBranchStore } from "@/src/store/chat-branch";
 import { BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -18,6 +19,7 @@ import { useBranches } from "@/src/_features/chat/services/git-api";
 import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
+import { IS_DEMO, DEMO_DEFAULT_REPO } from "@/src/shared/constants";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
@@ -28,10 +30,10 @@ export function Chat() {
   const queryClient = useQueryClient();
   const { projects, isLoading: projectsLoading } = useProjects();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
+  const { getBranch, setBranch } = useChatBranchStore();
 
   const projectId = searchParams.get("project");
   const sessionId = searchParams.get("session");
-  const branch = searchParams.get("branch");
 
   const activeProjectData = projects.find((p) => p.id === projectId) ?? null;
   const activeProject = activeProjectData?.repositoryName ?? null;
@@ -41,10 +43,18 @@ export function Chat() {
     activeProjectData?.repositoryName ?? "",
   );
 
+  const branch = projectId ? getBranch(projectId, defaultBranch) : null;
+
   useEffect(() => {
     if (!projectsLoading && projects.length > 0 && !projectId) {
       const stored = useActiveProjectStore.getState().lastProjectId;
-      const target = stored && projects.find((p) => p.id === stored) ? stored : projects[0].id;
+      // Demo always onboard onto the demo repo (formbricks by default) so the
+      // first interaction is a loaded repo, not setup.
+      const demoDefault = IS_DEMO
+        ? projects.find((p) => p.repositoryName === DEMO_DEFAULT_REPO)
+        : undefined;
+      const target =
+        (demoDefault ?? projects.find((p) => p.id === stored))?.id ?? projects[0].id;
       setLastProjectId(target);
       const p = new URLSearchParams(searchParams.toString());
       p.set("project", target);
@@ -59,25 +69,41 @@ export function Chat() {
   }, [projectId, setLastProjectId]);
 
   useEffect(() => {
-    if (defaultBranch && projectId && !branch) {
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("branch", defaultBranch);
-      router.replace(`/app?${p.toString()}`);
+    if (defaultBranch && projectId) {
+      const stored = getBranch(projectId, null);
+      if (!stored) {
+        setBranch(projectId, defaultBranch);
+      }
     }
-  }, [defaultBranch, projectId, branch, router, searchParams]);
+  }, [defaultBranch, projectId, getBranch, setBranch]);
 
   const handleBranchChange = async (branchName: string) => {
     if (!projectId) return;
     await prepareProjectBranch(projectId, branchName);
     await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
     toast.success(`Ready to chat on ${branchName}`);
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("branch", branchName);
-    router.push(`/app?${p.toString()}`);
+    setBranch(projectId, branchName);
   };
 
   const { messages, messagesLoading, streamingId, isStreaming, ingestionProgress, input, setInput, sendMessage, bottomRef } =
     useAIChat({ projectId, sessionId, branch });
+
+  // Demo: canned questions navigate here with a `q` param; send it once the
+  // project is ready, then drop the param so it isn't re-run on refresh.
+  const q = searchParams.get("q");
+  const autoSentRef = useRef<string | null>(null);
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
+  useEffect(() => {
+    if (!projectId || !q || isStreaming || messagesLoading) return;
+    if (autoSentRef.current === q) return;
+    autoSentRef.current = q;
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("q");
+    router.replace(`/app?${p.toString()}`, { scroll: false });
+    void sendMessageRef.current(q);
+  }, [q, projectId, isStreaming, messagesLoading, router, searchParams]);
 
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
@@ -121,7 +147,9 @@ export function Chat() {
               />
               <ChatSuggestions onSelect={sendMessage} />
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Answers are grounded in the project&apos;s ingested commits. Sources are shown as citations.
+                {IS_DEMO
+                  ? "Demo mode: read-only commit metadata (messages, dates, authors, file names). No code, no API keys, no write access."
+                  : "Answers are grounded in the project’s ingested commits. Sources are shown as citations."}
               </p>
             </div>
           </div>

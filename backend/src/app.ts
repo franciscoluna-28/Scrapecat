@@ -1,12 +1,14 @@
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { env } from "@/config/env";
 
 import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
+import { getMeta } from "@/meta/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
 import { listProjects, prepareBranch } from "@/projects/routes";
@@ -39,7 +41,8 @@ import {
   DeleteSessionResponse,
 } from "@/chat/schemas";
 import { HealthResponse } from "@/health/schemas";
-import { VerificationOkResponse } from "@/verification/schemas";
+import { MetaResponse } from "@/meta/schemas";
+import { VerificationStatusResponse } from "@/verification/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
   RepoOwnerParams,
@@ -81,6 +84,11 @@ export async function buildApp() {
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
   });
 
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: "1 minute",
+  });
+
   await app.register(swagger, {
     openapi: {
       info: {
@@ -103,11 +111,19 @@ export async function buildApp() {
     },
   }, health);
 
+  app.get("/api/v1/meta", {
+    schema: {
+      description: "Describe the data backing the API (bundled demo dataset vs database)",
+      tags: ["meta"],
+      response: { 200: MetaResponse, 500: ErrorResponse },
+    },
+  }, getMeta);
+
   app.get("/api/v1/verification/status", {
     schema: {
       description: "Verify GitHub token connection status",
       tags: ["verification"],
-      response: { 200: VerificationOkResponse },
+      response: { 200: VerificationStatusResponse },
     },
   }, checkVerification);
 
@@ -305,6 +321,12 @@ export async function buildApp() {
       params: ChatSessionIdParams,
       body: SendMessageBody,
       response: { 400: ErrorResponse, 404: ErrorResponse },
+    },
+    config: {
+      rateLimit: {
+        max: env.CHAT_RATE_LIMIT_MAX,
+        timeWindow: "1 minute",
+      },
     },
   }, streamChatMessage);
 

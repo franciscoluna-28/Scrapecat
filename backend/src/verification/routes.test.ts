@@ -51,13 +51,14 @@ describe("GET /api/v1/verification/status", () => {
     });
   });
 
-  it("returns 500 when GitHub API fails (schema mismatch on error body)", async () => {
+  it("reports the error in-band when the GitHub API fails", async () => {
     mockProvider.verifyConnection.mockRejectedValue(new Error("Unauthorized"));
 
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/verification/status",
     });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "error", message: "Unauthorized" });
   });
 });

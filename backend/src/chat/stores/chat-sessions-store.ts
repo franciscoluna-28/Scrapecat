@@ -1,33 +1,35 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db, DbOrTx } from "@/db/client";
 import { chatMessages, chatSessions, type ChatCitation } from "@/db/schema";
 
 export async function createSession({
   projectId,
   title,
+  anonymousId,
   tx,
 }: {
   projectId: string;
   title: string;
+  anonymousId: string;
   tx?: DbOrTx;
 }) {
   const [row] = await (tx || db)
     .insert(chatSessions)
-    .values({ projectId, title })
+    .values({ projectId, title, anonymousId })
     .returning();
   return row;
 }
 
-export async function listSessions(opts?: { projectId?: string; tx?: DbOrTx }) {
+export async function listSessions(opts?: { projectId?: string; anonymousId?: string; tx?: DbOrTx }) {
   const client = opts?.tx || db;
+  const conditions = [];
+  if (opts?.projectId) conditions.push(eq(chatSessions.projectId, opts.projectId));
+  if (opts?.anonymousId) conditions.push(eq(chatSessions.anonymousId, opts.anonymousId));
   const base = client
     .select()
     .from(chatSessions)
     .orderBy(desc(chatSessions.updatedAt));
-  if (opts?.projectId) {
-    return base.where(eq(chatSessions.projectId, opts.projectId));
-  }
-  return base;
+  return conditions.length > 0 ? base.where(and(...conditions)) : base;
 }
 
 export async function getSession({ id, tx }: { id: string; tx?: DbOrTx }) {

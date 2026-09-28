@@ -1,34 +1,10 @@
-import { Octokit } from "@octokit/core";
-import { throttling } from "@octokit/plugin-throttling";
-import { retry } from "@octokit/plugin-retry";
+import { createOctokit, type OctokitClient } from "@/shared/integrations/git-provider/octokit";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
 import type {
   Repository,
   RepositoryFilters,
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
-
-const MyOctokit = Octokit.plugin(throttling, retry);
-
-function createOctokit(token: string) {
-  return new MyOctokit({
-    auth: token,
-    throttle: {
-      onRateLimit: (retryAfter: number, options: any, _client: any, retryCount: number) => {
-        console.warn(`Rate limit hit for ${options.method} ${options.url}`);
-        if (retryCount < 3) {
-          console.info(`Retrying after ${retryAfter} seconds`);
-          return true;
-        }
-        return false;
-      },
-      onSecondaryRateLimit: (_retryAfter: number, options: any, _client: any) => {
-        console.warn(`Secondary rate limit for ${options.method} ${options.url}`);
-      },
-    },
-    retry: { doNotRetry: [400, 401, 403, 404, 410, 422, 451] },
-  });
-}
 
 function toRepository(raw: any): Repository {
   return {
@@ -46,7 +22,7 @@ function toRepository(raw: any): Repository {
 }
 
 export class GithubAdapter implements GitProvider {
-  private octokit: InstanceType<typeof MyOctokit>;
+  private octokit: OctokitClient;
 
   constructor(token: string) {
     this.octokit = createOctokit(token);
@@ -60,6 +36,21 @@ export class GithubAdapter implements GitProvider {
       per_page: filters?.perPage || 10,
     });
     return data.map(toRepository);
+  }
+
+  /**
+   * Search public repositories without authentication. Used when no GitHub
+   * token is configured so the demo still works with public repos.
+   */
+  async searchPublicRepositories(query: string, perPage = 10): Promise<Repository[]> {
+    const unauthed = createOctokit(null);
+    const { data } = await unauthed.request("GET /search/repositories", {
+      q: `${query} is:public`,
+      sort: "updated",
+      order: "desc",
+      per_page: perPage,
+    });
+    return (data.items || []).map(toRepository);
   }
 
   /**

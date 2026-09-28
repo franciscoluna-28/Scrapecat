@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import { env } from "@/config/env";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
 import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
@@ -30,6 +31,9 @@ export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function createProject(req: FastifyRequest, reply: FastifyReply) {
+  if (!env.allowAddRepos) {
+    return reply.status(403).send({ error: "Adding repositories is disabled" });
+  }
   const body = req.body as Static<typeof CreateProjectBody>;
   try {
     const { project } = await projectsStore.upsertProject({ input: body });

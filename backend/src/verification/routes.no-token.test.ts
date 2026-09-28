@@ -6,6 +6,10 @@ vi.mock("@/shared/integrations/git-provider", () => ({
   getGitProvider: vi.fn(() => mockProvider),
 }));
 
+vi.mock("@/github/token", () => ({
+  resolveGithubToken: vi.fn(async () => null),
+}));
+
 vi.mock("@/config/env", () => ({
   env: {
     PORT: 0,
@@ -30,11 +34,15 @@ describe("GET /api/v1/verification/status — no token", () => {
     await app.close();
   });
 
-  it("returns 500 when GITHUB_TOKEN is empty (schema mismatch on error body)", async () => {
+  it("reports the error in-band when GITHUB_TOKEN is empty", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/verification/status",
     });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      status: "error",
+      message: "GitHub token is not configured",
+    });
   });
 });

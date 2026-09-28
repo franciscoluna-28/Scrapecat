@@ -14,6 +14,7 @@ import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { useGitHubSettingsStore } from "@/src/store/github-settings";
 import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
 import { AISettingsManager } from "@/src/_features/settings/components/AISettingsManager";
+import { IS_DEMO } from "@/src/shared/constants";
 
 export default function SettingsPage() {
   const {
@@ -26,6 +27,22 @@ export default function SettingsPage() {
     setSort,
     setDirection,
   } = useGitHubSettingsStore();
+
+  if (IS_DEMO) {
+    return (
+      <SectionLayout>
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-base font-semibold">Settings</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Settings, API keys, and the GitHub token are managed by the server in
+              demo mode. You can still add public repositories from the sidebar.
+            </p>
+          </CardContent>
+        </Card>
+      </SectionLayout>
+    );
+  }
 
   return (
     <SectionLayout>

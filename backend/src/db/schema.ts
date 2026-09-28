@@ -207,6 +207,7 @@ export const chatSessions = pgTable(
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     title: text("title").default("New chat").notNull(),
+    anonymousId: text("anonymous_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

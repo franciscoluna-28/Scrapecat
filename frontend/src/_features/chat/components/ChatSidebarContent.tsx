@@ -28,6 +28,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -117,43 +118,45 @@ export function ChatSidebarContent() {
         </div>
       ) : (
         <>
-          <div className="flex py-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full">
-                  <Plus className="size-3" />
-                  New chat
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onSelect={() => setConnectOpen(true)}>
-                  <Globe className="size-4" />
-                  Connect repository...
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <FolderOpen className="size-4" />
-                    Select existing project
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {projects.length === 0 ? (
-                      <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
-                    ) : (
-                      projects.map((p) => (
-                        <DropdownMenuItem
-                          key={p.id}
-                          onSelect={() => navigate({ project: p.id, session: null, branch: null })}
-                        >
-                          {p.repositoryName}
-                        </DropdownMenuItem>
-                      ))
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {ALLOW_ADD_REPOS && (
+            <div className="flex py-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    <Plus className="size-3" />
+                    New chat
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem onSelect={() => setConnectOpen(true)}>
+                    <Globe className="size-4" />
+                    Connect repository...
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <FolderOpen className="size-4" />
+                      Select existing project
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {projects.length === 0 ? (
+                        <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
+                      ) : (
+                        projects.map((p) => (
+                          <DropdownMenuItem
+                            key={p.id}
+                            onSelect={() => navigate({ project: p.id, session: null, branch: null })}
+                          >
+                            {p.repositoryName}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           <p className="text-xs font-medium text-muted-foreground">Projects</p>
           <SidebarMenu className="gap-0">
             {projects.map((p) => {
@@ -236,18 +239,27 @@ export function ChatSidebarContent() {
 
       <p className="text-xs font-medium text-muted-foreground mt-2">Navigation</p>
       <SidebarMenu className="gap-0">
-        {NAV_ITEMS.map((item) => (
-          <SidebarMenuItem key={item.id}>
-            <SidebarMenuButton
-              isActive={isActive(item.route)}
-              onClick={() => router.push(item.route)}
-              tooltip={item.label}
-            >
-              <item.icon className="size-4" />
-              <span>{item.label}</span>
+        {!IS_DEMO &&
+          NAV_ITEMS.map((item) => (
+            <SidebarMenuItem key={item.id}>
+              <SidebarMenuButton
+                isActive={isActive(item.route)}
+                onClick={() => router.push(item.route)}
+                tooltip={item.label}
+              >
+                <item.icon className="size-4" />
+                <span>{item.label}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        {IS_DEMO && (
+          <SidebarMenuItem>
+            <SidebarMenuButton isActive={false} tooltip="API keys are managed by the server">
+              <Key className="size-4 opacity-60" />
+              <span className="text-muted-foreground">Keys managed by server</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ))}
+        )}
       </SidebarMenu>
     </div>
   );

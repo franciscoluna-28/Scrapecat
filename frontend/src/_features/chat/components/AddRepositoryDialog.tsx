@@ -6,6 +6,7 @@ import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUr
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
 import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
 import { useGitHubConnection } from "@/src/_features/chat/services/git-api";
+import { IS_DEMO } from "@/src/shared/constants";
 import type { GitHubRepository } from "@/src/shared/types";
 
 type Props = {
@@ -47,11 +48,13 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
         <DialogHeader>
           <DialogTitle>Connect a repository</DialogTitle>
           <DialogDescription>
-            Pick from your GitHub repos or paste a URL.
+            {IS_DEMO
+              ? "Add a public GitHub repository by URL, or pick from popular public repos."
+              : "Pick from your GitHub repos or paste a URL."}
           </DialogDescription>
         </DialogHeader>
 
-        {!connected ? (
+        {!connected && !IS_DEMO ? (
           <div className="space-y-4">
             <GitHubConnectForm />
             <p className="text-xs text-muted-foreground">
@@ -60,9 +63,20 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           </div>
         ) : (
           <>
-            <div className="rounded-md border p-3">
-              <GitHubConnectForm />
-            </div>
+            {/* Demo mode uses the deployer's server-side token (public repos
+                only) — never ask visitors for their own GitHub token. */}
+            {!IS_DEMO && (
+              <div className="rounded-md border p-3">
+                <GitHubConnectForm />
+              </div>
+            )}
+
+            {IS_DEMO && (
+              <p className="text-xs text-muted-foreground">
+                Public repositories only. Paste any public GitHub repo URL or
+                owner/repo below.
+              </p>
+            )}
 
             <RepositoryUrlInput
               value={value}
@@ -73,7 +87,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
             />
 
             <div className="text-xs text-muted-foreground">
-              Or select from your repositories:
+              {IS_DEMO ? "Or pick a popular public repo:" : "Or select from your repositories:"}
             </div>
 
             <RepositoryList
