@@ -28,3 +28,9 @@ export const DEMO_QUESTIONS: { suggestion: string; label: string }[] = [
   { suggestion: "What broke and got fixed?", label: "What broke & got fixed?" },
   { suggestion: "What changed in the API or billing?", label: "API & billing changes" },
 ];
+
+// Whether visitors can connect new repositories. Default true. Set
+// NEXT_PUBLIC_ALLOW_ADD_REPOS="false" to lock the UI to the repos already
+// ingested — e.g. for the hackathon demo after seeding.
+export const ALLOW_ADD_REPOS =
+  process.env.NEXT_PUBLIC_ALLOW_ADD_REPOS !== "false";

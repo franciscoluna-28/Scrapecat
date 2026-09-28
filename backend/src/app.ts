@@ -42,7 +42,7 @@ import {
 } from "@/chat/schemas";
 import { HealthResponse } from "@/health/schemas";
 import { MetaResponse } from "@/meta/schemas";
-import { VerificationOkResponse } from "@/verification/schemas";
+import { VerificationStatusResponse } from "@/verification/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
   RepoOwnerParams,
@@ -123,7 +123,7 @@ export async function buildApp() {
     schema: {
       description: "Verify GitHub token connection status",
       tags: ["verification"],
-      response: { 200: VerificationOkResponse },
+      response: { 200: VerificationStatusResponse },
     },
   }, checkVerification);
 

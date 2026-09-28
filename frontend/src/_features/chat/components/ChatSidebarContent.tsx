@@ -28,7 +28,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
-import { IS_DEMO } from "@/src/shared/constants";
+import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -118,7 +118,7 @@ export function ChatSidebarContent() {
         </div>
       ) : (
         <>
-          {!IS_DEMO && (
+          {ALLOW_ADD_REPOS && (
             <div className="flex py-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
