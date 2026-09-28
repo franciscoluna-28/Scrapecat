@@ -15,6 +15,15 @@ export const envSchema = z.object({
   GITHUB_TOKEN: z.string().default(""),
   GIT_PROVIDER: z.enum(["github", "gitlab"]).default("github"),
   ENCRYPTION_KEY: z.string().default(""),
+  // Postgres connection pool size. Serverless hosts (Vercel) should use a
+  // pooled connection string and set this to 1 to avoid exhausting connections.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+  // Set to "false" when the connection goes through a transaction-mode pooler
+  // (Neon/Supabase) that does not support prepared statements.
+  DATABASE_PREPARE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
   EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(100),
   EMBEDDING_ENABLED: z
@@ -78,6 +87,10 @@ if (missing.length > 0) {
 
 const isDemoMode = parsed.data.DEMO_MODE;
 
+// Vercel sets VERCEL=1 on both builds and runtime. Used to skip Node-only
+// features (e.g. the Swagger UI static asset server) in serverless deployments.
+const isVercel = !!process.env.VERCEL;
+
 export const env = {
   ...parsed.data,
   isDemoMode,
@@ -86,4 +99,5 @@ export const env = {
   // Configurable independently of demo mode: enable to seed repos, disable to
   // lock the app to the pre-ingested set.
   allowAddRepos: parsed.data.ALLOW_ADD_REPOS,
+  isVercel,
 };
