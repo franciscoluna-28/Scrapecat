@@ -14,8 +14,10 @@ alias-free file:
 
 - `scripts/build-vercel.mjs` (esbuild) bundles `src/vercel-entry.ts` →
   `dist/vercel-entry.mjs`, resolving `@/` and leaving `node_modules` external.
-- `server.ts` (project root) is the detected entrypoint. It imports the bundle,
-  whose `app.listen()` call Vercel captures to route requests.
+- `server.ts` (project root) is the detected entrypoint. Vercel's Fastify
+  detector requires the entry file to import `fastify`, so `server.ts` creates
+  the Fastify instance and starts the app factory exported by the bundle; the
+  `app.listen()` call is what Vercel captures to route requests.
 - The bundle is produced by the `build:vercel` script, wired as Vercel's Build
   Command in `backend/vercel.json`.
 - The Fastify factory is named `src/build-app.ts` (not `app.ts`) so Vercel's
