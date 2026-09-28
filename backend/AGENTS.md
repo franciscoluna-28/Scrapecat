@@ -56,7 +56,7 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 1. Validate input body with `ReportInputBody` (wraps `ReportDataInput` in `{ data: ... }`)
 2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
 3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`)
-4. Batch-ingest the window: `ingestCommits` (`src/repositories/ingest.ts`) ensures the branch archive, reads commits from disk (native `git` binary), upserts `commit_chunks`, and embeds
+4. Batch-ingest the window via `prepareProjectBranch` (`src/projects/services.ts`): self-hosted reads the branch archive from disk (native `git`); demo reads the public GitHub API (`ingest-api.ts`). Both upsert `commit_chunks` and embed, and both fall back to existing rows if ingestion fails.
 5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
 6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts` (commit messages + LLM summaries)
 7. Call AI with up to 2 retries if structure validation fails
@@ -66,9 +66,9 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 ### Read-path model
 
-The DB is the materialized read model for commits. The git archive is the ingestion source of truth; GitHub's REST API is used only for discovery and the clone.
+The DB is the materialized read model for commits. The git archive (self-hosted) or the public GitHub REST API (demo) is the ingestion source; GitHub's REST API is also used for discovery.
 
-- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **archive-backed** — it reads from the local clone, downloading it first if needed.
+- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **archive-backed** (self-hosted) or **API-backed** (demo) — see the route's `DEMO_MODE` branch.
 - **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
 - **Report generation** (`POST /api/v1/reports`): ingests the window via `src/repositories/ingest.ts`, then reads the window from `commit_chunks`.
 
@@ -78,6 +78,7 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
+- **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
 - **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(512)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
 - **reports** — generated reports linked to a project (uuid PK, title, markdown)
 - **report_commits** — snapshot of the SHAs a report was generated from (unique `(report_id, commit_sha)`)
@@ -87,11 +88,19 @@ All DB access goes through per-domain store modules — `src/projects/stores/pro
 
 ## Commit ingestion (`src/repositories/`)
 
-Commit ingestion is **synchronous, batch, archive-based** — no background worker, queue, or watermark.
+Commit ingestion is **synchronous, batch** — no background worker, queue, or watermark. There are two interchangeable paths, selected by `DEMO_MODE`:
+
+- **Self-hosted (default)** — clone a local `git` archive.
+- **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
 - **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with the native `git` binary (`git clone --single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN` via `http.extraheader`) and does an incremental fetch (`git fetch origin` + `git update-ref`) on repeat runs. The archive is the source of truth; commits are read from disk, never the API.
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the report prompt grounds on these, since a commit message can be uninformative).
 - **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → upsert `commit_chunks` (dedupe by SHA, skipping already-stored; `commit_message` is the embedding source) → `embedNewChunks`.
+- **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `shared/integrations/git-provider/octokit.ts`.
+- **Demo ingest** (`ingest-api.ts`): `ingestCommitsFromApi` mirrors `ingest.ts` using the API reads. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `github/routes.ts` and `verification/routes.ts`.
+- **Database-first** (`projects/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call). In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
+- **Demo branch scope** (`shared/demo-branches.ts`): demo only exposes/ingests `main`/`master` (or the repo's resolved default). `listBranches` filters the UI list and `prepareProjectBranch` skips ingestion for any other branch, so a visit can't fan out across every feature branch.
+- **Read-only demo**: `DEMO_MODE=true` also implies `DEMO_RESTRICT_KEYS` (no BYOK). Repo-adding is controlled separately by `ALLOW_ADD_REPOS` (default true): leave it on to seed the database on first run, then set `ALLOW_ADD_REPOS=false` to lock visitors to the pre-ingested set.
 - **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any clone or LLM work — `ProviderKeyError` otherwise.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
@@ -110,7 +119,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `listBranches`, `getDefaultBranch`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface. The default branch is resolved via the GitHub API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
 
-Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Factory in `index.ts` returns a singleton via `getGitProvider()`.
+Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Shared Octokit construction lives in `octokit.ts` (`createOctokit(token?)`; token optional for anonymous public access). Factory in `index.ts` returns a singleton via `getGitProvider()`. Demo commit reads do not use this interface — they live in `src/repositories/github-api.ts`.
 
 ## Credentials / encryption (`src/credentials/services.ts` + `encryption.ts`)
 
@@ -124,7 +133,9 @@ Encryption output format: `base64url(iv + tag + ciphertext)`.
 
 ## Environment config (`src/config/env.ts`)
 
-Zod-validated `process.env` with `.default()` for all optional fields. Non-defaulted required: `ENCRYPTION_KEY`. Warns on missing `OPENROUTER_API_KEY` and `GITHUB_TOKEN` but does not exit.
+Zod-validated `process.env` with `.default()` for all optional fields. Non-defaulted required: `ENCRYPTION_KEY`. Warns on missing `OPENROUTER_API_KEY` (and `GITHUB_TOKEN`, except in demo mode where anonymous public access is fine) but does not exit.
+
+Demo flags: `DEMO_MODE=true` (API ingestion + public-only hardening; implies `isDemoRestrictKeys`), `DEMO_RESTRICT_KEYS` (hide BYOK), `ALLOW_ADD_REPOS` (default true; set false to lock visitors to pre-ingested repos).
 
 Key defaults: `PORT: 4000`, `HOST: "0.0.0.0"`, `DATABASE_URL: "postgres://scrapecat:scrapecat@localhost:5432/scrapecat"`, `CORS_ORIGIN: "http://localhost:3000"`.
 
