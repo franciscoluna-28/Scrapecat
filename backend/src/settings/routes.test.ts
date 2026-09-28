@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 import * as settingsServices from "@/settings/services";
 
 vi.mock("@/settings/services", async (importOriginal) => {

@@ -14,10 +14,13 @@ alias-free file:
 
 - `scripts/build-vercel.mjs` (esbuild) bundles `src/vercel-entry.ts` →
   `dist/vercel-entry.mjs`, resolving `@/` and leaving `node_modules` external.
-- `server.ts` (project root) is the detected Fastify entrypoint. It imports the
-  bundle, whose `app.listen()` call Vercel captures to route requests.
-- The bundle is produced automatically by the `vercel-build` script in
-  `backend/package.json`.
+- `server.ts` (project root) is the detected entrypoint. It imports the bundle,
+  whose `app.listen()` call Vercel captures to route requests.
+- The bundle is produced by the `build:vercel` script, wired as Vercel's Build
+  Command in `backend/vercel.json`.
+- The Fastify factory is named `src/build-app.ts` (not `app.ts`) so Vercel's
+  Fastify entrypoint detection does not pick it up and run it directly — which
+  would bypass the bundle and fail on the unresolved `@/` alias.
 
 `dist/` is gitignored — it is generated on every deploy.
 
@@ -26,12 +29,12 @@ alias-free file:
 | Setting | Value |
 |---|---|
 | Root Directory | `backend` |
-| Framework preset | Fastify (auto-detected) |
-| Build Command | leave default (Vercel runs `vercel-build`) |
+| Framework preset | Fastify / Other (auto-detected) |
+| Build Command | `pnpm run build:vercel` (set in `vercel.json`) |
 | Output Directory | leave default |
 | Install Command | leave default (`pnpm` via the workspace lockfile) |
 
-Do **not** set a custom build command or output directory.
+Do **not** set an output directory.
 
 ## Environment variables
 

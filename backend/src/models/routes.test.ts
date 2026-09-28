@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 
 describe("GET /api/v1/models", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;

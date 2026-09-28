@@ -21,7 +21,7 @@ vi.mock("@/github/token", () => ({
   resolveGithubToken: vi.fn(async () => "mock-token"),
 }));
 
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 
 describe("GET /api/v1/verification/status", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;

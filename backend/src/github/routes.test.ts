@@ -29,7 +29,7 @@ vi.mock("@/credentials/encryption", () => ({
   maskApiKey: (key: string) => `${key.slice(0, 4)}••••`,
 }));
 
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 
 const fetchSpy = vi.spyOn(globalThis, "fetch");
 
