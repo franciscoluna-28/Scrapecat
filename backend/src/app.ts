@@ -99,9 +99,13 @@ export async function buildApp() {
     },
   });
 
-  await app.register(swaggerUi, {
-    routePrefix: "/docs",
-  });
+  // The Swagger UI serves static assets from disk, which serverless runtimes
+  // (Vercel) don't provide. The OpenAPI JSON is still published.
+  if (!env.isVercel) {
+    await app.register(swaggerUi, {
+      routePrefix: "/docs",
+    });
+  }
 
   app.get("/api/v1/health", {
     schema: {
