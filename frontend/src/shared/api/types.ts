@@ -43,6 +43,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Describe the data backing the API (bundled demo dataset vs database) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            datasetSource: "database";
+                            seedVersion: null;
+                            generatedAt: null;
+                            repos: {
+                                providerOwner: string;
+                                repositoryName: string;
+                                defaultBranch: string;
+                                commitCount: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/verification/status": {
         parameters: {
             query?: never;
@@ -69,10 +127,14 @@ export interface paths {
                         "application/json": {
                             /** @enum {string} */
                             status: "ok";
-                            github: {
+                            github?: {
                                 login: string;
                                 rateLimitRemaining: number;
                             };
+                        } | {
+                            /** @enum {string} */
+                            status: "error";
+                            message: string;
                         };
                     };
                 };
@@ -929,10 +991,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: "openrouter" | "deepseek" | "openai";
+                            reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
                             reportModel: string;
-                            /** @enum {string} */
-                            embeddingProvider: "openrouter";
+                            embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
                         };
                     };
@@ -961,10 +1022,9 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        reportProvider: "openrouter" | "deepseek" | "openai";
+                        reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
                         reportModel: string;
-                        /** @enum {string} */
-                        embeddingProvider: "openrouter";
+                        embeddingProvider: "openrouter" | "ollama";
                         embeddingModel: string;
                     };
                 };
@@ -977,10 +1037,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: "openrouter" | "deepseek" | "openai";
+                            reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
                             reportModel: string;
-                            /** @enum {string} */
-                            embeddingProvider: "openrouter";
+                            embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
                         };
                     };
@@ -1249,6 +1308,8 @@ export interface paths {
                     "application/json": {
                         content: string;
                         branch?: string;
+                        model?: string;
+                        provider?: string;
                     };
                 };
             };
