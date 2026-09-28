@@ -3,7 +3,13 @@ import postgres from "postgres";
 import { env } from "@/config/env";
 import * as schema from "@/db/schema";
 
-const liveDb = drizzle(postgres(env.DATABASE_URL), { schema });
+const liveDb = drizzle(
+  postgres(env.DATABASE_URL, {
+    max: env.DATABASE_POOL_MAX,
+    prepare: env.DATABASE_PREPARE,
+  }),
+  { schema },
+);
 
 export const db = liveDb;
 

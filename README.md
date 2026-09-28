@@ -86,12 +86,13 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
 cp backend/.env.example backend/.env
 ```
 
-Required values in `backend/.env`:
+At minimum, set `OPENROUTER_API_KEY` (LLM access — free key at
+[openrouter.ai/keys](https://openrouter.ai/keys)) and, for self-hosted,
+`GITHUB_TOKEN` (repository access — [github.com/settings/tokens](https://github.com/settings/tokens)).
 
-| Variable | Description |
-|---|---|
-| `OPENROUTER_API_KEY` | LLM access — get a free key at [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `GITHUB_TOKEN` | Repository data access — create one at [github.com/settings/tokens](https://github.com/settings/tokens) |
+For the full list of backend and frontend variables, their defaults, and
+copy-paste demo/self-hosted configurations, see
+[`docs/environment.md`](./docs/environment.md).
 
 > **Using Ollama?** No additional env vars needed — just ensure Ollama is running locally and select it in the Settings UI.
 
