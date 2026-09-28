@@ -30,7 +30,7 @@ async function verifyTokenWithGitHub(token: string): Promise<string | null> {
 }
 
 export async function createGitHubToken(req: FastifyRequest, reply: FastifyReply) {
-  if (env.isDemoMode) {
+  if (env.isDemoRestrictKeys) {
     return reply.status(403).send({ error: "GitHub token is managed by the server in demo mode" });
   }
   const { token } = req.body as { token: string };
@@ -58,6 +58,12 @@ export async function getGitHubConnection(_req: FastifyRequest, reply: FastifyRe
   const stored = await getLatestCredential(GITHUB_PROVIDER);
   const source = stored ? ("token" as const) : ("env" as const);
 
+  // Demo mode never probes the token owner's identity (`GET /user` returns the
+  // account login). Report connection state only.
+  if (env.isDemoMode) {
+    return reply.send({ connected: true, source });
+  }
+
   let login: string | undefined;
   try {
     login = (await getGitProvider(token).verifyConnection()).login;
@@ -69,7 +75,7 @@ export async function getGitHubConnection(_req: FastifyRequest, reply: FastifyRe
 }
 
 export async function deleteGitHubConnection(_req: FastifyRequest, reply: FastifyReply) {
-  if (env.isDemoMode) {
+  if (env.isDemoRestrictKeys) {
     return reply.status(403).send({ error: "GitHub token is managed by the server in demo mode" });
   }
   const stored = await getLatestCredential(GITHUB_PROVIDER);

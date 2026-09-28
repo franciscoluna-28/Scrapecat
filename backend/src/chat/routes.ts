@@ -92,7 +92,7 @@ function sendFrame(res: import("node:http").ServerResponse, data: unknown) {
  */
 export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
-  const { content, branch } = req.body as Static<typeof SendMessageBody>;
+  const { content, branch, model, provider } = req.body as Static<typeof SendMessageBody>;
   const anonymousId = getAnonymousId(req);
 
   const session = await chatSessionsStore.getSession({ id });

@@ -39,10 +39,7 @@ next-env.d.ts
 *.sqlite
 *.sqlite3
 data/
-# Demo snapshots are committed on purpose — they are statically imported and
-# bundled into the Vercel function so demo repos load without runtime git.
-!backend/src/demo/data/
-!backend/src/demo/data/**
+backend/src/demo/data/
 
 
 

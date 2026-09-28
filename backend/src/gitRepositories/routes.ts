@@ -1,8 +1,11 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import { env } from "@/config/env";
 import { getGitProvider } from "@/shared/integrations/git-provider";
+import { restrictDemoBranches } from "@/shared/demo-branches";
 import { resolveGithubToken } from "@/github/token";
 import { ensureArchive } from "@/repositories/archive-service";
 import { listCommitsInRange } from "@/repositories/git-reader";
+import { listCommitsFromApi } from "@/repositories/github-api";
 import type { Static } from "@sinclair/typebox";
 import {
   RepoOwnerParams,
@@ -23,7 +26,9 @@ export async function listRepositories(
 
   try {
     const token = await resolveGithubToken();
-    if (token) {
+    // Demo mode is public-only: never call /user/repos, which would expose the
+    // token owner's private repositories. Always use public search instead.
+    if (token && !env.isDemoMode) {
       const repositories = await getGitProvider(token).listRepositories({
         type: type || "all",
         sort: sort || "updated",
@@ -50,10 +55,14 @@ export async function listBranches(
 
   try {
     const provider = getGitProvider(await resolveGithubToken());
-    const [branches, defaultBranch] = await Promise.all([
+    const [allBranches, defaultBranch] = await Promise.all([
       provider.listBranches(owner, repo),
       provider.getDefaultBranch(owner, repo),
     ]);
+    // Demo: expose only trunk branches (or the default) to bound ingestion.
+    const branches = env.isDemoMode
+      ? restrictDemoBranches(allBranches, defaultBranch)
+      : allBranches;
     return reply.send({ branches, defaultBranch });
   } catch (error) {
     console.error("Error fetching branches:", error);
@@ -62,8 +71,9 @@ export async function listBranches(
 }
 
 /**
- * Archive-backed commit preview: reads commits directly from the local clone
- * of the branch (downloading it first if needed) — no per-item GitHub calls.
+ * Commit preview. Demo mode reads the GitHub REST API (no git binary); the
+ * self-hosted path reads the local clone of the branch. Both are public-only
+ * for public repos.
  */
 export async function listCommits(
   req: FastifyRequest,
@@ -74,6 +84,26 @@ export async function listCommits(
   const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
+    if (env.isDemoMode) {
+      const commits = await listCommitsFromApi({
+        owner,
+        repo,
+        branch: ref,
+        since: parseDate(startDate),
+        until: parseDate(endDate),
+        max: limit,
+      });
+      return reply.send({
+        commits: commits.map((c) => ({
+          sha: c.sha,
+          message: c.message,
+          author: c.author,
+          date: c.date,
+          url: c.url,
+        })),
+      });
+    }
+
     const archive = await ensureArchive({ owner, repo, branch: ref });
     const commits = await listCommitsInRange({
       dir: archive.dir,
@@ -114,6 +144,18 @@ export async function countCommits(
   const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
+    if (env.isDemoMode) {
+      const commits = await listCommitsFromApi({
+        owner,
+        repo,
+        branch: ref,
+        since: parseDate(startDate),
+        until: parseDate(endDate),
+        max: 1000,
+      });
+      return reply.send({ count: commits.length });
+    }
+
     const archive = await ensureArchive({ owner, repo, branch: ref });
     const commits = await listCommitsInRange({
       dir: archive.dir,

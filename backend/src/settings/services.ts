@@ -15,7 +15,7 @@ export type AISettings = {
 export function defaultAISettings(): AISettings {
   return {
     reportProvider: "openrouter",
-    reportModel: env.isDemoMode ? env.DEMO_AI_MODEL : env.AI_MODEL,
+    reportModel: env.AI_MODEL,
     embeddingProvider: "openrouter",
     embeddingModel: env.EMBEDDING_MODEL,
   };

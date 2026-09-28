@@ -1,95 +1,89 @@
-import { env } from "@/config/env";
+import { embedNewChunks } from "@/projects/embed-chunks";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
-
-const GITHUB_API = "https://api.github.com";
-const MAX_COMMITS = 200;
-const PER_PAGE = 100;
-
-type ApiCommit = {
-  sha: string;
-  html_url?: string;
-  commit?: {
-    message?: string;
-    author?: { name?: string; date?: string };
-    committer?: { date?: string };
-  };
-};
-
-export type ApiIngestResult = {
-  commitsFound: number;
-  chunksWritten: number;
-  tipSha: string;
-};
+import { getChangedFilesForShas, listCommitsFromApi } from "@/repositories/github-api";
+import type { IngestProgress, IngestResult } from "@/repositories/ingest";
+import { logger } from "@/shared/logger";
+import { timed } from "@/shared/timing";
 
 /**
- * Ingests commits for a branch via the GitHub REST API instead of a local git
- * archive. Used in demo/stateless deployments (e.g. Vercel serverless) where
- * the native `git` binary and persistent disk aren't available.
+ * Ingest path for demo / serverless deployments: reads commits from the GitHub
+ * REST API via Octokit instead of a local `git` archive. No `git` binary, no
+ * persistent disk — only Postgres and outbound HTTPS.
  *
- * Best-effort: capped history, no per-commit file diff (REST would need one
- * request per commit), so citations carry message/author/date but no file
- * scope. Dedupe by SHA like the archive path.
+ * Public repos only. Use a fine-grained PAT scoped to "Public repositories
+ * (read-only)" so the token can never read private repos or account data.
  */
 export async function ingestCommitsFromApi(opts: {
   owner: string;
   repo: string;
   branch: string;
   projectId: string;
-}): Promise<ApiIngestResult> {
-  const { owner, repo, branch, projectId } = opts;
-  const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
-  if (env.GITHUB_TOKEN) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
+  startDate?: Date;
+  endDate?: Date;
+  onProgress?: IngestProgress;
+}): Promise<IngestResult> {
+  const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
+  const base = { owner, repo, branch, projectId };
 
-  const commits: ApiCommit[] = [];
-  let page = 1;
-  while (commits.length < MAX_COMMITS) {
-    const url = `${GITHUB_API}/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(
-      branch,
-    )}&per_page=${PER_PAGE}&page=${page}`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      if (res.status === 404 || res.status === 422) {
-        throw new Error("Branch or repository not found on GitHub");
-      }
-      throw new Error(`GitHub API error: ${res.status}`);
-    }
-    const data = (await res.json()) as ApiCommit[];
-    if (!Array.isArray(data) || data.length === 0) break;
-    commits.push(...data);
-    if (data.length < PER_PAGE) break;
-    page += 1;
-  }
+  const commits = await timed("ingestApi.listCommits", base, () =>
+    listCommitsFromApi({ owner, repo, branch, since: startDate, until: endDate }),
+  );
+  onProgress?.("commits", `Found ${commits.length} commits`, commits.length, commits.length);
 
-  const inputs = commits
-    .map((c) => ({
+  const existing = await timed("ingestApi.getChunksByShas", { ...base, shas: commits.length }, () =>
+    commitChunksStore.getChunksByShas({
       projectId,
-      commitSha: c.sha,
+      shas: commits.map((c) => c.sha),
       branch,
-      commitMessage: c.commit?.message ?? "",
-      author: c.commit?.author?.name ?? null,
-      metadata: {
-        commitUrl: c.html_url ?? `https://github.com/${owner}/${repo}/commit/${c.sha}`,
-        filesChanged: [] as string[],
-      },
-      committedAt: new Date(
-        c.commit?.author?.date ?? c.commit?.committer?.date ?? Date.now(),
-      ),
-    }))
-    .filter((i) => i.commitMessage.trim().length > 0);
+    }),
+  );
+  const newCommits = commits.filter((c) => !existing.has(c.sha));
 
-  const existing = await commitChunksStore.getChunksByShas({
+  const filesBySha = await timed("ingestApi.getChangedFiles", { ...base, count: newCommits.length }, () =>
+    getChangedFilesForShas({ owner, repo, shas: newCommits.map((c) => c.sha) }),
+  );
+
+  const inputs = newCommits.map((c) => ({
     projectId,
-    shas: inputs.map((i) => i.commitSha),
+    commitSha: c.sha,
     branch,
-  });
-  const newInputs = inputs.filter((i) => !existing.has(i.commitSha));
-  if (newInputs.length > 0) {
-    await commitChunksStore.upsertCommitChunks({ inputs: newInputs });
+    commitMessage: c.message,
+    author: c.author,
+    metadata: {
+      filesChanged: (filesBySha.get(c.sha) ?? []).map((f) => f.filepath),
+      commitUrl: c.url,
+    },
+    committedAt: new Date(c.date),
+  }));
+
+  if (inputs.length > 0) {
+    await commitChunksStore.upsertCommitChunks({ inputs });
+    onProgress?.(
+      "ingest",
+      `Stored ${inputs.length} of ${commits.length} commits`,
+      inputs.length,
+      commits.length,
+    );
   }
 
-  return {
-    commitsFound: inputs.length,
-    chunksWritten: newInputs.length,
-    tipSha: commits[0]?.sha ?? "",
-  };
+  let embedded = 0;
+  if (inputs.length > 0) {
+    onProgress?.("embedding", "Embedding commit summaries");
+    const result = await timed("ingestApi.embedNewChunks", base, () => embedNewChunks(projectId));
+    embedded = result.embedded;
+  }
+
+  const tipSha = commits[0]?.sha ?? "";
+  logger.info(
+    {
+      ...base,
+      commitsFound: commits.length,
+      chunksWritten: inputs.length,
+      embedded,
+      tipSha,
+    },
+    "ingest (api) complete",
+  );
+
+  return { commitsFound: commits.length, chunksWritten: inputs.length, tipSha };
 }
