@@ -16,7 +16,7 @@ import { ModelSelectorDialog } from "./ModelSelectorDialog";
 import { useChatModelStore } from "@/src/store/chat-model";
 import { useAllModels } from "@/src/shared/services/ai-models";
 import { useAISettings } from "@/src/shared/services/ai-settings";
-import { PROVIDERS } from "@/src/shared/constants";
+import { PROVIDERS, IS_DEMO } from "@/src/shared/constants";
 
 type ChatComposerProps = {
   branches: string[];
@@ -81,16 +81,18 @@ export function ChatComposer({
           />
         </PromptInputBody>
         <PromptInputFooter>
-          <PromptInputButton
-            variant="ghost"
-            onClick={() => setModelDialogOpen(true)}
-            tooltip="Select model"
-          >
-            <Bot className="size-4" />
-            <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-              {providerLabel} · {modelLabel}
-            </span>
-          </PromptInputButton>
+          {!IS_DEMO && (
+            <PromptInputButton
+              variant="ghost"
+              onClick={() => setModelDialogOpen(true)}
+              tooltip="Select model"
+            >
+              <Bot className="size-4" />
+              <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                {providerLabel} · {modelLabel}
+              </span>
+            </PromptInputButton>
+          )}
           <PromptInputSubmit
             className="ml-auto"
             status={isStreaming ? "streaming" : "ready"}
