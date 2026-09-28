@@ -1,5 +1,9 @@
 // Vercel entrypoint.
 //
+// Plain JavaScript on purpose: Vercel type-checks the entrypoint, and the
+// generated bundle it imports (`dist/vercel-entry.mjs`) has no type
+// declarations, which would fail with TS7016.
+//
 // Vercel's Fastify framework detector requires the entrypoint file itself to
 // import `fastify`, so we create the instance here and hand it to the app
 // factory. The factory comes from the esbuild bundle in `dist/` (built by
