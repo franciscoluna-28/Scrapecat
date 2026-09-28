@@ -5,7 +5,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 ## Commands
 
 - Run API: `pnpm dev` (tsx watch on `src/main.ts`, port 4000, Swagger at http://localhost:4000/docs)
-- Vercel build (serverless demo): `pnpm build:vercel` bundles `src/vercel-entry.ts` → `dist/vercel-entry.mjs` via `scripts/build-vercel.mjs` (run automatically as `vercel-build`). The root `server.ts` is Vercel's Fastify entrypoint.
+- Vercel build (serverless demo): `pnpm build:vercel` bundles `src/vercel-entry.ts` → `dist/vercel-entry.mjs` via `scripts/build-vercel.mjs` (run automatically as `vercel-build`). The root `server.mjs` is Vercel's Fastify entrypoint (plain JS so Vercel's type-check skips the untyped bundle).
 - Tests: `pnpm test` (vitest run)
 - Watch tests: `pnpm test:watch`
 - Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
