@@ -1,6 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { db, isInMemoryMode } from "@/db/client";
-import * as memory from "@/db/memory";
+import { db } from "@/db/client";
 import { credentials, type CredentialProvider } from "@/db/schema";
 
 export type CredentialInput = {
@@ -10,7 +9,6 @@ export type CredentialInput = {
 };
 
 export async function upsertCredential(input: CredentialInput) {
-  if (isInMemoryMode) return memory.upsertCredential(input);
   const [row] = await db
     .insert(credentials)
     .values(input)
@@ -27,7 +25,6 @@ export async function upsertCredential(input: CredentialInput) {
 }
 
 export async function listCredentials(provider?: CredentialProvider) {
-  if (isInMemoryMode) return memory.listCredentials(provider);
   const query = db.select().from(credentials);
   if (provider) {
     query.where(eq(credentials.provider, provider));
@@ -36,7 +33,6 @@ export async function listCredentials(provider?: CredentialProvider) {
 }
 
 export async function getCredentialById(id: string) {
-  if (isInMemoryMode) return memory.getCredentialById(id);
   const [row] = await db
     .select()
     .from(credentials)
@@ -46,7 +42,6 @@ export async function getCredentialById(id: string) {
 }
 
 export async function deleteCredentialById(id: string) {
-  if (isInMemoryMode) return memory.deleteCredentialById(id);
   const rows = await db
     .delete(credentials)
     .where(eq(credentials.id, id))
@@ -55,7 +50,6 @@ export async function deleteCredentialById(id: string) {
 }
 
 export async function getLatestCredential(provider: CredentialProvider) {
-  if (isInMemoryMode) return memory.getLatestCredential(provider);
   const [row] = await db
     .select()
     .from(credentials)

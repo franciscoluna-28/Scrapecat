@@ -1,7 +1,6 @@
 import { createHash } from "crypto";
 import { and, asc, cosineDistance, desc, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
-import { db, DbOrTx, Tx, isInMemoryMode } from "@/db/client";
-import * as memory from "@/db/memory";
+import { db, DbOrTx, Tx } from "@/db/client";
 import { commitChunks, type CommitChunkMetadata } from "@/db/schema";
 
 export type CommitChunkInput = {
@@ -34,7 +33,6 @@ export async function upsertCommitChunks({
   inputs: CommitChunkInput[];
   tx?: Tx;
 }) {
-  if (isInMemoryMode) return memory.upsertCommitChunks({ inputs });
   if (inputs.length === 0) return;
   const client = tx || db;
   await client
@@ -75,9 +73,6 @@ export async function countChunksForProject({
   embeddedOnly?: boolean;
   tx?: DbOrTx;
 }): Promise<number> {
-  if (isInMemoryMode) {
-    return memory.countChunksForProject({ projectId, branch, embeddedOnly });
-  }
   const client = tx || db;
   const conditions = [eq(commitChunks.projectId, projectId)];
   if (branch) conditions.push(eq(commitChunks.branch, branch));
@@ -98,7 +93,6 @@ export async function getLatestCommitDate({
   branch?: string;
   tx?: DbOrTx;
 }): Promise<Date | null> {
-  if (isInMemoryMode) return memory.getLatestCommitDate({ projectId, branch });
   const client = tx || db;
   const conditions = [eq(commitChunks.projectId, projectId)];
   if (branch) conditions.push(eq(commitChunks.branch, branch));
@@ -122,7 +116,6 @@ export async function getChunksByShas({
   branch?: string;
   tx?: DbOrTx;
 }): Promise<Map<string, { commitSha: string; metadata: CommitChunkMetadata; contentHash: string | null }>> {
-  if (isInMemoryMode) return memory.getChunksByShas({ projectId, shas, branch });
   if (shas.length === 0) return new Map();
   const client = tx || db;
   const conditions = [
@@ -154,9 +147,6 @@ export async function listCommitsForProject({
   endDate?: Date;
   branch?: string;
 }) {
-  if (isInMemoryMode) {
-    return memory.listCommitsForProject({ projectId, startDate, endDate, branch });
-  }
   const client = tx || db;
   const conditions = [eq(commitChunks.projectId, projectId)];
   if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));
@@ -200,7 +190,6 @@ export async function semanticSearchCommits({
   endDate?: Date;
   tx?: DbOrTx;
 }): Promise<CommitSearchResult[]> {
-  if (isInMemoryMode) return memory.semanticSearchCommits({ projectId, embedding, limit, branch, startDate, endDate });
   const client = tx || db;
   const conditions = [
     eq(commitChunks.projectId, projectId),
@@ -253,9 +242,6 @@ export async function keywordSearchCommits({
   endDate?: Date;
   tx?: DbOrTx;
 }): Promise<CommitSearchResult[]> {
-  if (isInMemoryMode) {
-    return memory.keywordSearchCommits({ projectId, query, limit, branch, startDate, endDate });
-  }
   const client = tx || db;
   const pattern = `%${query.replace(/[%_]/g, "")}%`;
   const conditions = [

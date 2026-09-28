@@ -7,7 +7,6 @@ import { logger } from "@/shared/logger";
 import { embedTexts } from "@/projects/embeddings";
 
 export async function listPendingChunks(projectId: string) {
-  if (env.isInMemoryMode) return [];
   return db
     .select({
       id: commitChunks.id,
@@ -32,7 +31,7 @@ function fmtDate(d: Date): string {
 }
 
 export async function embedNewChunks(projectId: string, opts?: { batchSize?: number }) {
-  if (env.isInMemoryMode || !env.EMBEDDING_ENABLED) return { embedded: 0 };
+  if (!env.EMBEDDING_ENABLED) return { embedded: 0 };
 
   const pending = await listPendingChunks(projectId);
   if (pending.length === 0) return { embedded: 0 };
