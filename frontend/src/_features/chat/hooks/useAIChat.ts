@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -24,7 +24,6 @@ type UseAIChatOptions = {
 
 export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const createSession = useCreateChatSession();
   const { provider: modelProvider, model: modelId } = useChatModelStore();
@@ -44,6 +43,12 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const streamingId = liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.id ?? null;
   const streamingContentLength =
     liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.content.length ?? 0;
+
+  // Clear stale live messages when session or project changes.
+  useEffect(() => {
+    setLiveMessages([]);
+    setIngestionProgress(null);
+  }, [sessionId, projectId]);
 
   const scrollToBottom = useCallback((force: boolean) => {
     const container = bottomRef.current?.closest("[data-chat-scroll]") as HTMLElement | null;
@@ -67,6 +72,13 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     }
   }, [messages.length, streamingContentLength, scrollToBottom]);
 
+  // Project switching: clear all stale chat queries so old sessions don't bleed.
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: queryKeys.chat.all });
+    };
+  }, [projectId, queryClient]);
+
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || !projectId || isStreaming) return;
@@ -81,7 +93,8 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         const created = await createSession.mutateAsync(projectId);
         sid = created.id;
         isNewSession = true;
-        const p = new URLSearchParams(searchParams.toString());
+        // Read current URL instead of stale searchParams snapshot.
+        const p = new URLSearchParams(window.location.search);
         p.set("session", sid);
         router.replace(`/app?${p.toString()}`, { scroll: false });
       }
@@ -132,7 +145,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
 
       setLiveMessages([]);
       setIngestionProgress(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(sid) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(sid!) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
     } catch {
