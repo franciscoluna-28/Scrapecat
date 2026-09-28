@@ -12,7 +12,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
 
-## API layer (per-domain `routes.ts` + `src/app.ts`)
+## API layer (per-domain `routes.ts` + `src/build-app.ts`)
 
 Structure is routes → services, organized by **domain** (screaming architecture). Each domain folder (`src/reports/`, `src/projects/`, `src/repositories/`, `src/credentials/`, etc.) owns its handlers, Zod/TypeBox schemas, services, stores, and colocated tests. Cross-cutting integrations live in `src/shared/integrations/`; shared DB infra in `src/db/`.
 
@@ -20,7 +20,7 @@ Structure is routes → services, organized by **domain** (screaming architectur
 
 Route handlers stay thin; business logic goes in services.
 
-All route registration is imperative in `src/app.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/reports/routes.ts`). There is no router/index.ts or decorator-based routing.
+All route registration is imperative in `src/build-app.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/reports/routes.ts`). There is no router/index.ts or decorator-based routing.
 
 **Route handler pattern** (every handler must follow this):
 1. Accept `req: FastifyRequest, reply: FastifyReply` — do **not** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; validation is enforced at the route `schema` level, not via compile-time generics
@@ -29,9 +29,9 @@ All route registration is imperative in `src/app.ts` — each route specifies a 
 4. Return data or catch with a generic `500`
 
 Validation uses **TypeBox-first, Fastify-owned validation**:
-- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/app.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
+- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/build-app.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
 - Handlers read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts — no Zod schemas in the request path.
-- A global `setErrorHandler` in `src/app.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
+- A global `setErrorHandler` in `src/build-app.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
 - **Zod is reserved for non-request validation only:** `src/config/env.ts` (env parsing) and `src/reports/report-output.ts` (validating AI-generated markdown against `parsedReportSchema`). Do not reintroduce Zod for route input.
 
 Never return API key values from any endpoint — metadata only (key hints).
@@ -146,7 +146,7 @@ Vitest with colocated `*.test.ts` files. Route tests use `buildApp()` from `../a
 
 Test pattern:
 ```ts
-import { buildApp } from "../app";
+import { buildApp } from "@/build-app";
 const app = await buildApp();
 const res = await app.inject({ method: "GET", url: "/api/v1/..." });
 expect(res.statusCode).toBe(200);

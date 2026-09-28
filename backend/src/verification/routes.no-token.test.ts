@@ -21,7 +21,7 @@ vi.mock("@/config/env", () => ({
   },
 }));
 
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 
 describe("GET /api/v1/verification/status — no token", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;

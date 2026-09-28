@@ -4,7 +4,7 @@
 
 The backend has two architectural characteristics that drive the entire testing approach:
 
-1. **Fastify factory pattern.** `buildApp()` in `src/app.ts` returns a configured instance without starting a server. This lets us use `app.inject()` — zero-network HTTP injection via `light-my-request` — instead of binding to a port. Every test follows this three-step pattern:
+1. **Fastify factory pattern.** `buildApp()` in `src/build-app.ts` returns a configured instance without starting a server. This lets us use `app.inject()` — zero-network HTTP injection via `light-my-request` — instead of binding to a port. Every test follows this three-step pattern:
 
 ```ts
 const app = await buildApp();
@@ -35,7 +35,7 @@ vi.mock("../shared/integrations/git-provider", () => ({
 }));
 
 // 2. Imports come after vi.mock
-import { buildApp } from "../app";
+import { buildApp } from "@/build-app";
 
 // 3. Standard describe/it with buildApp + inject + close
 describe("GET /api/v1/branches", () => {

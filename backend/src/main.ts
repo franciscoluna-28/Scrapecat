@@ -1,5 +1,5 @@
 import "dotenv/config.js";
-import { buildApp } from "@/app";
+import { buildApp } from "@/build-app";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 
