@@ -117,8 +117,6 @@ export async function streamChatMessage(
       "Content-Type": "application/json",
       "x-anonymous-id": getAnonymousId(),
     },
-    body: JSON.stringify({ content, ...(branch ? { branch } : {}) }),
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       content,
       ...(branch ? { branch } : {}),
