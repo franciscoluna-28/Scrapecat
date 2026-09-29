@@ -91,6 +91,12 @@ const isDemoMode = parsed.data.DEMO_MODE;
 // features (e.g. the Swagger UI static asset server) in serverless deployments.
 const isVercel = !!process.env.VERCEL;
 
+// CORS_ORIGIN may list several origins separated by commas (e.g. a production
+// domain plus Vercel preview URLs).
+const corsOrigins = parsed.data.CORS_ORIGIN.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 export const env = {
   ...parsed.data,
   isDemoMode,
@@ -100,4 +106,5 @@ export const env = {
   // lock the app to the pre-ingested set.
   allowAddRepos: parsed.data.ALLOW_ADD_REPOS,
   isVercel,
+  corsOrigins,
 };

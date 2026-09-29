@@ -80,7 +80,8 @@ export async function buildApp(instance?: FastifyInstance) {
   });
 
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    // A single origin, or several comma-separated ones from CORS_ORIGIN.
+    origin: env.corsOrigins.length <= 1 ? env.corsOrigins[0] ?? false : env.corsOrigins,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
   });
 
