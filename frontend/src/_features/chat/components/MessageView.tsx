@@ -58,7 +58,7 @@ export function MessageView({
           <MessageAction
             tooltip="Copy"
             onClick={() => {
-              const cleaned = message.content.replace(/:::report\n?|:::/g, "").trim();
+              const cleaned = [before, artifact].filter(Boolean).join("\n\n").trim();
               navigator.clipboard.writeText(cleaned);
               toast.success("Copied to clipboard");
             }}
