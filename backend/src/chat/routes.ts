@@ -15,7 +15,7 @@ import {
   SessionNotFoundError,
 } from "@/chat/services";
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
-import { applyCorsToRawResponse } from "@/shared/cors-raw";
+import { env } from "@/config/env";
 
 function getAnonymousId(req: FastifyRequest): string {
   return (req.headers["x-anonymous-id"] as string) || "anonymous";
@@ -80,10 +80,6 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-function sendFrame(res: import("node:http").ServerResponse, data: unknown) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
 /**
  * SSE stream of an assistant reply. Frames:
  *  - { type: "token", content }   per delta
@@ -105,7 +101,17 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
 
   reply.hijack();
   const res = reply.raw;
-  applyCorsToRawResponse(req.raw, res);
+
+  // @fastify/cors headers are discarded after hijack — reflect origin inline.
+  const origin = req.raw.headers.origin;
+  if (origin) {
+    const allowed = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
+    if (allowed.includes("*") || allowed.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+  }
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -121,6 +127,10 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   };
   req.raw.on("close", close);
 
+  const send = (data: unknown) => {
+    if (!closed) res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
   try {
     const message = await streamChatMessage({
       sessionId: id,
@@ -129,25 +139,19 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       model,
       provider,
       onProgress: (stage, msg, done, total) => {
-        if (closed) return;
-        sendFrame(res, { type: "progress", stage, message: msg, done, total });
+        send({ type: "progress", stage, message: msg, done, total });
       },
       onToken: (chunk) => {
-        if (closed) return;
-        sendFrame(res, { type: "token", content: chunk });
+        send({ type: "token", content: chunk });
       },
     });
-    if (!closed) {
-      sendFrame(res, { type: "done", message });
-    }
+    send({ type: "done", message });
   } catch (error) {
     const message =
       error instanceof SessionNotFoundError
         ? "Chat session not found"
         : (error as Error)?.message ?? "Failed to generate reply";
-    if (!closed) {
-      sendFrame(res, { type: "error", error: message });
-    }
+    send({ type: "error", error: message });
   } finally {
     close();
   }

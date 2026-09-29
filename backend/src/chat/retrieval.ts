@@ -4,8 +4,15 @@ import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 
 export const RETRIEVAL_LIMIT = 20;
 
-/** Cosine distance threshold: rows beyond this are too unrelated to cite. */
-export const MAX_COSINE_DISTANCE = 0.45;
+/**
+ * Cosine distance ceiling for a semantic hit. `text-embedding-3-small` distances
+ * between a natural-language question and short commit subjects typically land
+ * around 0.45–0.65 even when the commits are clearly on-topic, so a tight floor
+ * throws away the whole candidate set (the model then reports "no commits").
+ * Keep this generous: it only drops clearly-unrelated rows and lets the prompt
+ * do the quality filtering.
+ */
+export const MAX_COSINE_DISTANCE = 0.8;
 
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10);

@@ -20,7 +20,7 @@ import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
 import { useDemoProjects } from "@/src/_features/demo/hooks/useDemoProjects";
-import { IS_DEMO } from "@/src/shared/constants";
+import { IS_DEMO, DEMO_PROJECTS } from "@/src/shared/constants";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
@@ -30,10 +30,9 @@ export function Chat() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { projects, isLoading: projectsLoading } = useProjects();
-  const { isDemo, defaultProject, ensureProject } = useDemoProjects();
+  const { isDemo, ensureProject } = useDemoProjects();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
   const { getBranch, setBranch } = useChatBranchStore();
-  const demoBootstrapped = useRef(false);
 
   const projectId = searchParams.get("project");
   const sessionId = searchParams.get("session");
@@ -48,43 +47,15 @@ export function Chat() {
 
   const branch = projectId ? getBranch(projectId, defaultBranch) : null;
 
+  // Non-demo: auto-select the last-used project (or the first one).
   useEffect(() => {
-    if (projectId || projectsLoading) return;
-
-    // Demo always lands on a working project: ensure the default demo repo
-    // exists, then select it. Visitors never start from an empty workspace.
-    if (isDemo) {
-      if (demoBootstrapped.current) return;
-      demoBootstrapped.current = true;
-      void (async () => {
-        const target = await ensureProject(defaultProject);
-        if (!target) return;
-        setLastProjectId(target);
-        const p = new URLSearchParams(searchParams.toString());
-        p.set("project", target);
-        router.replace(`/app?${p.toString()}`);
-      })();
-      return;
-    }
-
+    if (projectId || projectsLoading || isDemo) return;
     if (projects.length === 0) return;
     const stored = useActiveProjectStore.getState().lastProjectId;
     const target = projects.find((p) => p.id === stored)?.id ?? projects[0].id;
     setLastProjectId(target);
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("project", target);
-    router.replace(`/app?${p.toString()}`);
-  }, [
-    projectId,
-    projectsLoading,
-    projects,
-    isDemo,
-    defaultProject,
-    ensureProject,
-    router,
-    searchParams,
-    setLastProjectId,
-  ]);
+    router.replace(`/app?project=${target}`);
+  }, [projectId, projectsLoading, projects, isDemo, router, setLastProjectId]);
 
   useEffect(() => {
     if (projectId) {
@@ -100,6 +71,14 @@ export function Chat() {
       }
     }
   }, [defaultBranch, projectId, getBranch, setBranch]);
+
+  const handleDemoProjectClick = async (demo: (typeof DEMO_PROJECTS)[number]) => {
+    const id = await ensureProject(demo);
+    if (id) {
+      setLastProjectId(id);
+      router.push(`/app?project=${id}`);
+    }
+  };
 
   const handleBranchChange = async (branchName: string) => {
     if (!projectId) return;
@@ -123,7 +102,7 @@ export function Chat() {
     if (!projectId || !q || isStreaming || messagesLoading) return;
     if (autoSentRef.current === q) return;
     autoSentRef.current = q;
-    const p = new URLSearchParams(searchParams.toString());
+    const p = new URLSearchParams(window.location.search);
     p.delete("q");
     router.replace(`/app?${p.toString()}`, { scroll: false });
     void sendMessageRef.current(q);
@@ -132,21 +111,45 @@ export function Chat() {
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
       {!projectId ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Empty className="max-w-md border-0">
-            <EmptyMedia>
-              <BookOpen className="size-12 text-muted-foreground" />
-            </EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
-              <EmptyDescription className="text-sm text-muted-foreground">
-                {IS_DEMO
-                  ? "Demo mode: ask about the recent commits of a public repo. Pick one from the sidebar to get started — answers cite real commits."
-                  : "Select or connect a repository from the sidebar to start asking questions about your code history."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
+        IS_DEMO ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="max-w-md space-y-6">
+              <div className="text-center space-y-2">
+                <BookOpen className="size-10 text-muted-foreground mx-auto" />
+                <h2 className="text-lg font-semibold">Welcome to Demo Mode</h2>
+                <p className="text-sm text-muted-foreground">
+                  Select a repository to start asking questions about its recent commits.
+                </p>
+              </div>
+              <div className="grid gap-3">
+                {DEMO_PROJECTS.map((demo) => (
+                  <button
+                    key={demo.repo}
+                    onClick={() => handleDemoProjectClick(demo)}
+                    className="flex items-center gap-3 p-4 border rounded-lg hover:bg-accent text-left transition-colors"
+                  >
+                    <span className="font-medium">{demo.label}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{demo.owner}/{demo.repo}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <Empty className="max-w-md border-0">
+              <EmptyMedia>
+                <BookOpen className="size-12 text-muted-foreground" />
+              </EmptyMedia>
+              <EmptyHeader>
+                <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
+                <EmptyDescription className="text-sm text-muted-foreground">
+                  Select or connect a repository from the sidebar to start asking questions about your code history.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </div>
+        )
       ) : (
         <div className="flex flex-col flex-1">
           <ChatMessages

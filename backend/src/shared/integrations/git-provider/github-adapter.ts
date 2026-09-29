@@ -83,6 +83,19 @@ export class GithubAdapter implements GitProvider {
     return data.default_branch;
   }
 
+  /**
+   * The numeric repo id is the provider's stable identity: it never changes on
+   * rename/transfer. We store it as `provider_project_id` so every creation path
+   * (demo cards, repo list, URL) resolves to the same project row.
+   */
+  async getRepositoryId(owner: string, repo: string): Promise<string> {
+    const { data } = await this.octokit.request("GET /repos/{owner}/{repo}", {
+      owner,
+      repo,
+    });
+    return String(data.id);
+  }
+
   async verifyConnection(): Promise<ConnectionStatus> {
     const response = await this.octokit.request("GET /user", {
       headers: { "X-GitHub-Api-Version": "2022-11-28" },

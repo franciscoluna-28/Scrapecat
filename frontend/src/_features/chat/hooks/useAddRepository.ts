@@ -91,6 +91,9 @@ export function useAddRepository(
     }
   };
 
+  // Use the provider's numeric repo id as the external id — the backend also
+  // canonicalizes every creation path to it, so the same repo always resolves
+  // to one project row (ingestion + embeddings run once).
   const connectByRepo = (repo: GitHubRepository) =>
     connect({
       providerProjectId: repo.id,
