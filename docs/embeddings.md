@@ -6,8 +6,8 @@ How commit embeddings are produced, stored, and kept cheap and reliable. Semanti
 
 Three constraints drove the design, in order of priority:
 
-1. **Cost.** Embedding the full git diff for every commit would burn tokens on patch noise (boilerplate, formatting churn, generated files) for almost no retrieval value, and re-embedding unchanged content on every report run would multiply the bill. The corpus is the **commit message** — commit/PR review, not code review, so the message is the unit of meaning and file scopes are the ground truth for reports.
-2. **Reliability.** Embedding must never block or fail report generation. If the embedding provider is down, out of quota, or missing a key, the report still succeeds — vectors are a derived cache that catches up later.
+1. **Cost.** Embedding the full git diff for every commit would burn tokens on patch noise (boilerplate, formatting churn, generated files) for almost no retrieval value, and re-embedding unchanged content on every run would multiply the bill. The corpus is the **commit message** — commit/PR review, not code review, so the message is the unit of meaning and file scopes ground retrieval.
+2. **Reliability.** Embedding must never block or fail chat retrieval. If the embedding provider is down, out of quota, or missing a key, retrieval still succeeds via the keyword fallback — vectors are a derived cache that catches up later.
 3. **Correctness by construction.** A commit is immutable (identified by its SHA), so a stored commit's content never changes. The only thing that can go stale is its embedding — and that staleness is tracked explicitly.
 
 ## The corpus: the commit message
@@ -16,7 +16,7 @@ Each `commit_chunks` row stores the commit message (the embedding source) plus s
 
 | Field | Source | Where stored |
 |---|---|---|
-| `sha` | local git log (isomorphic-git) | `commit_sha` |
+| `sha` | local git log (native git) | `commit_sha` |
 | `commit_message` | local git log | `commit_message` (embedding source) |
 | `author` | local git log | `author` |
 | `files_changed` | `git diff-tree --name-status` between commit and parent | `metadata` jsonb |
@@ -41,13 +41,13 @@ A row's embedding is **current** iff `embedding_hash = content_hash`. The embed 
 ## Provider and dimensions
 
 - **Provider:** OpenRouter's OpenAI-compatible embeddings endpoint (`https://openrouter.ai/api/v1/embeddings`), reusing the existing OpenRouter API key (`resolveApiKey("openrouter")` → `OPENROUTER_API_KEY`).
-- **Model:** the global AI setting `embeddingModel` (Settings → AI Settings, stored in `app_settings`), defaulting to `openai/text-embedding-3-small` (env `EMBEDDING_MODEL` fallback), 512 dimensions — matches the `vector(512)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine). The Settings UI only offers 512-dim OpenRouter embedding models.
+- **Model:** the global AI setting `embeddingModel` (Settings → AI Settings, stored in `app_settings`), defaulting to `openai/text-embedding-3-small` (env `EMBEDDING_MODEL` fallback), 768 dimensions — matches the `vector(768)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine).
 - **Guarding:** if the model ever returns a vector of the wrong length, the batch fails loudly instead of writing corrupt vectors.
 - **Model changes:** changing the embedding model only applies to newly embedded rows. Existing vectors keep their model until a full re-embed (the staleness gate is content-based, not model-based).
 
 ## When embeddings happen
 
-1. **Inline, non-blocking** — after ingestion upserts new chunks, `embedNewChunks(projectId)` runs fire-and-forget (`void ... .catch(...)`). Report generation never waits on it or fails because of it. If it fails (no key, quota, outage), the chunks stay persisted with `content_hash`, and the next run or backfill catches up.
+1. **Inline, non-blocking** — after ingestion upserts new chunks, `embedNewChunks(projectId)` runs fire-and-forget (`void ... .catch(...)`). Chat retrieval never waits on it or fails because of it. If it fails (no key, quota, outage), the chunks stay persisted with `content_hash`, and the next run or backfill catches up.
 2. **Batch backfill** — `pnpm embed:backfill` (`backend/scripts/embed-backfill.ts`) walks every project and embeds all pending rows, in batches of `EMBEDDING_BATCH_SIZE` (default 100) — one HTTP call per batch.
 
 ## Reliability & scaling properties
