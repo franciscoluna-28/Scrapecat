@@ -11,16 +11,24 @@ vi.mock("@/shared/integrations/git-provider", () => ({
   getGitProvider: vi.fn(() => mockProvider),
 }));
 
-const mockEnsureArchive = vi.fn();
-const mockListCommitsInRange = vi.fn();
+const mockGetProjectByOwnerRepo = vi.fn();
+const mockListCommitsForProject = vi.fn();
 
-vi.mock("@/repositories/archive-service", () => ({
-  ensureArchive: (...args: unknown[]) => mockEnsureArchive(...args),
-}));
+vi.mock("@/projects/stores/projects-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/projects/stores/projects-store")>();
+  return {
+    ...actual,
+    getProjectByOwnerRepo: (...args: unknown[]) => mockGetProjectByOwnerRepo(...args),
+  };
+});
 
-vi.mock("@/repositories/git-reader", () => ({
-  listCommitsInRange: (...args: unknown[]) => mockListCommitsInRange(...args),
-}));
+vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/projects/stores/commit-chunks-store")>();
+  return {
+    ...actual,
+    listCommitsForProject: (...args: unknown[]) => mockListCommitsForProject(...args),
+  };
+});
 
 vi.mock("@/github/token", () => ({
   resolveGithubToken: vi.fn(async () => null),
@@ -119,16 +127,22 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", defaultBranch: "main" });
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it("returns commits list from the local archive", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/tmp/repo", tipSha: "abc" });
-    mockListCommitsInRange.mockResolvedValue([
-      { sha: "abc", message: "fix", author: "dev", date: "2024-01-15T00:00:00.000Z" },
+  it("returns commits from Postgres (the read model)", async () => {
+    mockListCommitsForProject.mockResolvedValue([
+      {
+        commitSha: "abc",
+        commitMessage: "fix",
+        author: "dev",
+        committedAt: new Date("2024-01-15T00:00:00.000Z"),
+        metadata: { commitUrl: "https://github.com/owner1/repo1/commit/abc" },
+      },
     ]);
 
     const res = await app.inject({
@@ -137,30 +151,52 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      commits: [{ sha: "abc", message: "fix", author: "dev", date: "2024-01-15T00:00:00.000Z" }],
+      commits: [
+        {
+          sha: "abc",
+          message: "fix",
+          author: "dev",
+          date: "2024-01-15T00:00:00.000Z",
+          url: "https://github.com/owner1/repo1/commit/abc",
+        },
+      ],
+    });
+    expect(mockGetProjectByOwnerRepo).toHaveBeenCalledWith({
+      gitProvider: "github",
+      providerOwner: "owner1",
+      repositoryName: "repo1",
     });
   });
 
-  it("passes branch and date range to the archive-backed reader", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/tmp/repo", tipSha: "abc" });
-    mockListCommitsInRange.mockResolvedValue([]);
+  it("passes branch and date range to the store", async () => {
+    mockListCommitsForProject.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/commits?limit=50&branch=main&startDate=2024-01-01&endDate=2024-01-31",
     });
 
-    expect(mockEnsureArchive).toHaveBeenCalledWith({ owner: "owner1", repo: "repo1", branch: "main" });
-    expect(mockListCommitsInRange).toHaveBeenCalledWith({
-      dir: "/tmp/repo",
-      ref: "main",
-      since: new Date("2024-01-01T00:00:00.000Z"),
-      until: new Date("2024-01-31T00:00:00.000Z"),
+    expect(mockListCommitsForProject).toHaveBeenCalledWith({
+      projectId: "p1",
+      branch: "main",
+      startDate: new Date("2024-01-01T00:00:00.000Z"),
+      endDate: new Date("2024-01-31T00:00:00.000Z"),
     });
   });
 
+  it("returns an empty list when the repo has no project yet", async () => {
+    mockGetProjectByOwnerRepo.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/commits",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ commits: [] });
+  });
+
   it("returns 500 on error", async () => {
-    mockEnsureArchive.mockRejectedValue(new Error("clone failed"));
+    mockGetProjectByOwnerRepo.mockRejectedValueOnce(new Error("db down"));
 
     const res = await app.inject({
       method: "GET",
@@ -168,16 +204,6 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json()).toEqual({ error: "Failed to fetch commits" });
-  });
-
-  it("returns 400 when the branch or repo is not found", async () => {
-    mockEnsureArchive.mockRejectedValue(Object.assign(new Error("not found"), { code: "NotFoundError" }));
-
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/repositories/owner1/repo1/commits?branch=nope",
-    });
-    expect(res.statusCode).toBe(400);
   });
 
   it("rejects an invalid limit", async () => {
@@ -194,15 +220,15 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", defaultBranch: "main" });
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it("returns commit count from the local archive", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/tmp/repo", tipSha: "abc" });
-    mockListCommitsInRange.mockResolvedValue([{ sha: "a" }, { sha: "b" }]);
+  it("returns the stored commit count", async () => {
+    mockListCommitsForProject.mockResolvedValue([{ commitSha: "a" }, { commitSha: "b" }]);
 
     const res = await app.inject({
       method: "GET",
@@ -212,26 +238,24 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
     expect(res.json()).toEqual({ count: 2 });
   });
 
-  it("passes date range query parameters", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/tmp/repo", tipSha: "abc" });
-    mockListCommitsInRange.mockResolvedValue([]);
+  it("passes date range and branch query parameters", async () => {
+    mockListCommitsForProject.mockResolvedValue([]);
 
     await app.inject({
       method: "GET",
       url: "/api/v1/repositories/owner1/repo1/commits/count?startDate=2024-01-01&endDate=2024-01-31&branch=main",
     });
 
-    expect(mockEnsureArchive).toHaveBeenCalledWith({ owner: "owner1", repo: "repo1", branch: "main" });
-    expect(mockListCommitsInRange).toHaveBeenCalledWith({
-      dir: "/tmp/repo",
-      ref: "main",
-      since: new Date("2024-01-01T00:00:00.000Z"),
-      until: new Date("2024-01-31T00:00:00.000Z"),
+    expect(mockListCommitsForProject).toHaveBeenCalledWith({
+      projectId: "p1",
+      branch: "main",
+      startDate: new Date("2024-01-01T00:00:00.000Z"),
+      endDate: new Date("2024-01-31T00:00:00.000Z"),
     });
   });
 
   it("returns 500 on error", async () => {
-    mockEnsureArchive.mockRejectedValue(new Error("clone failed"));
+    mockGetProjectByOwnerRepo.mockRejectedValueOnce(new Error("db down"));
 
     const res = await app.inject({
       method: "GET",
