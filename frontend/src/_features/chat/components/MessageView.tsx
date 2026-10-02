@@ -10,6 +10,7 @@ import {
   MessageActions,
   MessageAction,
 } from "@/src/components/ai-elements/message";
+import { Spinner } from "@/src/components/ui/spinner";
 import { ChatMessage } from "@/src/shared/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 import { CommitCitationCard } from "./CommitCitationCard";
@@ -19,9 +20,11 @@ import { splitArtifact } from "@/src/shared/utils/repo-url";
 export function MessageView({
   message,
   streaming,
+  awaitingResponse,
 }: {
   message: ChatMessage;
   streaming?: boolean;
+  awaitingResponse?: boolean;
 }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const citationCount = message.citations.length;
@@ -45,8 +48,15 @@ export function MessageView({
                 <MessageResponse className="m-6">{artifact}</MessageResponse>
               </div>
             )}
-            {streaming && (
-              <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
+            {awaitingResponse ? (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="size-4" />
+                Thinking…
+              </span>
+            ) : (
+              streaming && (
+                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
+              )
             )}
           </>
         ) : (
