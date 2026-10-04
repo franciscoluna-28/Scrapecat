@@ -1,118 +1,190 @@
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Presentation Tier                      │
-│              Next.js 16 (React 19)                      │
-│         TanStack Query · Tailwind · shadcn/ui           │
-├─────────────────────────────────────────────────────────┤
-│                    API Tier                              │
-│            Fastify 5 · TypeBox · OpenAPI                │
-│          Request validation · CORS · Swagger            │
-├─────────────────────────────────────────────────────────┤
-│                   Data Tier                              │
-│     PostgreSQL + pgvector (read model: projects, commits)│
-│     Drizzle ORM · postgres-js driver                     │
-│     Store layer per domain (src/projects/stores/, …)     │
-│     Archive store (fs | s3) · job queue (memory | bullmq)│
-│     native git (clone/fetch) · Octokit (discovery only)  │
-│     ──[future]──── GitLab · Bitbucket                    │
-└─────────────────────────────────────────────────────────┘
-```
+# Architecture
 
-## RAG (Vectors: partial, semantic search not shipped)
+Scrapecat is a RAG chat over a repository's git history. Commits are ingested into
+Postgres (the read model), embedded, and retrieved by semantic + keyword search
+to ground an LLM answer.
 
-The commit corpus and embedding pipeline are real; semantic search over it is **not shipped yet**:
+## Tiers
 
-- `commit_chunks.commit_message` is the **embedding source** (commit/PR review, not code review — the message is the unit of meaning). `metadata` carries `files_changed` and `validation.status` (`confirmed`/`flagged`/`skipped`) + `notes` from the free rule guardrail.
-- `content_hash` (SHA-256 of the message) and `embedding_hash` gate re-embedding: a row's embedding is current iff `embedding_hash = content_hash`. `embedding vector(768)` + the HNSW index (`commit_embedding_hnsw_idx`) are populated by the non-blocking `embedNewChunks()` (OpenRouter, `openai/text-embedding-3-small`) invoked after ingestion, plus the `embed:backfill` script for one-time catch-up. If no OpenRouter key is available ingestion degrades gracefully and the backfill catches up later.
-- Semantic search (`cosineDistance` over the HNSW index) backs chat retrieval; there is no prompt-enrichment pass beyond retrieved chunks.
-
-The full strategy (why, corpus shape, cost/reliability properties) is documented in [`docs/embeddings.md`](embeddings.md).
-
-## Commit ingestion (queued, archive-based)
-
-Commit ingestion is **batched and archive-based**, executed as a deduped job. The API enqueues `ingest-branch` and awaits the result; with `QUEUE_DRIVER=memory` (default) the job runs inline, with `bullmq` a Worker in the same process drains Redis. Postgres is the read model; the git archive (or the demo GitHub API) is the ingestion source.
-
-```
-ingest-branch job
-   └─ projects/services.prepareProjectBranch → queue.enqueue + runAndWait
-        └─ repositories/archive-service.ensureArchive(owner, repo, branch)
-             hydrate from the archive store (fs no-op | s3 GetObject + untar)
-             repos/{owner}/{repo}/{branch}/   (native git clone/fetch + GITHUB_TOKEN)
-             dehydrate to the archive store when the tip changed
-        ▼
-   repositories/git-reader.listCommitsInRange(dir, ref, since, until)
-        · commits in the window, read from the local .git
-        · per-commit file scope (`git diff-tree --name-status`)
-        ▼
-   classify with the free rule guardrail (skip empty/junk; flag misleading)
-        ▼
-   upsert commit_chunks (dedupe by SHA; commit_message is the embedding source)
-        →  embedNewChunks (batch)
+```mermaid
+flowchart TB
+    subgraph P["Presentation"]
+        FE["Next.js 16 · React 19<br/>TanStack Query · Tailwind · shadcn/ui"]
+    end
+    subgraph A["API"]
+        API["Fastify 5 · TypeBox · OpenAPI<br/>validation · CORS · Swagger"]
+    end
+    subgraph D["Data"]
+        PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
+        STORE["Per-domain stores (routes never touch db directly)"]
+        INFRA["Archive store (fs | s3) · job queue (memory | bullmq)<br/>native git (clone/fetch) · Octokit (discovery only)"]
+    end
+    FE --> API --> PG
+    API --> STORE --> PG
+    API --> INFRA
+    INFRA -.->|future| EXT["GitLab · Bitbucket"]
 ```
 
-**Why batch:** the workload needs *everything* (all metadata + file scopes) from a remote, rate-limited API. A clone collapses that into one idempotent fetch; every fragile per-item call (pagination, retries, 429s) disappears. The GitHub REST API is used only for **discovery** (repo/branch listing, connection check) and the clone itself.
+## RAG pipeline
 
-**Dedupe by SHA:** re-running ingestion for the same window writes nothing new (upsert `ON CONFLICT DO NOTHING`-style by `(project_id, commit_sha, branch)`), and already-synced commits are skipped before any file-scope work.
+`POST /api/v1/chat/sessions/:id/messages` ingests the branch if needed, then
+retrieves, then streams the answer.
 
-**Failure handling:** the only remote step is the clone/fetch (retryable with backoff). Embeddings run as a separate, non-blocking step and never fail ingestion.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as Chat route
+    participant Q as Job queue
+    participant DB as Postgres
+    participant LLM as callAI()
 
-**Status:** there is no dedicated sync endpoint — ingestion is triggered by `prepareProjectBranch` (chat + `POST /projects/:id/branches/prepare`) through the job queue; archive freshness is implicit (hydrate → fetch-before-read → dehydrate).
+    C->>API: message + branch
+    API->>Q: prepareProjectBranch (ingest if not stored)
+    Q->>DB: upsert commit_chunks → embedNewChunks
+    API->>DB: retrieveCommits(query, branch, window)
+    DB-->>API: ranked citations (vector, keyword fallback)
+    API->>LLM: system prompt + retrieved commits + question
+    LLM-->>C: streamed tokens (SSE)
+    API->>DB: persist assistant message + citations
+```
+
+- **Vector search** is the primary path (`cosineDistance` over the HNSW index,
+  ceiling `MAX_COSINE_DISTANCE = 0.8`); **keyword search** is the fallback when
+  embeddings are missing or the vector query fails. Retrieval limit: `20`.
+- **Date windows** ("last 30 days", "since June") are parsed into metadata
+  filters; temporal keywords with no explicit date anchor on the latest commit.
+- **Grounding** is the commit message plus file scope — see [`embeddings.md`](embeddings.md).
+
+## Commit ingestion
+
+Batched and archive-based, run as a deduped job. Callers enqueue `ingest-branch`
+and await it: with `QUEUE_DRIVER=memory` (default) it runs inline; with `bullmq` a
+Worker in the same process drains Redis.
+
+```mermaid
+flowchart TD
+    J["ingest-branch job"] --> P["prepareProjectBranch → enqueue + runAndWait"]
+    P --> E["ensureArchive(owner, repo, branch)"]
+    E --> H["hydrate (fs no-op | s3 GetObject + untar)"]
+    H --> G["native git clone/fetch → repos/{owner}/{repo}/{branch}/"]
+    G --> DH["dehydrate when tip changed"]
+    G --> R["listCommitsInRange(dir, ref, since, until)"]
+    R --> S["per-commit file scope (git diff-tree --name-status)"]
+    S --> CL["guardrail: skip empty/junk, flag misleading"]
+    CL --> U["upsert commit_chunks (dedupe by SHA)"]
+    U --> EM["embedNewChunks (batch, non-blocking)"]
+```
+
+- **Why batch:** the workload needs everything from a rate-limited API; one clone
+  collapses it into a single idempotent fetch. GitHub REST is used only for
+  **discovery** (repo/branch listing, connection check) and the clone itself.
+- **Dedupe by SHA:** re-running a window writes nothing new; already-synced
+  commits are skipped before file-scope work.
+- **Failure handling:** the only remote step is clone/fetch (retryable).
+  Embeddings are a separate, non-blocking step and never fail ingestion.
 
 ### Why native git (not a JS git library)
 
-`src/repositories/git.ts` shells out to the system `git` binary with `execFile`, and the binary is baked into the backend image (`backend/Dockerfile.dev`: `RUN apk add --no-cache git`). This is a deliberate constraint, not an implementation detail — do **not** replace it with `isomorphic-git`, `nodegit`, or another library.
+`src/repositories/git.ts` shells out to the system `git` binary with `execFile`,
+baked into the image (`backend/Dockerfile.dev`). Do **not** replace it with
+`isomorphic-git`, `nodegit`, etc.:
 
-- **Off-loop, bounded memory.** A separate C process means packfile inflation, delta resolution, and object-graph walking cost ~0 V8 heap and never block the event loop. That is what makes running a BullMQ Worker *in the API process* safe, and what keeps a large clone from OOMing the service.
-- **Protocol maturity.** Shallow/single-branch clone, incremental fetch negotiation, packfiles, smart HTTP, `http.extraheader` auth, and fast `log`/`diff-tree` on huge repos are years of hardening we get for free.
-- **Reproducibility.** Pinning git in the image gives identical clone/fetch behavior across dev, replicas, and prod.
-- **Statelessness.** Git touches only the disposable job scratch and local refs; the process carries no git state, matching "nothing durable on the image."
+- **Off-loop, bounded memory** — a separate C process keeps pack/delta work off
+  the V8 heap, which is what makes an in-process Worker safe and large clones
+  non-OOMing.
+- **Protocol maturity** — shallow/single-branch clone, incremental fetch,
+  packfiles, `http.extraheader` auth, fast `log`/`diff-tree` on huge repos.
+- **Reproducibility** — pinning git gives identical behavior across dev,
+  replicas, and prod.
+- **Statelessness** — git touches only disposable job scratch, matching "nothing
+  durable on the image."
 
-Why the alternatives break the model:
+Serverless cannot run the binary at all — which is why the demo uses the GitHub
+REST API. The clean split: self-hosted ships git; serverless does not and uses
+the API path.
 
-- **`isomorphic-git` (pure JS)** runs on the event loop, so pack/delta CPU stalls every request and SSE frame in the process, and it builds object structures in the JS heap (memory spikes on large repos). Protocol/negotiation support is weaker, and it does not produce the stderr shapes we map to HTTP (`BranchNotFound` → 400).
-- **`nodegit` / libgit2 bindings** are native addons: per-platform prebuilds and Node-ABI rebuilds, which break the single portable image and cannot run on Vercel/Lambda; libgit2 is also still in-process (no subprocess isolation) and trails git on newer protocol features.
-- **Serverless cannot run the binary at all**, which is exactly why the demo uses the GitHub REST API. The clean split: the self-hosted image ships git; serverless does not and uses the API path.
+## Model resolution
 
-## Tech Debt
+Two roles, each with a provider + model setting stored in `app_settings`:
 
-The MVP solved one concrete problem as fast as possible. Every shortcut was intentional but now needs addressing.
+| Role | Setting | Default |
+|---|---|---|
+| Chat (RAG answer) | `reportProvider` / `reportModel` | `openrouter` / `env.AI_MODEL` |
+| Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
+
+Precedence: a per-conversation override (chat only) → stored `app_settings` row →
+`defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
+`src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
+
+## Tech debt
+
+Every shortcut below is intentional and tracked, not accidental.
+
+### Report-era leftovers (dead or misnamed)
+
+The app is now RAG-only, but the word "report" survives in three places:
+
+- **Unused tables.** `report_jobs`, `reports`, `report_commits` exist in
+  `src/db/schema.ts` and are never written by the current API. They linger only
+  because migrations are append-only. Candidate for a `DROP TABLE` migration.
+- **Report artifact prompt.** `src/chat/prompts.ts` still instructs the model to
+  wrap broad answers in a `:::report` block, and the frontend renders it as a
+  "Report" card (`MessageView.tsx`, `splitArtifact()` in `shared/utils/repo-url.ts`).
+  Confusing framing for a RAG-only product; removal is deferred to avoid a
+  frontend/backend lockstep change.
+- **Misnamed columns.** `app_settings.reportProvider` / `reportModel` actually
+  hold the **chat** model. Renaming to `chatProvider`/`chatModel` touches the DB
+  migration, TypeBox schemas, frontend types (codegen), and tests — deferred.
+- **Dead helper.** `extractReportTitle()` in `src/shared/utils.ts` has no caller.
 
 ### Git provider coupling
 
-All external data flows through `src/shared/integrations/git-provider/` — an Octokit adapter with an interface. It's still imported directly by every consuming route/service (no DI), so adding GitLab or Bitbucket means touching each call site.
+External data flows through `src/shared/integrations/git-provider/` (an Octokit
+adapter behind an interface), but it is imported directly by consuming
+routes/services with no DI — adding GitLab/Bitbucket means touching each call
+site.
 
 ### Database coupling
 
-The DB client is initialized at module load in `src/db/client.ts`. Access goes through per-domain stores (`src/projects/stores/`, `src/credentials/stores/`) — routes never import `db` directly. The schema is a normalized model in `src/db/schema.ts`: `projects` (provider-generic: `git_provider` enum + `provider_project_id`/`provider_owner`, unique on `(git_provider, provider_project_id)`), `commit_chunks` (commit message + file scope + pgvector embedding), and `credentials`. The `reports`/`report_commits`/`report_jobs` tables are legacy and unused.
+The DB client is initialized at module load in `src/db/client.ts`. Access goes
+through per-domain stores; routes never import `db` directly.
 
 ### No dependency injection
 
-Services are imported at the top of files, not injected. Swapping implementations means changing import paths everywhere. Tests compensate with `vi.mock()`.
+Services are imported at the top of files, not injected. Swapping implementations
+means changing import paths everywhere; tests compensate with `vi.mock()`.
 
 ### No auth layer
 
-The API has zero authentication. Fine for the MVP's trusted deployments. Impossible to open for multi-tenant SaaS without a full rework.
+The API has zero authentication — fine for trusted self-hosted deployments,
+impossible to open as multi-tenant SaaS without a rework.
 
 ### Validation & data-integrity gaps
 
-- `startDate`/`endDate` are unvalidated strings; invalid dates surface as generic 500s.
-- `limit`/`per_page` on the discovery endpoints are validated (coerced ints, 1–100) so bad input fails fast with a 400 instead of propagating NaN to the archive.
-- `GET /repositories/*` and `/commits`/`/commits/count` are Postgres-backed in self-hosted mode (`commit_chunks`; unknown/un-ingested repos return empty) and API-backed in demo.
-- No transactions: project upsert and chunk ingest are separate writes; the window ingest runs outside a transaction. A mid-way failure leaves chunks persisted (safe today — chunks are the cache).
+- `startDate`/`endDate` are unvalidated strings; invalid dates surface as 500s.
+- `limit`/`per_page` on discovery endpoints are validated (1–100) and fail fast.
+- No transactions: project upsert and chunk ingest are separate writes. A mid-way
+  failure leaves chunks persisted (safe today — chunks are the cache).
 
 ### Diff grounding is file-level, not content-level
 
-The report prompt is grounded on real, provable diff **scope** (files, line counts, commit link) — the commit message is demoted to a hint and flagged when it contradicts the diff (`git-diff.ts` computes the stats, `guardrail.ts` skips empty commits and flags junk/lying messages). Two deliberate shortcuts remain:
-
-- **The report model never reads the patch hunks.** It knows *what/where* changed and *how much*, but the "why" is inferred from file paths + line counts + message + link, not from the changed lines themselves. A commit mislabeled as `refactor` that actually deletes a feature is only caught if the file paths reveal it. Closing this means condensing real hunks into the report prompt — a token cost we're deferring.
-- **The embedding corpus is the commit message by design.** This is a commit/PR review tool, not a code reviewer: with clear conventional commits the message is a legitimate summary, so generating a diff-derived one via a batched LLM is **unnecessary**. Revisit only if search ships *and* message-based embeddings prove insufficient (the `embed:backfill` script already exists for one-time re-embedding).
+The prompt is grounded on provable diff **scope** (files, line counts, commit
+link); the commit message is a hint, flagged when it contradicts the diff. The
+report model never reads patch hunks, and the embedding corpus is the commit
+message by design (this is commit/PR review, not code review). Revisit only if
+message-based retrieval proves insufficient — the `embed:backfill` script already
+handles one-time re-embedding.
 
 ## What needs to happen
 
-Decouple in three phases, no big-bang rewrites:
+Decouple in phases, no big-bang rewrites:
 
-1. **Git provider interface** — extract an adapter behind a single interface so routes don't know or care whether data comes from GitHub, GitLab, or Bitbucket
-2. **Data access layer** — store layer extracted into per-domain stores under each domain folder (`src/projects/stores/`, etc.); Postgres + pgvector provides the connected data model. The vector-search half of this (HNSW on `commit_chunks.embedding`) is infrastructure-ready but **WIP** — embeddings are populated, the `cosineDistance` search endpoint is not — see "RAG (Vectors: partial, semantic search not shipped)" above
-3. **Dependency injection** — wire providers and stores into the app via Fastify's decorate mechanism so routes receive their dependencies instead of importing them
+1. **Git provider interface** — one adapter interface so routes don't know the
+   source (GitHub/GitLab/Bitbucket).
+2. **Data access layer** — per-domain stores (already largely in place); vector
+   search infrastructure is ready.
+3. **Dependency injection** — wire providers and stores via Fastify's `decorate`
+   so routes receive dependencies instead of importing them.
 
-Each migration follows the same pattern: extract interface, write new implementation behind it, run both in parallel, flip the default, remove the old one.
+Each migration: extract interface → implement behind it → run both in parallel →
+flip the default → remove the old one.
