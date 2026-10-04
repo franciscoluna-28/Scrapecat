@@ -23,7 +23,7 @@ type ChatSuggestionsProps = {
 
 export function ChatSuggestions({ onSelect }: ChatSuggestionsProps) {
   // Demo deployments surface the canned questions so a visitor can click one
-  // and immediately get a report with commit citations. The open-source app
+  // and immediately get an answer with commit citations. The open-source app
   // keeps its default suggestions.
   const items: ChatSuggestionItem[] = IS_DEMO
     ? DEMO_QUESTIONS.map((q) => ({

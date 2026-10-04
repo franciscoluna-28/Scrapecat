@@ -109,7 +109,7 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 
 | Role | Setting | Default |
 |---|---|---|
-| Chat (RAG answer) | `reportProvider` / `reportModel` | `openrouter` / `env.AI_MODEL` |
+| Chat (RAG answer) | `chatProvider` / `chatModel` | `openrouter` / `env.AI_MODEL` |
 | Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
 
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
@@ -119,23 +119,6 @@ Precedence: a per-conversation override (chat only) → stored `app_settings` ro
 ## Tech debt
 
 Every shortcut below is intentional and tracked, not accidental.
-
-### Report-era leftovers (dead or misnamed)
-
-The app is now RAG-only, but the word "report" survives in three places:
-
-- **Unused tables.** `report_jobs`, `reports`, `report_commits` exist in
-  `src/db/schema.ts` and are never written by the current API. They linger only
-  because migrations are append-only. Candidate for a `DROP TABLE` migration.
-- **Report artifact prompt.** `src/chat/prompts.ts` still instructs the model to
-  wrap broad answers in a `:::report` block, and the frontend renders it as a
-  "Report" card (`MessageView.tsx`, `splitArtifact()` in `shared/utils/repo-url.ts`).
-  Confusing framing for a RAG-only product; removal is deferred to avoid a
-  frontend/backend lockstep change.
-- **Misnamed columns.** `app_settings.reportProvider` / `reportModel` actually
-  hold the **chat** model. Renaming to `chatProvider`/`chatModel` touches the DB
-  migration, TypeBox schemas, frontend types (codegen), and tests — deferred.
-- **Dead helper.** `extractReportTitle()` in `src/shared/utils.ts` has no caller.
 
 ### Git provider coupling
 
@@ -170,7 +153,7 @@ impossible to open as multi-tenant SaaS without a rework.
 
 The prompt is grounded on provable diff **scope** (files, line counts, commit
 link); the commit message is a hint, flagged when it contradicts the diff. The
-report model never reads patch hunks, and the embedding corpus is the commit
+chat model never reads patch hunks, and the embedding corpus is the commit
 message by design (this is commit/PR review, not code review). Revisit only if
 message-based retrieval proves insufficient — the `embed:backfill` script already
 handles one-time re-embedding.
