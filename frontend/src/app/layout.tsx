@@ -5,6 +5,7 @@ import { cn } from "@/src/shared/lib/utils";
 import { Toaster } from "@/src/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
 import { QueryProvider } from "../shared/providers/QueryProvider";
+import { BRAND } from "@/src/shared/constants";
 
 const poppins = Poppins({subsets:['latin'],variable:'--font-sans',weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']});
 
@@ -19,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scrapecat",
-  description: "Scrapecat Reports - Create reports for your stakeholders using your GitHub commits",
+  title: BRAND.name,
+  description: BRAND.description,
 };
 
 export default function RootLayout({
