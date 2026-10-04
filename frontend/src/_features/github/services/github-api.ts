@@ -3,9 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
+import { BRAND } from "@/src/shared/constants";
 
-export const GITHUB_PAT_URL =
-  "https://github.com/settings/tokens/new?description=Scrapecat&scopes=repo,read:user";
+export const GITHUB_PAT_URL = `https://github.com/settings/tokens/new?description=${BRAND.name}&scopes=repo,read:user`;
 
 export type GitHubConnection = {
   connected: boolean;
