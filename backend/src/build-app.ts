@@ -103,7 +103,7 @@ export async function buildApp(instance?: FastifyInstance) {
       info: {
         title: "Scrapecat API",
         version: "v1",
-        description: "Backend API for Scrapecat reports",
+        description: "Backend API for Scrapecat RAG chat over git history",
       },
     },
   });

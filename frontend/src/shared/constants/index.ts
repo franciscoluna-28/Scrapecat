@@ -18,7 +18,7 @@ export const EMBEDDING_DIMENSIONS = 768;
 
 export const DEFAULT_EMBEDDING_PROVIDER = EMBEDDING_PROVIDERS[0].id;
 
-export type ReportProvider = (typeof PROVIDERS)[number]["id"];
+export type ChatProvider = (typeof PROVIDERS)[number]["id"];
 export type EmbeddingProvider = (typeof EMBEDDING_PROVIDERS)[number]["id"];
 
 export const GITHUB_REPOSITORY_TYPES = [
@@ -51,7 +51,7 @@ export const BRAND = {
   tagline: "Intelligence",
   logoAlt: "Scrapecat Logo",
   description:
-    "Scrapecat Reports - Create reports for your stakeholders using your GitHub commits",
+    "Scrapecat - Ask questions about your repository's history using your GitHub commits",
 } as const;
 
 // Demo mode is opt-in via NEXT_PUBLIC_DEMO_MODE="true". When enabled the UI

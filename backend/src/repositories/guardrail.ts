@@ -45,9 +45,9 @@ function claimsFileCount(subject: string): number | null {
  * Classifies a commit against the changes actually present in its diff.
  * The diff stats are ground truth (read from git objects); the message can lie.
  *
- * - `skipped`: no files changed (empty or merge no-op) — exclude from reports.
+ * - `skipped`: no files changed (empty or merge no-op) — exclude from retrieval.
  * - `flagged`: the message is uninformative or contradicts the diff — keep the
- *   commit but make the report rely on the real scope, not the message.
+ *   commit but make the answer rely on the real scope, not the message.
  * - `confirmed`: message and diff are consistent enough to trust.
  */
 export function classifyCommit(opts: {
