@@ -8,15 +8,10 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/src/components/ui/combobox";
-
-type Model = {
-  id: string;
-  name: string;
-  free?: boolean;
-};
+import type { AIModel } from "@/src/shared/types";
 
 type Props = {
-  models: Model[];
+  models: AIModel[];
   selectedModel: string;
   onModelChange: (value: string) => void;
   loading: boolean;
