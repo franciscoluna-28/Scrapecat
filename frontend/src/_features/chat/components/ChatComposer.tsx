@@ -50,8 +50,8 @@ export function ChatComposer({
 
   const modelMap = useMemo(() => Object.fromEntries(models.map((m) => [m.id, m])), [models]);
 
-  const activeProvider = provider ?? settings?.reportProvider ?? "openrouter";
-  const activeModel = model ?? settings?.reportModel ?? "";
+  const activeProvider = provider ?? settings?.chatProvider ?? "openrouter";
+  const activeModel = model ?? settings?.chatModel ?? "";
 
   const providerLabel = PROVIDERS.find((p) => p.id === activeProvider)?.label ?? activeProvider;
   const modelLabel = modelMap[activeModel]?.name ?? activeModel.split("/").pop() ?? "Default";
