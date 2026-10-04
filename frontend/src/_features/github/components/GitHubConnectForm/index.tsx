@@ -10,7 +10,7 @@ import {
   useConnectGitHubToken,
   useDisconnectGitHub,
   GITHUB_PAT_URL,
-} from "@/src/_features/chat/services/git-api";
+} from "@/src/_features/github/services/github-api";
 
 type Props = {
   onConnected?: () => void;
