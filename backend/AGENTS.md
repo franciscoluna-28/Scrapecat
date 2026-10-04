@@ -67,7 +67,7 @@ Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
 - **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
 - **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
-- **reports** / **report_commits** / **report_jobs** — legacy tables from the removed report-generation domain. Not written by the current API; kept only because migrations are append-only.
+- **reports** / **report_commits** / **report_jobs** — legacy tables from the removed report-generation domain. Not written by the current API; kept only because migrations are append-only. The app is RAG-only now; removing these (plus the `:::report` prompt, the `app_settings.report*` rename, and the unused `extractReportTitle()`) is tracked as tech debt in `docs/architecture.md` → "Report-era leftovers".
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
 All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
