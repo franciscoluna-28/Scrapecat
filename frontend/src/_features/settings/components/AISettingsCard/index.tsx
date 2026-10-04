@@ -11,22 +11,20 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 import { Loader2, Save } from "lucide-react";
-import { EMBEDDING_PROVIDERS } from "@/src/shared/constants";
+import {
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_PROVIDERS,
+} from "@/src/shared/constants";
 import { ModelSelector } from "@/src/_features/settings/components/ModelSelector";
+import type { AIModel } from "@/src/shared/types";
 import type { AISettings } from "@/src/shared/services/ai-settings";
-
-type Model = {
-  id: string;
-  name: string;
-  free?: boolean;
-};
 
 type AISettingsCardProps = {
   embeddingProvider: AISettings["embeddingProvider"];
   setEmbeddingProvider: (value: AISettings["embeddingProvider"]) => void;
   embeddingModel: string;
   setEmbeddingModel: (value: string) => void;
-  embeddingModels: Model[];
+  embeddingModels: AIModel[];
   embeddingModelsLoading: boolean;
   mounted: boolean;
   dirty: boolean;
@@ -96,8 +94,8 @@ export function AISettingsCard({
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               {embeddingProvider === "ollama"
-                ? "Local model · 768 dimensions · runs on your machine"
-                : "OpenRouter · 768-dimension models. Changing it applies to newly synced commits; existing embeddings keep their model."}
+                ? `Local model · ${EMBEDDING_DIMENSIONS} dimensions · runs on your machine`
+                : `OpenRouter · ${EMBEDDING_DIMENSIONS}-dimension models. Changing it applies to newly synced commits; existing embeddings keep their model.`}
             </p>
           </div>
         </div>

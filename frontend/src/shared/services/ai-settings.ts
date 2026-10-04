@@ -3,11 +3,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { queryKeys } from "./keys";
+import type { EmbeddingProvider, ReportProvider } from "@/src/shared/constants";
 
 export type AISettings = {
-  reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+  reportProvider: ReportProvider;
   reportModel: string;
-  embeddingProvider: "openrouter" | "ollama";
+  embeddingProvider: EmbeddingProvider;
   embeddingModel: string;
 };
 
