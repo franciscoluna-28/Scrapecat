@@ -6,16 +6,16 @@ import type { AISettingsInput } from "@/settings/schemas";
 export const GLOBAL_SETTINGS_ID = "global";
 
 export type AISettings = {
-  reportProvider: string;
-  reportModel: string;
+  chatProvider: string;
+  chatModel: string;
   embeddingProvider: string;
   embeddingModel: string;
 };
 
 export function defaultAISettings(): AISettings {
   return {
-    reportProvider: "openrouter",
-    reportModel: env.AI_MODEL,
+    chatProvider: "openrouter",
+    chatModel: env.AI_MODEL,
     embeddingProvider: "openrouter",
     embeddingModel: env.EMBEDDING_MODEL,
   };
@@ -25,16 +25,16 @@ export async function getAISettings(): Promise<AISettings> {
   const row = await settingsStore.getSettings(GLOBAL_SETTINGS_ID);
   if (!row) return defaultAISettings();
   return {
-    reportProvider: row.reportProvider,
-    reportModel: row.reportModel,
+    chatProvider: row.chatProvider,
+    chatModel: row.chatModel,
     embeddingProvider: row.embeddingProvider,
     embeddingModel: row.embeddingModel,
   };
 }
 
 export async function updateAISettings(input: AISettingsInput): Promise<AISettings> {
-  if (!isProviderSupported(input.reportProvider)) {
-    throw new Error(`Unsupported provider: ${input.reportProvider}`);
+  if (!isProviderSupported(input.chatProvider)) {
+    throw new Error(`Unsupported provider: ${input.chatProvider}`);
   }
   if (!isProviderSupported(input.embeddingProvider)) {
     throw new Error(`Unsupported embedding provider: ${input.embeddingProvider}`);
@@ -42,8 +42,8 @@ export async function updateAISettings(input: AISettingsInput): Promise<AISettin
 
   await settingsStore.upsertSettings({
     id: GLOBAL_SETTINGS_ID,
-    reportProvider: input.reportProvider,
-    reportModel: input.reportModel,
+    chatProvider: input.chatProvider,
+    chatModel: input.chatModel,
     embeddingProvider: input.embeddingProvider,
     embeddingModel: input.embeddingModel,
   });

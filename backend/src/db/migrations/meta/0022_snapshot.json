@@ -1,0 +1,643 @@
+{
+    "id":  "d44816d3-54fb-40db-a12a-f9600dbe83eb",
+    "prevId":  "be9277bd-d36e-4b7f-ad8a-3827bc42af7d",
+    "version":  "7",
+    "dialect":  "postgresql",
+    "tables":  {
+                   "public.app_settings":  {
+                                               "name":  "app_settings",
+                                               "schema":  "",
+                                               "columns":  {
+                                                               "id":  {
+                                                                          "name":  "id",
+                                                                          "type":  "text",
+                                                                          "primaryKey":  true,
+                                                                          "notNull":  true
+                                                                      },
+                                                               "chat_provider":  {
+                                                                                     "name":  "chat_provider",
+                                                                                     "type":  "text",
+                                                                                     "primaryKey":  false,
+                                                                                     "notNull":  true,
+                                                                                     "default":  "\u0027openrouter\u0027"
+                                                                                 },
+                                                               "chat_model":  {
+                                                                                  "name":  "chat_model",
+                                                                                  "type":  "text",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  true,
+                                                                                  "default":  "\u0027nvidia/nemotron-3-ultra-550b-a55b:free\u0027"
+                                                                              },
+                                                               "embedding_provider":  {
+                                                                                          "name":  "embedding_provider",
+                                                                                          "type":  "text",
+                                                                                          "primaryKey":  false,
+                                                                                          "notNull":  true,
+                                                                                          "default":  "\u0027openrouter\u0027"
+                                                                                      },
+                                                               "embedding_model":  {
+                                                                                       "name":  "embedding_model",
+                                                                                       "type":  "text",
+                                                                                       "primaryKey":  false,
+                                                                                       "notNull":  true,
+                                                                                       "default":  "\u0027openai/text-embedding-3-small\u0027"
+                                                                                   },
+                                                               "updated_at":  {
+                                                                                  "name":  "updated_at",
+                                                                                  "type":  "timestamp with time zone",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  true,
+                                                                                  "default":  "now()"
+                                                                              }
+                                                           },
+                                               "indexes":  {
+
+                                                           },
+                                               "foreignKeys":  {
+
+                                                               },
+                                               "compositePrimaryKeys":  {
+
+                                                                        },
+                                               "uniqueConstraints":  {
+
+                                                                     },
+                                               "policies":  {
+
+                                                            },
+                                               "checkConstraints":  {
+
+                                                                    },
+                                               "isRLSEnabled":  false
+                                           },
+                   "public.chat_messages":  {
+                                                "name":  "chat_messages",
+                                                "schema":  "",
+                                                "columns":  {
+                                                                "id":  {
+                                                                           "name":  "id",
+                                                                           "type":  "uuid",
+                                                                           "primaryKey":  true,
+                                                                           "notNull":  true,
+                                                                           "default":  "gen_random_uuid()"
+                                                                       },
+                                                                "session_id":  {
+                                                                                   "name":  "session_id",
+                                                                                   "type":  "uuid",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true
+                                                                               },
+                                                                "role":  {
+                                                                             "name":  "role",
+                                                                             "type":  "text",
+                                                                             "primaryKey":  false,
+                                                                             "notNull":  true
+                                                                         },
+                                                                "content":  {
+                                                                                "name":  "content",
+                                                                                "type":  "text",
+                                                                                "primaryKey":  false,
+                                                                                "notNull":  true
+                                                                            },
+                                                                "branch":  {
+                                                                               "name":  "branch",
+                                                                               "type":  "text",
+                                                                               "primaryKey":  false,
+                                                                               "notNull":  false
+                                                                           },
+                                                                "citations":  {
+                                                                                  "name":  "citations",
+                                                                                  "type":  "jsonb",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  false,
+                                                                                  "default":  "\u0027[]\u0027::jsonb"
+                                                                              },
+                                                                "created_at":  {
+                                                                                   "name":  "created_at",
+                                                                                   "type":  "timestamp with time zone",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true,
+                                                                                   "default":  "now()"
+                                                                               }
+                                                            },
+                                                "indexes":  {
+                                                                "chat_messages_session_id_idx":  {
+                                                                                                     "name":  "chat_messages_session_id_idx",
+                                                                                                     "columns":  [
+                                                                                                                     {
+                                                                                                                         "expression":  "session_id",
+                                                                                                                         "isExpression":  false,
+                                                                                                                         "asc":  true,
+                                                                                                                         "nulls":  "last"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                     "isUnique":  false,
+                                                                                                     "concurrently":  false,
+                                                                                                     "method":  "btree",
+                                                                                                     "with":  {
+
+                                                                                                              }
+                                                                                                 }
+                                                            },
+                                                "foreignKeys":  {
+                                                                    "chat_messages_session_id_chat_sessions_id_fk":  {
+                                                                                                                         "name":  "chat_messages_session_id_chat_sessions_id_fk",
+                                                                                                                         "tableFrom":  "chat_messages",
+                                                                                                                         "tableTo":  "chat_sessions",
+                                                                                                                         "columnsFrom":  [
+                                                                                                                                             "session_id"
+                                                                                                                                         ],
+                                                                                                                         "columnsTo":  [
+                                                                                                                                           "id"
+                                                                                                                                       ],
+                                                                                                                         "onDelete":  "cascade",
+                                                                                                                         "onUpdate":  "no action"
+                                                                                                                     }
+                                                                },
+                                                "compositePrimaryKeys":  {
+
+                                                                         },
+                                                "uniqueConstraints":  {
+
+                                                                      },
+                                                "policies":  {
+
+                                                             },
+                                                "checkConstraints":  {
+
+                                                                     },
+                                                "isRLSEnabled":  false
+                                            },
+                   "public.chat_sessions":  {
+                                                "name":  "chat_sessions",
+                                                "schema":  "",
+                                                "columns":  {
+                                                                "id":  {
+                                                                           "name":  "id",
+                                                                           "type":  "uuid",
+                                                                           "primaryKey":  true,
+                                                                           "notNull":  true,
+                                                                           "default":  "gen_random_uuid()"
+                                                                       },
+                                                                "project_id":  {
+                                                                                   "name":  "project_id",
+                                                                                   "type":  "uuid",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true
+                                                                               },
+                                                                "title":  {
+                                                                              "name":  "title",
+                                                                              "type":  "text",
+                                                                              "primaryKey":  false,
+                                                                              "notNull":  true,
+                                                                              "default":  "\u0027New chat\u0027"
+                                                                          },
+                                                                "anonymous_id":  {
+                                                                                     "name":  "anonymous_id",
+                                                                                     "type":  "text",
+                                                                                     "primaryKey":  false,
+                                                                                     "notNull":  false
+                                                                                 },
+                                                                "created_at":  {
+                                                                                   "name":  "created_at",
+                                                                                   "type":  "timestamp with time zone",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true,
+                                                                                   "default":  "now()"
+                                                                               },
+                                                                "updated_at":  {
+                                                                                   "name":  "updated_at",
+                                                                                   "type":  "timestamp with time zone",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true,
+                                                                                   "default":  "now()"
+                                                                               }
+                                                            },
+                                                "indexes":  {
+                                                                "chat_sessions_project_id_idx":  {
+                                                                                                     "name":  "chat_sessions_project_id_idx",
+                                                                                                     "columns":  [
+                                                                                                                     {
+                                                                                                                         "expression":  "project_id",
+                                                                                                                         "isExpression":  false,
+                                                                                                                         "asc":  true,
+                                                                                                                         "nulls":  "last"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                     "isUnique":  false,
+                                                                                                     "concurrently":  false,
+                                                                                                     "method":  "btree",
+                                                                                                     "with":  {
+
+                                                                                                              }
+                                                                                                 }
+                                                            },
+                                                "foreignKeys":  {
+                                                                    "chat_sessions_project_id_projects_id_fk":  {
+                                                                                                                    "name":  "chat_sessions_project_id_projects_id_fk",
+                                                                                                                    "tableFrom":  "chat_sessions",
+                                                                                                                    "tableTo":  "projects",
+                                                                                                                    "columnsFrom":  [
+                                                                                                                                        "project_id"
+                                                                                                                                    ],
+                                                                                                                    "columnsTo":  [
+                                                                                                                                      "id"
+                                                                                                                                  ],
+                                                                                                                    "onDelete":  "cascade",
+                                                                                                                    "onUpdate":  "no action"
+                                                                                                                }
+                                                                },
+                                                "compositePrimaryKeys":  {
+
+                                                                         },
+                                                "uniqueConstraints":  {
+
+                                                                      },
+                                                "policies":  {
+
+                                                             },
+                                                "checkConstraints":  {
+
+                                                                     },
+                                                "isRLSEnabled":  false
+                                            },
+                   "public.commit_chunks":  {
+                                                "name":  "commit_chunks",
+                                                "schema":  "",
+                                                "columns":  {
+                                                                "id":  {
+                                                                           "name":  "id",
+                                                                           "type":  "uuid",
+                                                                           "primaryKey":  true,
+                                                                           "notNull":  true,
+                                                                           "default":  "gen_random_uuid()"
+                                                                       },
+                                                                "project_id":  {
+                                                                                   "name":  "project_id",
+                                                                                   "type":  "uuid",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true
+                                                                               },
+                                                                "commit_sha":  {
+                                                                                   "name":  "commit_sha",
+                                                                                   "type":  "text",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true
+                                                                               },
+                                                                "branch":  {
+                                                                               "name":  "branch",
+                                                                               "type":  "text",
+                                                                               "primaryKey":  false,
+                                                                               "notNull":  true,
+                                                                               "default":  "\u0027main\u0027"
+                                                                           },
+                                                                "commit_message":  {
+                                                                                       "name":  "commit_message",
+                                                                                       "type":  "text",
+                                                                                       "primaryKey":  false,
+                                                                                       "notNull":  true
+                                                                                   },
+                                                                "author":  {
+                                                                               "name":  "author",
+                                                                               "type":  "text",
+                                                                               "primaryKey":  false,
+                                                                               "notNull":  false
+                                                                           },
+                                                                "embedding":  {
+                                                                                  "name":  "embedding",
+                                                                                  "type":  "vector(768)",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  false
+                                                                              },
+                                                                "content_hash":  {
+                                                                                     "name":  "content_hash",
+                                                                                     "type":  "text",
+                                                                                     "primaryKey":  false,
+                                                                                     "notNull":  false
+                                                                                 },
+                                                                "embedding_hash":  {
+                                                                                       "name":  "embedding_hash",
+                                                                                       "type":  "text",
+                                                                                       "primaryKey":  false,
+                                                                                       "notNull":  false
+                                                                                   },
+                                                                "metadata":  {
+                                                                                 "name":  "metadata",
+                                                                                 "type":  "jsonb",
+                                                                                 "primaryKey":  false,
+                                                                                 "notNull":  false,
+                                                                                 "default":  "\u0027{}\u0027::jsonb"
+                                                                             },
+                                                                "committed_at":  {
+                                                                                     "name":  "committed_at",
+                                                                                     "type":  "timestamp with time zone",
+                                                                                     "primaryKey":  false,
+                                                                                     "notNull":  true
+                                                                                 },
+                                                                "created_at":  {
+                                                                                   "name":  "created_at",
+                                                                                   "type":  "timestamp with time zone",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true,
+                                                                                   "default":  "now()"
+                                                                               },
+                                                                "updated_at":  {
+                                                                                   "name":  "updated_at",
+                                                                                   "type":  "timestamp with time zone",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true,
+                                                                                   "default":  "now()"
+                                                                               }
+                                                            },
+                                                "indexes":  {
+                                                                "commit_project_sha_branch_idx":  {
+                                                                                                      "name":  "commit_project_sha_branch_idx",
+                                                                                                      "columns":  [
+                                                                                                                      {
+                                                                                                                          "expression":  "project_id",
+                                                                                                                          "isExpression":  false,
+                                                                                                                          "asc":  true,
+                                                                                                                          "nulls":  "last"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "expression":  "commit_sha",
+                                                                                                                          "isExpression":  false,
+                                                                                                                          "asc":  true,
+                                                                                                                          "nulls":  "last"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "expression":  "branch",
+                                                                                                                          "isExpression":  false,
+                                                                                                                          "asc":  true,
+                                                                                                                          "nulls":  "last"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                      "isUnique":  true,
+                                                                                                      "concurrently":  false,
+                                                                                                      "method":  "btree",
+                                                                                                      "with":  {
+
+                                                                                                               }
+                                                                                                  },
+                                                                "commit_embedding_hnsw_idx":  {
+                                                                                                  "name":  "commit_embedding_hnsw_idx",
+                                                                                                  "columns":  [
+                                                                                                                  {
+                                                                                                                      "expression":  "embedding",
+                                                                                                                      "isExpression":  false,
+                                                                                                                      "asc":  true,
+                                                                                                                      "nulls":  "last",
+                                                                                                                      "opclass":  "vector_cosine_ops"
+                                                                                                                  }
+                                                                                                              ],
+                                                                                                  "isUnique":  false,
+                                                                                                  "concurrently":  false,
+                                                                                                  "method":  "hnsw",
+                                                                                                  "with":  {
+
+                                                                                                           }
+                                                                                              }
+                                                            },
+                                                "foreignKeys":  {
+                                                                    "commit_chunks_project_id_projects_id_fk":  {
+                                                                                                                    "name":  "commit_chunks_project_id_projects_id_fk",
+                                                                                                                    "tableFrom":  "commit_chunks",
+                                                                                                                    "tableTo":  "projects",
+                                                                                                                    "columnsFrom":  [
+                                                                                                                                        "project_id"
+                                                                                                                                    ],
+                                                                                                                    "columnsTo":  [
+                                                                                                                                      "id"
+                                                                                                                                  ],
+                                                                                                                    "onDelete":  "cascade",
+                                                                                                                    "onUpdate":  "no action"
+                                                                                                                }
+                                                                },
+                                                "compositePrimaryKeys":  {
+
+                                                                         },
+                                                "uniqueConstraints":  {
+
+                                                                      },
+                                                "policies":  {
+
+                                                             },
+                                                "checkConstraints":  {
+
+                                                                     },
+                                                "isRLSEnabled":  false
+                                            },
+                   "public.credentials":  {
+                                              "name":  "credentials",
+                                              "schema":  "",
+                                              "columns":  {
+                                                              "id":  {
+                                                                         "name":  "id",
+                                                                         "type":  "uuid",
+                                                                         "primaryKey":  true,
+                                                                         "notNull":  true,
+                                                                         "default":  "gen_random_uuid()"
+                                                                     },
+                                                              "provider":  {
+                                                                               "name":  "provider",
+                                                                               "type":  "credential_provider",
+                                                                               "typeSchema":  "public",
+                                                                               "primaryKey":  false,
+                                                                               "notNull":  true
+                                                                           },
+                                                              "encrypted_key":  {
+                                                                                    "name":  "encrypted_key",
+                                                                                    "type":  "text",
+                                                                                    "primaryKey":  false,
+                                                                                    "notNull":  true
+                                                                                },
+                                                              "key_hint":  {
+                                                                               "name":  "key_hint",
+                                                                               "type":  "text",
+                                                                               "primaryKey":  false,
+                                                                               "notNull":  true
+                                                                           },
+                                                              "created_at":  {
+                                                                                 "name":  "created_at",
+                                                                                 "type":  "timestamp with time zone",
+                                                                                 "primaryKey":  false,
+                                                                                 "notNull":  true,
+                                                                                 "default":  "now()"
+                                                                             },
+                                                              "updated_at":  {
+                                                                                 "name":  "updated_at",
+                                                                                 "type":  "timestamp with time zone",
+                                                                                 "primaryKey":  false,
+                                                                                 "notNull":  true,
+                                                                                 "default":  "now()"
+                                                                             }
+                                                          },
+                                              "indexes":  {
+                                                              "credentials_provider_unique":  {
+                                                                                                  "name":  "credentials_provider_unique",
+                                                                                                  "columns":  [
+                                                                                                                  {
+                                                                                                                      "expression":  "provider",
+                                                                                                                      "isExpression":  false,
+                                                                                                                      "asc":  true,
+                                                                                                                      "nulls":  "last"
+                                                                                                                  }
+                                                                                                              ],
+                                                                                                  "isUnique":  true,
+                                                                                                  "concurrently":  false,
+                                                                                                  "method":  "btree",
+                                                                                                  "with":  {
+
+                                                                                                           }
+                                                                                              }
+                                                          },
+                                              "foreignKeys":  {
+
+                                                              },
+                                              "compositePrimaryKeys":  {
+
+                                                                       },
+                                              "uniqueConstraints":  {
+
+                                                                    },
+                                              "policies":  {
+
+                                                           },
+                                              "checkConstraints":  {
+
+                                                                   },
+                                              "isRLSEnabled":  false
+                                          },
+                   "public.projects":  {
+                                           "name":  "projects",
+                                           "schema":  "",
+                                           "columns":  {
+                                                           "id":  {
+                                                                      "name":  "id",
+                                                                      "type":  "uuid",
+                                                                      "primaryKey":  true,
+                                                                      "notNull":  true,
+                                                                      "default":  "gen_random_uuid()"
+                                                                  },
+                                                           "git_provider":  {
+                                                                                "name":  "git_provider",
+                                                                                "type":  "git_provider",
+                                                                                "typeSchema":  "public",
+                                                                                "primaryKey":  false,
+                                                                                "notNull":  true,
+                                                                                "default":  "\u0027github\u0027"
+                                                                            },
+                                                           "provider_project_id":  {
+                                                                                       "name":  "provider_project_id",
+                                                                                       "type":  "text",
+                                                                                       "primaryKey":  false,
+                                                                                       "notNull":  true
+                                                                                   },
+                                                           "provider_owner":  {
+                                                                                  "name":  "provider_owner",
+                                                                                  "type":  "text",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  true,
+                                                                                  "default":  "\u0027\u0027"
+                                                                              },
+                                                           "repository_name":  {
+                                                                                   "name":  "repository_name",
+                                                                                   "type":  "text",
+                                                                                   "primaryKey":  false,
+                                                                                   "notNull":  true
+                                                                               },
+                                                           "default_branch":  {
+                                                                                  "name":  "default_branch",
+                                                                                  "type":  "text",
+                                                                                  "primaryKey":  false,
+                                                                                  "notNull":  true,
+                                                                                  "default":  "\u0027main\u0027"
+                                                                              },
+                                                           "created_at":  {
+                                                                              "name":  "created_at",
+                                                                              "type":  "timestamp with time zone",
+                                                                              "primaryKey":  false,
+                                                                              "notNull":  true,
+                                                                              "default":  "now()"
+                                                                          },
+                                                           "updated_at":  {
+                                                                              "name":  "updated_at",
+                                                                              "type":  "timestamp with time zone",
+                                                                              "primaryKey":  false,
+                                                                              "notNull":  true,
+                                                                              "default":  "now()"
+                                                                          }
+                                                       },
+                                           "indexes":  {
+                                                           "projects_git_provider_project_id_idx":  {
+                                                                                                        "name":  "projects_git_provider_project_id_idx",
+                                                                                                        "columns":  [
+                                                                                                                        {
+                                                                                                                            "expression":  "git_provider",
+                                                                                                                            "isExpression":  false,
+                                                                                                                            "asc":  true,
+                                                                                                                            "nulls":  "last"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "expression":  "provider_project_id",
+                                                                                                                            "isExpression":  false,
+                                                                                                                            "asc":  true,
+                                                                                                                            "nulls":  "last"
+                                                                                                                        }
+                                                                                                                    ],
+                                                                                                        "isUnique":  true,
+                                                                                                        "concurrently":  false,
+                                                                                                        "method":  "btree",
+                                                                                                        "with":  {
+
+                                                                                                                 }
+                                                                                                    }
+                                                       },
+                                           "foreignKeys":  {
+
+                                                           },
+                                           "compositePrimaryKeys":  {
+
+                                                                    },
+                                           "uniqueConstraints":  {
+
+                                                                 },
+                                           "policies":  {
+
+                                                        },
+                                           "checkConstraints":  {
+
+                                                                },
+                                           "isRLSEnabled":  false
+                                       }
+               },
+    "enums":  {
+
+              },
+    "schemas":  {
+
+                },
+    "sequences":  {
+
+                  },
+    "roles":  {
+
+              },
+    "policies":  {
+
+                 },
+    "views":  {
+
+              },
+    "_meta":  {
+                  "columns":  {
+
+                              },
+                  "schemas":  {
+
+                              },
+                  "tables":  {
+
+                             }
+              }
+}

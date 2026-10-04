@@ -17,8 +17,8 @@ vi.mock("@/credentials/services", () => ({
 
 vi.mock("@/settings/services", () => ({
   getAISettings: vi.fn(async () => ({
-    reportProvider: "openrouter",
-    reportModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
+    chatProvider: "openrouter",
+    chatModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
     embeddingProvider: "openrouter",
     embeddingModel: "openai/text-embedding-3-small",
   })),
