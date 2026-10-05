@@ -27,6 +27,7 @@ type ChatComposerProps = {
   onSubmit: (text: string) => void;
   onBranchChange: (branch: string) => void;
   isStreaming: boolean;
+  isAwaitingResponse: boolean;
   projectName: string | null;
 };
 
@@ -39,6 +40,7 @@ export function ChatComposer({
   onSubmit,
   onBranchChange,
   isStreaming,
+  isAwaitingResponse,
   projectName,
 }: ChatComposerProps) {
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -95,7 +97,7 @@ export function ChatComposer({
           )}
           <PromptInputSubmit
             className="ml-auto"
-            status={isStreaming ? "streaming" : "ready"}
+            status={!isStreaming ? "ready" : isAwaitingResponse ? "submitted" : "streaming"}
             disabled={!input.trim() || isStreaming}
           >
             <ArrowUp className="size-4" />

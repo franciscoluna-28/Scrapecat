@@ -19,6 +19,7 @@ type IngestionProgress = {
 type ChatMessagesProps = {
   messages: ChatMessage[];
   streamingId: string | null;
+  awaitingResponse: boolean;
   isLoading: boolean;
   sessionId: string | null;
   projectName: string | null;
@@ -36,6 +37,7 @@ const stageIcon: Record<string, React.ReactNode> = {
 export function ChatMessages({
   messages,
   streamingId,
+  awaitingResponse,
   isLoading,
   sessionId,
   projectName,
@@ -68,7 +70,12 @@ export function ChatMessages({
     <div className="flex-1 flex flex-col justify-center px-4 py-4">
       <div className="max-w-[800px] mx-auto w-full space-y-2">
         {messages.map((m) => (
-          <MessageView key={m.id} message={m} streaming={m.id === streamingId} />
+          <MessageView
+            key={m.id}
+            message={m}
+            streaming={m.id === streamingId}
+            awaitingResponse={m.id === streamingId && awaitingResponse && !ingestionProgress}
+          />
         ))}
         {ingestionProgress && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50 text-xs text-muted-foreground animate-pulse">
