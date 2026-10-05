@@ -12,8 +12,8 @@ vi.mock("@/settings/services", async (importOriginal) => {
 });
 
 const DEFAULT_SETTINGS = {
-  reportProvider: "openrouter",
-  reportModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
+  chatProvider: "openrouter",
+  chatModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
   embeddingProvider: "openrouter",
   embeddingModel: "openai/text-embedding-3-small",
 };
@@ -45,7 +45,7 @@ describe("AI settings routes", () => {
   it("PUT /api/v1/settings/ai updates and returns settings", async () => {
     const updated = {
       ...DEFAULT_SETTINGS,
-      reportModel: "openai/gpt-4o",
+      chatModel: "openai/gpt-4o",
       embeddingModel: "openai/text-embedding-3-large",
     };
     vi.mocked(settingsServices.updateAISettings).mockResolvedValue(updated);
@@ -54,8 +54,8 @@ describe("AI settings routes", () => {
       method: "PUT",
       url: "/api/v1/settings/ai",
       payload: {
-        reportProvider: "openai",
-        reportModel: "openai/gpt-4o",
+        chatProvider: "openai",
+        chatModel: "openai/gpt-4o",
         embeddingProvider: "openrouter",
         embeddingModel: "openai/text-embedding-3-large",
       },
@@ -63,8 +63,8 @@ describe("AI settings routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(updated);
     expect(settingsServices.updateAISettings).toHaveBeenCalledWith({
-      reportProvider: "openai",
-      reportModel: "openai/gpt-4o",
+      chatProvider: "openai",
+      chatModel: "openai/gpt-4o",
       embeddingProvider: "openrouter",
       embeddingModel: "openai/text-embedding-3-large",
     });
@@ -75,8 +75,8 @@ describe("AI settings routes", () => {
       method: "PUT",
       url: "/api/v1/settings/ai",
       payload: {
-        reportProvider: "nope",
-        reportModel: "some/model",
+        chatProvider: "nope",
+        chatModel: "some/model",
         embeddingProvider: "openrouter",
         embeddingModel: "openai/text-embedding-3-small",
       },
@@ -90,8 +90,8 @@ describe("AI settings routes", () => {
       method: "PUT",
       url: "/api/v1/settings/ai",
       payload: {
-        reportProvider: "openrouter",
-        reportModel: "",
+        chatProvider: "openrouter",
+        chatModel: "",
         embeddingProvider: "openrouter",
         embeddingModel: "openai/text-embedding-3-small",
       },

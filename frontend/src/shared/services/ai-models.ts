@@ -3,6 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { queryKeys } from "./keys";
+import type { AIModel } from "@/src/shared/types";
+
+export type { AIModel };
 
 export function useModels(provider?: string, modality?: "chat" | "embeddings") {
   const query = { provider, modality };

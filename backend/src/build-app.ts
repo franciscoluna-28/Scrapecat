@@ -5,6 +5,8 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { env } from "@/config/env";
+import { sweepStaleJobScratch } from "@/repositories/archive-service";
+import { shutdownJobQueue } from "@/shared/queue";
 
 import { health } from "@/health/routes";
 import { checkVerification } from "@/verification/routes";
@@ -69,6 +71,13 @@ import { GitHubConnectionResponse, AddGitHubTokenBody } from "@/github/schemas";
 export async function buildApp(instance?: FastifyInstance) {
   const app = instance ?? Fastify({ logger: { level: env.LOG_LEVEL } });
 
+  // s3 mode treats local scratch as disposable: clear any dirs a crashed
+  // worker left behind, and release queue resources on shutdown.
+  await sweepStaleJobScratch();
+  app.addHook("onClose", async () => {
+    await shutdownJobQueue();
+  });
+
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
     if (error.validation) {
       return reply.status(400).send({ error: "Invalid request parameters" });
@@ -95,7 +104,7 @@ export async function buildApp(instance?: FastifyInstance) {
       info: {
         title: "Scrapecat API",
         version: "v1",
-        description: "Backend API for Scrapecat reports",
+        description: "Backend API for Scrapecat RAG chat over git history",
       },
     },
   });

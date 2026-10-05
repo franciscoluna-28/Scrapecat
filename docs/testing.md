@@ -18,12 +18,10 @@ await app.close();
 
 | Module | Why |
 |---|---|
-| `src/shared/integrations/git-provider/` | All routes hit GitHub API via Octokit |
-| `src/reports/ai.ts` | Report generation calls OpenRouter |
+| `src/shared/integrations/git-provider/` | Discovery routes hit the GitHub API via Octokit |
 | `src/db/client.ts` | Postgres via postgres-js (lazy — importing it does not connect, so unit tests need no live DB) |
 | `src/config/env.ts` | Control GITHUB_TOKEN and other config |
 | `global.fetch` | `GET /api/v1/models` calls OpenRouter directly |
-| `src/reports/prompts.ts` | **Do not mock** — pure string functions, fast and deterministic |
 | `src/shared/utils.ts` | **Do not mock** — pure regex functions, fast and deterministic |
 
 ## How to write a test
@@ -71,15 +69,13 @@ When a test needs a different `process.env` / `env` value, create a **separate t
 
 See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/routes.no-token.test.ts` (GITHUB_TOKEN empty) as the canonical example.
 
-## Integration tests (Postgres)
+## Integration tests
 
-`src/db/integration.test.ts` exercises the store layer and the DB-backed routes (`GET /api/v1/projects`, `GET /api/v1/reports/:id/commits`, `GET /api/v1/reports`) against a **live Postgres**. It is skipped by default and runs only under the integration config:
+Opt-in integration tests live next to the code and are skipped unless their flag is set — e.g. `src/shared/storage/s3-archive-store.integration.test.ts` runs against MinIO / real S3 when `S3_INTEGRATION=1`. Run them under the integration config:
 
 ```bash
-pnpm test:integration   # requires a running Postgres (e.g. docker compose up -d db)
+S3_INTEGRATION=1 pnpm test:integration   # requires MinIO/S3 (e.g. docker compose up -d minio minio-init)
 ```
-
-It targets `DATABASE_URL` (defaulting to `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`, overridable via the shell). Test rows use a fixed `(git_provider, provider_project_id)` marker and a marked credential name, and both `afterAll` and the final cascade test remove them, so real dev data is untouched.
 
 ## Conventions
 

@@ -15,7 +15,6 @@ import { ChatMessage } from "@/src/shared/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 import { CommitCitationCard } from "./CommitCitationCard";
 import { cn } from "@/src/shared/lib/utils";
-import { splitArtifact } from "@/src/shared/utils/repo-url";
 
 export function MessageView({
   message,
@@ -28,25 +27,14 @@ export function MessageView({
 }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const citationCount = message.citations.length;
-  const { before, artifact } = message.role === "assistant" ? splitArtifact(message.content) : { before: message.content, artifact: null };
 
   return (
     <Message from={message.role}>
       <MessageContent>
         {message.role === "assistant" ? (
           <>
-            {before && (
-              <MessageResponse>{before}</MessageResponse>
-            )}
-            {artifact && (
-              <div className="rounded-lg border bg-card p-6 my-3 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">
-                    Report
-                  </span>
-                </div>
-                <MessageResponse className="m-6">{artifact}</MessageResponse>
-              </div>
+            {message.content && (
+              <MessageResponse>{message.content}</MessageResponse>
             )}
             {awaitingResponse ? (
               <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -68,8 +56,7 @@ export function MessageView({
           <MessageAction
             tooltip="Copy"
             onClick={() => {
-              const cleaned = [before, artifact].filter(Boolean).join("\n\n").trim();
-              navigator.clipboard.writeText(cleaned);
+              navigator.clipboard.writeText(message.content.trim());
               toast.success("Copied to clipboard");
             }}
           >

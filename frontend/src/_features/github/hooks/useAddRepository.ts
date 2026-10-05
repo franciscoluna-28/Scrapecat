@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { parseRepoUrl } from "@/src/shared/utils/repo-url";
-import { useRepositories } from "@/src/_features/chat/services/git-api";
+import { useRepositories } from "@/src/_features/github/services/github-api";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
 import type { GitHubRepository } from "@/src/shared/types";
 

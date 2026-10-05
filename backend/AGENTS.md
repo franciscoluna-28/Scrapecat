@@ -14,13 +14,13 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 
 ## API layer (per-domain `routes.ts` + `src/build-app.ts`)
 
-Structure is routes → services, organized by **domain** (screaming architecture). Each domain folder (`src/reports/`, `src/projects/`, `src/repositories/`, `src/credentials/`, etc.) owns its handlers, Zod/TypeBox schemas, services, stores, and colocated tests. Cross-cutting integrations live in `src/shared/integrations/`; shared DB infra in `src/db/`.
+Structure is routes → services, organized by **domain** (screaming architecture). Each domain folder (`src/projects/`, `src/repositories/`, `src/credentials/`, etc.) owns its handlers, Zod/TypeBox schemas, services, stores, and colocated tests. Cross-cutting infrastructure lives in `src/shared/` (`integrations/`, `storage/`, `queue/`); shared DB infra in `src/db/`.
 
-**Imports use the `@/` alias** pointing at `src/` (e.g. `@/reports/routes`, `@/db/schema`, `@/shared/integrations/git-provider`) — never relative `../` paths. Resolved by tsconfig `paths` (`@/*` → `./src/*`), vitest `resolve.alias`, and `tsx` at runtime. New files must import via `@/`.
+**Imports use the `@/` alias** pointing at `src/` (e.g. `@/projects/routes`, `@/db/schema`, `@/shared/integrations/git-provider`) — never relative `../` paths. Resolved by tsconfig `paths` (`@/*` → `./src/*`), vitest `resolve.alias`, and `tsx` at runtime. New files must import via `@/`.
 
 Route handlers stay thin; business logic goes in services.
 
-All route registration is imperative in `src/build-app.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/reports/routes.ts`). There is no router/index.ts or decorator-based routing.
+All route registration is imperative in `src/build-app.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/projects/routes.ts`). There is no router/index.ts or decorator-based routing.
 
 **Route handler pattern** (every handler must follow this):
 1. Accept `req: FastifyRequest, reply: FastifyReply` — do **not** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; validation is enforced at the route `schema` level, not via compile-time generics
@@ -32,7 +32,7 @@ Validation uses **TypeBox-first, Fastify-owned validation**:
 - **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/build-app.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
 - Handlers read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts — no Zod schemas in the request path.
 - A global `setErrorHandler` in `src/build-app.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
-- **Zod is reserved for non-request validation only:** `src/config/env.ts` (env parsing) and `src/reports/report-output.ts` (validating AI-generated markdown against `parsedReportSchema`). Do not reintroduce Zod for route input.
+- **Zod is reserved for non-request validation only:** `src/config/env.ts` (env parsing). Do not reintroduce Zod for route input.
 
 Never return API key values from any endpoint — metadata only (key hints).
 
@@ -52,26 +52,12 @@ API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts 
 
 Strip extended-thinking output with `cleanResponse()` before using model responses (removes `<thinking>` tags).
 
-## Report generation flow (`src/reports/routes.ts`)
+## Read-path model
 
-1. Validate input body with `ReportInputBody` (wraps `ReportDataInput` in `{ data: ... }`)
-2. Resolve the AI provider + key (default `openrouter`; stored credential or env fallback) — **refuse to start if no key** (`ProviderKeyError`, 400)
-3. Upsert the project (`projects` via `projects-store`, keyed by `git_provider` + `provider_project_id`)
-4. Batch-ingest the window via `prepareProjectBranch` (`src/projects/services.ts`): self-hosted reads the branch archive from disk (native `git`); demo reads the public GitHub API (`ingest-api.ts`). Both upsert `commit_chunks` and embed, and both fall back to existing rows if ingestion fails.
-5. Read the report window straight from `commit_chunks` (`listCommitsForProject`) — no GitHub call in the use case
-6. Build system prompt (with template instruction) + user prompt via `src/reports/prompts.ts` (commit messages + LLM summaries)
-7. Call AI with up to 2 retries if structure validation fails
-8. Validate AI output structure with `validateReportStructure()` (parses markdown, validates against `parsedReportSchema`)
-9. Store report + `report_commits` snapshot in Postgres via Drizzle ORM
-10. Return `{ reportId, projectId }`
+The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; GitHub's REST API is also used for discovery.
 
-### Read-path model
-
-The DB is the materialized read model for commits. The git archive (self-hosted) or the public GitHub REST API (demo) is the ingestion source; GitHub's REST API is also used for discovery.
-
-- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **archive-backed** (self-hosted) or **API-backed** (demo) — see the route's `DEMO_MODE` branch.
-- **Report commits** (`GET /api/v1/reports/:id/commits`): serves the report's stored commit rows from `report_commits` + `commit_chunks` (`reportCommitsStore.listCommitsForReport`). No GitHub call.
-- **Report generation** (`POST /api/v1/reports`): ingests the window via `src/repositories/ingest.ts`, then reads the window from `commit_chunks`.
+- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
+- **Chat retrieval** (`POST /api/v1/chat/sessions/:id/messages`) ingests the branch via the job queue (see `src/shared/queue/`), then reads `commit_chunks`.
 
 ## Database (`src/db/`)
 
@@ -80,29 +66,28 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
 - **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
-- **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(512)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
-- **reports** — generated reports linked to a project (uuid PK, title, markdown)
-- **report_commits** — snapshot of the SHAs a report was generated from (unique `(report_id, commit_sha)`)
+- **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
+- **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/reports/stores/reports-store.ts` + `report-commits-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
 
 ## Commit ingestion (`src/repositories/`)
 
-Commit ingestion is **synchronous, batch** — no background worker, queue, or watermark. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as a deduped job in `src/shared/queue/`. The caller enqueues `ingest-branch` and awaits `runAndWait`; with `QUEUE_DRIVER=memory` (default) it runs inline, with `bullmq` a Worker in the same process drains Redis. Errors carry `{ message, code }` back through the queue so route behavior is unchanged. There are two interchangeable paths, selected by `DEMO_MODE`:
 
-- **Self-hosted (default)** — clone a local `git` archive.
+- **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
-- **Archive** (`archive-service.ts`): `ensureArchive(owner, repo, branch)` clones the branch with the native `git` binary (`git clone --single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, using `GITHUB_TOKEN` via `http.extraheader`) and does an incremental fetch (`git fetch origin` + `git update-ref`) on repeat runs. The archive is the source of truth; commits are read from disk, never the API.
-- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the report prompt grounds on these, since a commit message can be uninformative).
+- **Archive store** (`src/shared/storage/`): `ArchiveStore` is a warm cache for the branch clone — `fs` (default: local disk already is the archive), `s3` (one `tar.gz` object per branch written with a single atomic `PutObject`, with disposable job-scoped local scratch), `memory` (tests). `ensureArchive` (`archive-service.ts`) hydrates before cloning, clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`), then dehydrates only when the tip changed. GitHub remains the source of truth. **Known gap:** deleting a project cascades in Postgres but orphans its archive (S3 object / fs clone); the cache is regenerable, so cleanup is manual.
+- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the image (`backend/Dockerfile.dev`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process worker and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
+- **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
 - **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → upsert `commit_chunks` (dedupe by SHA, skipping already-stored; `commit_message` is the embedding source) → `embedNewChunks`.
 - **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `shared/integrations/git-provider/octokit.ts`.
 - **Demo ingest** (`ingest-api.ts`): `ingestCommitsFromApi` mirrors `ingest.ts` using the API reads. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `github/routes.ts` and `verification/routes.ts`.
-- **Database-first** (`projects/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call). In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
+- **Database-first** (`projects/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
 - **Demo branch scope** (`shared/demo-branches.ts`): demo only exposes/ingests `main`/`master` (or the repo's resolved default). `listBranches` filters the UI list and `prepareProjectBranch` skips ingestion for any other branch, so a visit can't fan out across every feature branch.
 - **Read-only demo**: `DEMO_MODE=true` also implies `DEMO_RESTRICT_KEYS` (no BYOK). Repo-adding is controlled separately by `ALLOW_ADD_REPOS` (default true): leave it on to seed the database on first run, then set `ALLOW_ADD_REPOS=false` to lock visitors to the pre-ingested set.
-- **Report generation** requires a valid AI provider key (stored credential or env fallback) BEFORE any clone or LLM work — `ProviderKeyError` otherwise.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
 
@@ -167,11 +152,17 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
 | `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
+| `ARCHIVE_STORE` | Warm cache: `fs` (default) \| `s3` \| `memory` (tests) |
+| `S3_BUCKET` / `S3_ENDPOINT` / `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_PREFIX` | S3 (or MinIO) archive cache settings |
+| `QUEUE_DRIVER` | `memory` (default, inline) \| `bullmq` (Redis) |
+| `WORKER_ENABLED` | `true` (default); set `false` for API-only replicas |
+| `REDIS_URL` | BullMQ connection (default `redis://localhost:6379`) |
+| `QUEUE_NAME` | BullMQ queue name (default `scrapecat`) |
 
 ## Deep dives
 
-- `src/reports/report-output.ts` — AI markdown structure validation with Zod + hand-written parser
-- `src/reports/prompts.ts` — all prompt builders and `FALLBACK_REPORT`
-- `src/repositories/` — archive clone, git reading, ingestion orchestrator
+- `src/shared/storage/` — archive warm-cache adapters (`fs`/`s3`/`memory`) + tar helpers
+- `src/shared/queue/` — job queue (`memory`/`bullmq`), handler registry, and the `ingest-branch` job
+- `src/repositories/` — archive clone/hydrate, git reading, ingestion orchestrator
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/credentials/encryption.ts` — AES-256-GCM details

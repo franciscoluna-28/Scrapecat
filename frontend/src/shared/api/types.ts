@@ -991,8 +991,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
-                            reportModel: string;
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
                         };
@@ -1022,8 +1022,8 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
-                        reportModel: string;
+                        chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                        chatModel: string;
                         embeddingProvider: "openrouter" | "ollama";
                         embeddingModel: string;
                     };
@@ -1037,8 +1037,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
-                            reportModel: string;
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
                         };

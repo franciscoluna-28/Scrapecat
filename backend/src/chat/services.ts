@@ -74,8 +74,8 @@ export async function deleteChatSession(id: string) {
 
 async function resolveProviderAndKey(override?: { provider?: string; model?: string }) {
   const settings = await getAISettings();
-  const provider = override?.provider || settings.reportProvider;
-  const model = override?.model || settings.reportModel;
+  const provider = override?.provider || settings.chatProvider;
+  const model = override?.model || settings.chatModel;
   const providerConfig = getProviderConfig(provider);
   if (!providerConfig) throw new ProviderKeyError(provider);
   const storedKey = await resolveApiKey(provider);
