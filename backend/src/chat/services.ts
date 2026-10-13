@@ -119,7 +119,9 @@ export async function streamChatMessage(opts: {
   const prepared = await prepareProjectBranch(session.projectId, requestedBranch, onProgress).catch(() => null);
   const effectiveBranch = prepared?.branch || requestedBranch;
 
-  let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery } = parseQueryWindow(content);
+  let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery, isRelative } = parseQueryWindow(content);
+
+  const DAY_MS = 86_400_000;
 
   // Temporal keywords like "last", "latest", "recent" with no explicit date:
   // anchor the window at the latest commit so the date-prefixed embedding
@@ -129,7 +131,6 @@ export async function streamChatMessage(opts: {
     !dateWindowEnd &&
     hasTemporalIntent(content)
   ) {
-    const DAY_MS = 86_400_000;
     const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
     if (latest) {
       dateWindowEnd = latest;
@@ -137,13 +138,30 @@ export async function streamChatMessage(opts: {
     }
   }
 
-  const citations = await retrieveCommits({
+  let citations = await retrieveCommits({
     projectId: session.projectId,
     query: filteredQuery,
     branch: effectiveBranch,
     startDate: dateWindowStart,
     endDate: dateWindowEnd,
   });
+
+  // Relative windows ("this week", "last 30 days") are anchored to wall-clock
+  // now, but a repo whose newest commit predates that window has nothing to
+  // return. Retry anchored at the latest commit so recency queries still
+  // surface the most recent work instead of reporting an empty range.
+  if (citations.length === 0 && isRelative) {
+    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
+    if (latest) {
+      citations = await retrieveCommits({
+        projectId: session.projectId,
+        query: filteredQuery,
+        branch: effectiveBranch,
+        startDate: new Date(latest.getTime() - 45 * DAY_MS),
+        endDate: latest,
+      });
+    }
+  }
 
   const history = await chatSessionsStore.listMessages({ sessionId });
   const prior = history.slice(-HISTORY_LIMIT).map((m) => ({
