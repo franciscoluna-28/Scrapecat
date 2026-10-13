@@ -7,7 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { QueryProvider } from "../shared/providers/QueryProvider";
 import { BRAND } from "@/src/shared/constants";
 
-const poppins = Poppins({subsets:['latin'],variable:'--font-sans',weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']});
+const poppins = Poppins({subsets:['latin'],variable:'--font-poppins',weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
