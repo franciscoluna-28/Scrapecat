@@ -16,19 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: scrapecat-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   minio:
     image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     container_name: scrapecat-minio
@@ -79,11 +66,8 @@ services:
       - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - REPO_ARCHIVE_DIR=/app/repos
-      # Defaults stay fs/memory (zero infra). Opt into the queue + S3 cache with:
-      #   ARCHIVE_STORE=s3 QUEUE_DRIVER=bullmq docker compose up
+      # Opt into the S3 archive cache with: ARCHIVE_STORE=s3 docker compose up
       - ARCHIVE_STORE=${ARCHIVE_STORE:-fs}
-      - QUEUE_DRIVER=${QUEUE_DRIVER:-memory}
-      - REDIS_URL=redis://redis:6379
       - S3_BUCKET=scrapecat-archives
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY_ID=minioadmin
@@ -113,5 +97,4 @@ services:
 volumes:
   postgres_data:
   repo_archives:
-  redis_data:
   minio_data:

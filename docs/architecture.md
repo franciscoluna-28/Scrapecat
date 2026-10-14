@@ -17,7 +17,7 @@ flowchart TB
     subgraph D["Data"]
         PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
         STORE["Per-domain stores (routes never touch db directly)"]
-        INFRA["Archive store (fs | s3) · job queue (memory | bullmq)<br/>native git (clone/fetch) · Octokit (discovery only)"]
+        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit (discovery only)"]
     end
     FE --> API --> PG
     API --> STORE --> PG
@@ -57,9 +57,9 @@ sequenceDiagram
 
 ## Commit ingestion
 
-Batched and archive-based, run as a deduped job. Callers enqueue `ingest-branch`
-and await it: with `QUEUE_DRIVER=memory` (default) it runs inline; with `bullmq` a
-Worker in the same process drains Redis.
+Batched and archive-based, run as a deduped in-process job. Callers enqueue
+`ingest-branch` and await it; the handler runs inline, and concurrent callers for
+the same project+branch attach to the in-flight run.
 
 ```mermaid
 flowchart TD

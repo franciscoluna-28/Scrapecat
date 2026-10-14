@@ -12,9 +12,9 @@ export type IngestJobPayload = {
 };
 
 /**
- * The one heavy ingestion job. Registered as a side effect so both queue
- * drivers (and, in bullmq mode, the in-process worker) can resolve it. The
- * demo/self-hosted split lives here, exactly as it did inline before.
+ * The one heavy ingestion job. Registered as a side effect so the queue can
+ * resolve it. The demo/self-hosted split lives here, exactly as it did inline
+ * before.
  */
 registerJobHandler("ingest-branch", async (payload, report, ctx) => {
   const { owner, repo, branch, projectId } = payload as IngestJobPayload;

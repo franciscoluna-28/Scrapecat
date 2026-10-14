@@ -71,16 +71,6 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().default(""),
   S3_SECRET_ACCESS_KEY: z.string().default(""),
   S3_PREFIX: z.string().default("archives"),
-  // Job queue. `memory` runs inline (dev, tests, serverless demo — zero infra);
-  // `bullmq` runs a Queue + Worker in this process (set WORKER_ENABLED=false
-  // for API-only replicas behind a shared Redis).
-  QUEUE_DRIVER: z.enum(["memory", "bullmq"]).default("memory"),
-  WORKER_ENABLED: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((v) => v === "true"),
-  REDIS_URL: z.string().default("redis://localhost:6379"),
-  QUEUE_NAME: z.string().default("scrapecat"),
 });
 
 const parsed = envSchema.safeParse(process.env);

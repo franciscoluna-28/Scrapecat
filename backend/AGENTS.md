@@ -74,13 +74,13 @@ All DB access goes through per-domain store modules — `src/projects/stores/pro
 
 ## Commit ingestion (`src/repositories/`)
 
-Commit ingestion runs as a deduped job in `src/shared/queue/`. The caller enqueues `ingest-branch` and awaits `runAndWait`; with `QUEUE_DRIVER=memory` (default) it runs inline, with `bullmq` a Worker in the same process drains Redis. Errors carry `{ message, code }` back through the queue so route behavior is unchanged. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
 
 - **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
 - **Archive store** (`src/shared/storage/`): `ArchiveStore` is a warm cache for the branch clone — `fs` (default: local disk already is the archive), `s3` (one `tar.gz` object per branch written with a single atomic `PutObject`, with disposable job-scoped local scratch), `memory` (tests). `ensureArchive` (`archive-service.ts`) hydrates before cloning, clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`), then dehydrates only when the tip changed. GitHub remains the source of truth. **Known gap:** deleting a project cascades in Postgres but orphans its archive (S3 object / fs clone); the cache is regenerable, so cleanup is manual.
-- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the image (`backend/Dockerfile.dev`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process worker and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
+- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the image (`backend/Dockerfile.dev`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
 - **Ingest** (`ingest.ts`): `ingestCommits` orchestrates: ensure archive → list window commits → upsert `commit_chunks` (dedupe by SHA, skipping already-stored; `commit_message` is the embedding source) → `embedNewChunks`.
 - **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `shared/integrations/git-provider/octokit.ts`.
@@ -154,15 +154,11 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
 | `ARCHIVE_STORE` | Warm cache: `fs` (default) \| `s3` \| `memory` (tests) |
 | `S3_BUCKET` / `S3_ENDPOINT` / `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_PREFIX` | S3 (or MinIO) archive cache settings |
-| `QUEUE_DRIVER` | `memory` (default, inline) \| `bullmq` (Redis) |
-| `WORKER_ENABLED` | `true` (default); set `false` for API-only replicas |
-| `REDIS_URL` | BullMQ connection (default `redis://localhost:6379`) |
-| `QUEUE_NAME` | BullMQ queue name (default `scrapecat`) |
 
 ## Deep dives
 
 - `src/shared/storage/` — archive warm-cache adapters (`fs`/`s3`/`memory`) + tar helpers
-- `src/shared/queue/` — job queue (`memory`/`bullmq`), handler registry, and the `ingest-branch` job
+- `src/shared/queue/` — in-process job queue, handler registry, and the `ingest-branch` job
 - `src/repositories/` — archive clone/hydrate, git reading, ingestion orchestrator
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/credentials/encryption.ts` — AES-256-GCM details
