@@ -16,6 +16,7 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
 import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
+import { BRAND } from "@/src/shared/constants";
 
 function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
   return (
@@ -28,11 +29,11 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
                 <SidebarMenuButton size="lg" asChild>
                   <a href="/app">
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                      <Image src={LogoImage} alt="Scrapecat Logo" width={28} height={28} className="size-7" />
+                      <Image src={LogoImage} alt={BRAND.logoAlt} width={28} height={28} className="size-7" />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">Scrapecat</span>
-                      <span className="truncate text-xs text-muted-foreground">Intelligence</span>
+                      <span className="truncate font-semibold">{BRAND.name}</span>
+                      <span className="truncate text-xs text-muted-foreground">{BRAND.tagline}</span>
                     </div>
                   </a>
                 </SidebarMenuButton>

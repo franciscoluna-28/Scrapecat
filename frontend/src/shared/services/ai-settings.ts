@@ -3,11 +3,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { queryKeys } from "./keys";
+import type { paths } from "@/src/shared/api/types";
+
+type AISettingsResponse =
+  paths["/api/v1/settings/ai"]["get"]["responses"]["200"]["content"]["application/json"];
 
 export type AISettings = {
-  reportProvider: "openrouter" | "deepseek" | "openai" | "ollama";
-  reportModel: string;
-  embeddingProvider: "openrouter" | "ollama";
+  chatProvider: AISettingsResponse["chatProvider"];
+  chatModel: string;
+  embeddingProvider: AISettingsResponse["embeddingProvider"];
   embeddingModel: string;
 };
 

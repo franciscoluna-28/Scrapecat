@@ -35,6 +35,24 @@ describe("parseQueryWindow", () => {
 
     expect(result.startDate).toEqual(new Date("2026-07-31T12:00:00.000Z"));
     expect(result.endDate).toEqual(NOW);
+    expect(result.isRelative).toBe(true);
+  });
+
+  it("marks \"this week\" as relative", () => {
+    const result = parseQueryWindow("what has engineering built this week?", NOW);
+
+    expect(result.isRelative).toBe(true);
+    expect(result.startDate).toBeDefined();
+    expect(result.endDate).toEqual(NOW);
+  });
+
+  it("does not mark absolute ranges as relative", () => {
+    const result = parseQueryWindow(
+      "show releases between 2024-06-01 and 2024-06-30",
+      NOW,
+    );
+
+    expect(result.isRelative).toBeUndefined();
   });
 
   it("does not invent a date filter for ordinary questions", () => {

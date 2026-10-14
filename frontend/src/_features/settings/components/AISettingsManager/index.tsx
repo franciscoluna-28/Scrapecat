@@ -11,6 +11,7 @@ import {
 } from "@/src/shared/services/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
 import { AISettingsCard } from "@/src/_features/settings/components/AISettingsCard";
+import { DEFAULT_EMBEDDING_PROVIDER } from "@/src/shared/constants";
 
 type Draft = {
   embeddingProvider: AISettings["embeddingProvider"];
@@ -19,7 +20,7 @@ type Draft = {
 
 function draftFrom(settings?: AISettings): Draft {
   return {
-    embeddingProvider: settings?.embeddingProvider ?? "openrouter",
+    embeddingProvider: settings?.embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER,
     embeddingModel: settings?.embeddingModel ?? "",
   };
 }

@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-
-type RepositoryType = 'all' | 'owner' | 'public' | 'private'
-type SortType = 'created' | 'updated' | 'pushed' | 'full_name'
-type DirectionType = 'asc' | 'desc'
+import {
+  GITHUB_PER_PAGE,
+  type RepositoryType,
+  type SortType,
+  type DirectionType,
+} from '@/src/shared/constants'
 
 interface GitHubSettingsState {
   repositoryType: RepositoryType
@@ -20,7 +22,7 @@ export const useGitHubSettingsStore = create<GitHubSettingsState>()(
   persist(
     (set, _get) => ({
       repositoryType: 'all',
-      perPage: 10,
+      perPage: GITHUB_PER_PAGE.default,
       sort: 'updated',
       direction: 'desc',
       setRepositoryType: (repositoryType) => set({ repositoryType }),

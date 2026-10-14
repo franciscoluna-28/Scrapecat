@@ -43,6 +43,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const streamingId = liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.id ?? null;
   const streamingContentLength =
     liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.content.length ?? 0;
+  const isAwaitingResponse = isStreaming && streamingContentLength === 0;
 
   // Clear stale live messages when session or project changes.
   useEffect(() => {
@@ -161,6 +162,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     messagesLoading,
     streamingId,
     isStreaming,
+    isAwaitingResponse,
     ingestionProgress,
     input,
     setInput,

@@ -4,8 +4,8 @@ import { appSettings } from "@/db/schema";
 
 export type SettingsInput = {
   id: string;
-  reportProvider: string;
-  reportModel: string;
+  chatProvider: string;
+  chatModel: string;
   embeddingProvider: string;
   embeddingModel: string;
 };
@@ -26,8 +26,8 @@ export async function upsertSettings(input: SettingsInput) {
     .onConflictDoUpdate({
       target: appSettings.id,
       set: {
-        reportProvider: input.reportProvider,
-        reportModel: input.reportModel,
+        chatProvider: input.chatProvider,
+        chatModel: input.chatModel,
         embeddingProvider: input.embeddingProvider,
         embeddingModel: input.embeddingModel,
         updatedAt: new Date(),

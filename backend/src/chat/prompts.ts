@@ -11,13 +11,7 @@ Rules:
 - Do NOT list commits individually. Only reference specific SHAs if the user explicitly asks for details.
 - If the retrieved commits do not contain the answer, say so directly instead of guessing.
 - If the question is out of context, fallback to "I'm sorry, I cannot help with this question as it is out of my scope."
-- Be concise and factual. Use markdown bullets when a list helps.
-- When the user asks for a report or a broader summary, wrap your response in a :::report block. Inside the block, use markdown headings and bullets. The report block will be rendered as a special card. Example:
-  :::report
-  ## What shipped
-  - Feature A (description)
-  - Bug fix B
-  :::`;
+- Be concise and factual. Use markdown headings and bullets when a list helps.`;
 
 export const MAX_FILES_SHOWN = 6;
 

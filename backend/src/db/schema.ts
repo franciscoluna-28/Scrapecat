@@ -1,7 +1,6 @@
 import {
   customType,
   index,
-  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -124,57 +123,6 @@ export const commitChunks = pgTable(
   },
 );
 
-export const reportJobs = pgTable("report_jobs", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  status: text("status").notNull().default("queued"),
-  phase: text("phase"),
-  commitCount: integer("commit_count").notNull().default(0),
-  progress: text("progress"),
-  error: jsonb("error").$type<{ message: string; status: number } | null>(),
-  data: jsonb("data").notNull(),
-  projectId: uuid("project_id"),
-  reportId: uuid("report_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  startedAt: timestamp("started_at", { withTimezone: true }),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-});
-
-export const reports = pgTable("reports", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  projectId: uuid("project_id")
-    .references(() => projects.id, { onDelete: "cascade" })
-    .notNull(),
-  sessionId: uuid("session_id")
-    .references(() => chatSessions.id, { onDelete: "set null" }),
-  title: text("title").notNull(),
-  originalMarkdown: text("original_markdown").notNull(),
-  startDate: timestamp("start_date", { withTimezone: true }).notNull(),
-  endDate: timestamp("end_date", { withTimezone: true }).notNull(),
-  branch: text("branch").notNull(),
-  customInstructions: text("custom_instructions"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const reportCommits = pgTable(
-  "report_commits",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    reportId: uuid("report_id")
-      .references(() => reports.id, { onDelete: "cascade" })
-      .notNull(),
-    commitSha: text("commit_sha").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    reportCommitUnique: uniqueIndex("report_commit_unique_idx").on(
-      table.reportId,
-      table.commitSha,
-    ),
-    reportIdIdx: index("report_commits_report_id_idx").on(table.reportId),
-  }),
-);
-
 export const credentials = pgTable(
   "credentials",
   {
@@ -238,8 +186,8 @@ export const chatMessages = pgTable(
 
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
-  reportProvider: text("report_provider").default("openrouter").notNull(),
-  reportModel: text("report_model").default("nvidia/nemotron-3-ultra-550b-a55b:free").notNull(),
+  chatProvider: text("chat_provider").default("openrouter").notNull(),
+  chatModel: text("chat_model").default("nvidia/nemotron-3-ultra-550b-a55b:free").notNull(),
   embeddingProvider: text("embedding_provider").default("openrouter").notNull(),
   embeddingModel: text("embedding_model").default("openai/text-embedding-3-small").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

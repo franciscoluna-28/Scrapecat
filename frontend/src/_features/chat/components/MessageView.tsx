@@ -10,43 +10,41 @@ import {
   MessageActions,
   MessageAction,
 } from "@/src/components/ai-elements/message";
+import { Spinner } from "@/src/components/ui/spinner";
 import { ChatMessage } from "@/src/shared/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/components/ui/collapsible";
 import { CommitCitationCard } from "./CommitCitationCard";
 import { cn } from "@/src/shared/lib/utils";
-import { splitArtifact } from "@/src/shared/utils/repo-url";
 
 export function MessageView({
   message,
   streaming,
+  awaitingResponse,
 }: {
   message: ChatMessage;
   streaming?: boolean;
+  awaitingResponse?: boolean;
 }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const citationCount = message.citations.length;
-  const { before, artifact } = message.role === "assistant" ? splitArtifact(message.content) : { before: message.content, artifact: null };
 
   return (
     <Message from={message.role}>
       <MessageContent>
         {message.role === "assistant" ? (
           <>
-            {before && (
-              <MessageResponse>{before}</MessageResponse>
+            {message.content && (
+              <MessageResponse>{message.content}</MessageResponse>
             )}
-            {artifact && (
-              <div className="rounded-lg border bg-card p-6 my-3 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">
-                    Report
-                  </span>
-                </div>
-                <MessageResponse className="m-6">{artifact}</MessageResponse>
-              </div>
-            )}
-            {streaming && (
-              <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
+            {awaitingResponse ? (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="size-4" />
+                Thinking…
+              </span>
+            ) : (
+              streaming && (
+                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-middle" />
+              )
             )}
           </>
         ) : (
@@ -58,8 +56,7 @@ export function MessageView({
           <MessageAction
             tooltip="Copy"
             onClick={() => {
-              const cleaned = [before, artifact].filter(Boolean).join("\n\n").trim();
-              navigator.clipboard.writeText(cleaned);
+              navigator.clipboard.writeText(message.content.trim());
               toast.success("Copied to clipboard");
             }}
           >

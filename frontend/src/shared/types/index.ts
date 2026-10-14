@@ -20,3 +20,6 @@ export type ChatSession =
 
 export type ChatMessage =
   paths["/api/v1/chat/sessions/{id}/messages"]["get"]["responses"]["200"]["content"]["application/json"]["messages"][number];
+
+export type AIModel =
+  paths["/api/v1/models"]["get"]["responses"]["200"]["content"]["application/json"]["models"][number];

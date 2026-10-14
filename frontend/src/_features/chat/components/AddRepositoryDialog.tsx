@@ -1,11 +1,11 @@
 "use client";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/src/components/ui/dialog";
-import { useAddRepository } from "@/src/_features/chat/hooks/useAddRepository";
+import { useAddRepository } from "@/src/_features/github/hooks/useAddRepository";
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
-import { GitHubConnectForm } from "@/src/_features/chat/components/GitHubConnectForm";
-import { useGitHubConnection } from "@/src/_features/chat/services/git-api";
+import { GitHubConnectForm } from "@/src/_features/github/components/GitHubConnectForm";
+import { useGitHubConnection } from "@/src/_features/github/services/github-api";
 import { IS_DEMO } from "@/src/shared/constants";
 import type { GitHubRepository } from "@/src/shared/types";
 

@@ -1,12 +1,13 @@
 import { env } from "@/config/env";
-import { ingestCommits, type IngestProgress } from "@/repositories/ingest";
-import { ingestCommitsFromApi } from "@/repositories/ingest-api";
+import type { IngestProgress, IngestResult } from "@/repositories/ingest";
 import { countChunksForProject } from "@/projects/stores/commit-chunks-store";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGithubToken } from "@/github/token";
+import { getJobQueue } from "@/shared/queue";
+import "@/projects/jobs";
 
 /**
  * Ingests a project branch, but is database-first: the database is the source
@@ -40,22 +41,24 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
-  const ingest = (ref: string) =>
-    env.isDemoMode
-      ? ingestCommitsFromApi({
-          owner: project.providerOwner,
-          repo: project.repositoryName,
-          branch: ref,
-          projectId,
-          onProgress,
-        })
-      : ingestCommits({
-          owner: project.providerOwner,
-          repo: project.repositoryName,
-          branch: ref,
-          projectId,
-          onProgress,
-        });
+  const queue = await getJobQueue();
+  // The heavy ingest runs as a deduped job; same window for now (full branch),
+  // so the id is stable per project+branch and concurrent callers attach.
+  const ingest = (ref: string): Promise<IngestResult> => {
+    const jobId = `ingest:${projectId}:${ref}:all`;
+    return queue
+      .enqueue("ingest-branch", jobId, {
+        owner: project.providerOwner,
+        repo: project.repositoryName,
+        branch: ref,
+        projectId,
+      })
+      .then(() =>
+        queue.runAndWait<IngestResult>(jobId, (p) =>
+          onProgress?.(p.stage as Parameters<IngestProgress>[0], p.message, p.done, p.total),
+        ),
+      );
+  };
 
   try {
     return { branch, ...(await ingest(branch)) };

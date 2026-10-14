@@ -8,6 +8,13 @@ export type DateWindow = {
 export type ParsedQueryWindow = DateWindow & {
   /** The query with temporal clauses stripped, for keyword matching. */
   filteredQuery: string;
+  /**
+   * True when the window came from a relative phrase ("this week",
+   * "last 30 days"). Those are anchored to wall-clock now, so a repo whose
+   * newest commit predates the window returns nothing — callers can retry
+   * against the latest commit.
+   */
+  isRelative?: boolean;
 };
 
 const MONTHS: Record<string, number> = {
@@ -215,7 +222,7 @@ export function parseQueryWindow(query: string, now: Date = new Date()): ParsedQ
       const idx = query.indexOf(phrase);
       if (idx >= 0) filteredQuery = query.slice(0, idx).trim();
     }
-    return { ...relative, filteredQuery };
+    return { ...relative, filteredQuery, isRelative: true };
   }
 
   // "before X" / "until X" / "hasta X" => endDate (exclusive, last ms before X)

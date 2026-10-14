@@ -6,32 +6,42 @@
 
 ## 🐈 Scrapecat — RAG Chat Over Git History
 
-Scrapecat is an engineering intelligence assistant that answers questions about your repository's history. It uses RAG (Retrieval-Augmented Generation) to find the most relevant commits and summarizes them at a feature level — no more digging through git logs or writing manual reports. Built because a CEO kept asking what engineering was doing **daily** when everything was on Git.
+Scrapecat is an engineering intelligence assistant that answers questions about your repository's history. It uses RAG (Retrieval-Augmented Generation) to find the most relevant commits and summarize them at a feature level — no more digging through git logs. Built because a CEO kept asking what engineering was doing **daily** when everything was on Git.
 
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements
 - **Data Source:** Native GitHub REST via `Octokit`, local git archive for commit ingestion
-- **Intelligence:** OpenRouter API (Google Gemma 4, DeepSeek, GPT-4o, etc.) or Ollama (local LLMs)
+- **Intelligence:** OpenRouter API (Google Gemma, DeepSeek, GPT-4o, etc.) or Ollama (local LLMs)
 - **Package Manager:** pnpm workspaces
 
 ## Core Features
 
-- **RAG Chat:** Ask questions about your code history in natural language. The system retrieves the most relevant commits via vector search (pgvector HNSW index) and summarizes them using an LLM.
+- **RAG Chat:** Ask questions about your code history in natural language. The system retrieves the most relevant commits via vector search (pgvector HNSW index) and summarizes them with an LLM.
 - **Feature-Level Summaries:** Related commits are grouped by feature, bug fix, refactor, or infrastructure — no individual commit listing unless asked.
-- **Importance Reranking:** Commits are scored by conventional commit type (`feat!`, `feat`, `fix!`, `breaking`), file count, and PR merges. The most important 30 commits are surfaced.
-- **Report Artifacts:** Ask for a "report" or "summary" and the LLM wraps the output in a `:::report` block, rendered as a styled card in the chat.
 - **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to GitHub commits.
 - **Project Tree Sidebar:** Connected repositories with nested chat sessions, branch selector, and navigation.
-- **Copy Support:** One-click copy of AI responses (report markers stripped automatically).
+- **Model Selection:** Pick the chat model per conversation; configure the embedding model in Settings.
 
 ## Future Roadmap
-- **External Integrations:** Connect Slack, Linear, Jira, and Notion so reports cross-reference commits with tickets, messages, and docs.
+- **External Integrations:** Connect Slack, Linear, Jira, and Notion so summaries cross-reference commits with tickets, messages, and docs.
 - **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
-- **Persona-Driven Synthesis:** Custom tone mapping to generate reports specifically tailored for CTOs, Founders, or Board Members.
-- **Enterprise-Grade Security:** Implementing E2E Encryption, SSO, and Organization-level RBAC (Role-Based Access Control).
+- **Persona-Driven Synthesis:** Custom tone mapping tailored for CTOs, Founders, or Board Members.
+- **Enterprise-Grade Security:** E2E Encryption, SSO, and Organization-level RBAC.
 
 AI is increasing commit velocity, not reducing it. Scrapecat is the missing layer that translates engineering output into something every department can actually understand.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Ingest commits<br/>(git archive or GitHub API)"] --> B["Upsert commit_chunks<br/>+ embed commit messages"]
+    B --> C["Ask a question"]
+    C --> D["Retrieve via<br/>pgvector HNSW (+ keyword fallback)"]
+    D --> E["LLM summary<br/>with commit citations"]
+```
+
+Ingestion is batch/archive-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval runs against Postgres as the read model.
 
 ## Demo Mode (public concept demo)
 
@@ -49,14 +59,14 @@ Scrapecat requires a Personal Access Token (PAT) to fetch repository metadata an
 
 - 1.  Navigate to [GitHub Settings](https://github.com/settings) > Developer Settings > Personal Access Tokens.
 - 2.  Ensure the `repo` (Full control of private repositories) and `read:org` scopes are enabled.
-- 3. Scrapecat treats your data as read-only. We analyze the metadata to build reports without ever modifying your source code.
+- 3. Scrapecat treats your data as read-only. We analyze metadata to answer questions without ever modifying your source code.
 
 ### 2. OpenRouter Intelligence Layer
 
 We use OpenRouter's API for LLM access. The free tier works out of the box.
 
 - 1. Sign up at [OpenRouter](https://openrouter.ai/keys) and create a free API key.
-- 2. Default model: `google/gemma-4-31b-it` — supports chat, summaries, and report artifacts.
+- 2. Default chat model is set by `AI_MODEL` (default `mimo-v2.6-flash`); override anytime in the Settings UI or per conversation.
 
 ### 3. Ollama (Local Alternative)
 
@@ -72,7 +82,7 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
    ```
 3. Verify Ollama is running: `curl http://localhost:11434/api/tags`
 4. In the **Settings UI** (`/settings`):
-   - Set **Report Provider** to `Ollama (Local)` → select `llama3.2:1b`
+   - Set the **chat model** provider to `Ollama (Local)` → select `llama3.2:1b`
    - Set **Embedding Provider** to `Ollama (Local)` → select `nomic-embed-text`
 5. The API key field can be set to `ollama` (placeholder, no real key needed)
 
@@ -141,23 +151,10 @@ docker compose down
 ### RAG Pipeline
 
 1. **Query parsing** — natural language date windows are parsed ("last 30 days", "since June", "2024") and applied as metadata filters
-2. **Vector search** — 200 candidate commits retrieved via pgvector HNSW index
-3. **Importance reranking** — candidates scored by conventional commit type, file count, and PR merge status; top 30 returned
+2. **Vector search** — candidate commits retrieved via the pgvector HNSW index (`MAX_COSINE_DISTANCE = 0.8`)
+3. **Keyword fallback** — text match when embeddings are missing or the vector query fails
 4. **LLM summarization** — system prompt instructs the LLM to group by feature, not list individual commits
-5. **Report artifacts** — when the user asks for a report, the LLM wraps output in `:::report` for special card rendering
-6. **Sources** — every response includes a collapsible "Sources Used" section with commit links
-
-### Key Backend Modules
-
-| Module | Purpose |
-|---|---|
-| `src/chat/` | Chat sessions, streaming, RAG retrieval, AI integration |
-| `src/chat/ai.ts` | `callAI()` — unified LLM interface (OpenRouter + OpenAI-compatible) |
-| `src/chat/retrieval.ts` | Vector search + importance reranking |
-| `src/chat/date-window.ts` | Natural language date parsing for temporal queries |
-| `src/projects/` | Project/repository management, commit ingestion, embeddings |
-| `src/repositories/` | Local git archive, commit reading, ingestion orchestrator |
-| `src/credentials/` | Encrypted API key storage (AES-256-GCM) |
+5. **Sources** — every response includes a collapsible "Sources Used" section with commit links
 
 ## Contributing
 

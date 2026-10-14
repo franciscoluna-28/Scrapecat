@@ -15,7 +15,7 @@ import {
   EmptyMedia,
 } from "@/src/components/ui/empty";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
-import { useBranches } from "@/src/_features/chat/services/git-api";
+import { useBranches } from "@/src/_features/github/services/github-api";
 import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
@@ -88,7 +88,7 @@ export function Chat() {
     setBranch(projectId, branchName);
   };
 
-  const { messages, messagesLoading, streamingId, isStreaming, ingestionProgress, input, setInput, sendMessage, bottomRef } =
+  const { messages, messagesLoading, streamingId, isStreaming, isAwaitingResponse, ingestionProgress, input, setInput, sendMessage, bottomRef } =
     useAIChat({ projectId, sessionId, branch });
 
   // Demo: canned questions navigate here with a `q` param; send it once the
@@ -155,6 +155,7 @@ export function Chat() {
           <ChatMessages
             messages={messages}
             streamingId={streamingId}
+            awaitingResponse={isAwaitingResponse}
             isLoading={messagesLoading}
             sessionId={sessionId}
             projectName={activeProject}
@@ -172,6 +173,7 @@ export function Chat() {
                 onSubmit={sendMessage}
                 onBranchChange={handleBranchChange}
                 isStreaming={isStreaming}
+                isAwaitingResponse={isAwaitingResponse}
                 projectName={activeProject}
               />
               <ChatSuggestions onSelect={sendMessage} />

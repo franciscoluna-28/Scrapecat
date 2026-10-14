@@ -3,9 +3,9 @@ import { env } from "@/config/env";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { restrictDemoBranches } from "@/shared/demo-branches";
 import { resolveGithubToken } from "@/github/token";
-import { ensureArchive } from "@/repositories/archive-service";
-import { listCommitsInRange } from "@/repositories/git-reader";
 import { listCommitsFromApi } from "@/repositories/github-api";
+import * as projectsStore from "@/projects/stores/projects-store";
+import { listCommitsForProject } from "@/projects/stores/commit-chunks-store";
 import type { Static } from "@sinclair/typebox";
 import {
   RepoOwnerParams,
@@ -72,8 +72,9 @@ export async function listBranches(
 
 /**
  * Commit preview. Demo mode reads the GitHub REST API (no git binary); the
- * self-hosted path reads the local clone of the branch. Both are public-only
- * for public repos.
+ * self-hosted path is now served from Postgres (`commit_chunks`, the read
+ * model) — the API never touches git or local disk. Unknown repos simply have
+ * no ingested commits yet.
  */
 export async function listCommits(
   req: FastifyRequest,
@@ -81,10 +82,10 @@ export async function listCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { limit, startDate, endDate, branch } = req.query as Static<typeof CommitsQuery>;
-  const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
     if (env.isDemoMode) {
+      const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
       const commits = await listCommitsFromApi({
         owner,
         repo,
@@ -104,33 +105,32 @@ export async function listCommits(
       });
     }
 
-    const archive = await ensureArchive({ owner, repo, branch: ref });
-    const commits = await listCommitsInRange({
-      dir: archive.dir,
-      ref,
-      since: parseDate(startDate),
-      until: parseDate(endDate),
+    const project = await projectsStore.getProjectByOwnerRepo({
+      gitProvider: env.GIT_PROVIDER,
+      providerOwner: owner,
+      repositoryName: repo,
+    });
+    if (!project) return reply.send({ commits: [] });
+
+    const rows = await listCommitsForProject({
+      projectId: project.id,
+      branch: branch || project.defaultBranch,
+      startDate: parseDate(startDate),
+      endDate: parseDate(endDate),
     });
     return reply.send({
-      commits: commits.slice(0, limit).map((c) => ({
-        sha: c.sha,
-        message: c.message,
-        author: c.author,
-        date: c.date,
+      commits: rows.slice(0, limit).map((c) => ({
+        sha: c.commitSha,
+        message: c.commitMessage,
+        author: c.author ?? "",
+        date: c.committedAt.toISOString(),
+        url:
+          c.metadata?.commitUrl ??
+          `https://github.com/${owner}/${repo}/commit/${c.commitSha}`,
       })),
     });
   } catch (error: any) {
     console.error("Error fetching commits:", error);
-    if (error?.status === 404 || error?.status === 422 || error?.code === "NotFoundError") {
-      return reply.status(400).send({
-        error: "Branch or repository not found on GitHub. Check the branch name and repository access.",
-      });
-    }
-    if (error?.code === "BranchNotFound") {
-      return reply.status(400).send({
-        error: `Branch "${ref}" not found in this repository. Check the branch name.`,
-      });
-    }
     return reply.status(500).send({ error: "Failed to fetch commits" });
   }
 }
@@ -141,10 +141,10 @@ export async function countCommits(
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
   const { startDate, endDate, branch } = req.query as Static<typeof CommitsCountQuery>;
-  const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
 
   try {
     if (env.isDemoMode) {
+      const ref = branch || (await getGitProvider(await resolveGithubToken()).getDefaultBranch(owner, repo));
       const commits = await listCommitsFromApi({
         owner,
         repo,
@@ -156,21 +156,22 @@ export async function countCommits(
       return reply.send({ count: commits.length });
     }
 
-    const archive = await ensureArchive({ owner, repo, branch: ref });
-    const commits = await listCommitsInRange({
-      dir: archive.dir,
-      ref,
-      since: parseDate(startDate),
-      until: parseDate(endDate),
+    const project = await projectsStore.getProjectByOwnerRepo({
+      gitProvider: env.GIT_PROVIDER,
+      providerOwner: owner,
+      repositoryName: repo,
     });
-    return reply.send({ count: commits.length });
+    if (!project) return reply.send({ count: 0 });
+
+    const rows = await listCommitsForProject({
+      projectId: project.id,
+      branch: branch || project.defaultBranch,
+      startDate: parseDate(startDate),
+      endDate: parseDate(endDate),
+    });
+    return reply.send({ count: rows.length });
   } catch (error: any) {
     console.error("Error fetching commit count:", error);
-    if (error?.code === "BranchNotFound") {
-      return reply.status(400).send({
-        error: `Branch "${ref}" not found in this repository. Check the branch name.`,
-      });
-    }
     return reply.status(500).send({ error: "Failed to fetch commit count" });
   }
 }

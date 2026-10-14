@@ -71,12 +71,13 @@ export async function ingestCommits(opts: {
   startDate?: Date;
   endDate?: Date;
   onProgress?: IngestProgress;
+  jobId?: string;
 }): Promise<IngestResult> {
-  const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
+  const { owner, repo, branch, projectId, startDate, endDate, onProgress, jobId } = opts;
   const base = { owner, repo, branch, projectId };
 
   const archive = await timed("ingest.ensureArchive", base, () =>
-    ensureArchive({ owner, repo, branch }),
+    ensureArchive({ owner, repo, branch, jobId }),
   );
 
   const commits = await timed(
