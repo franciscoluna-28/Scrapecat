@@ -1,18 +1,19 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, API_URL } from "@/src/shared/api/client";
+import { apiClient, API_URL, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { getAnonymousId } from "@/src/shared/lib/anonymous-id";
-import type { ChatMessage, ChatSession } from "@/src/shared/types";
+import { parseSseBuffer, parseSseFrame } from "@/src/shared/lib/sse";
+import type { ChatMessage } from "@/src/shared/types";
 
 export async function prepareProjectBranch(projectId: string, branch: string) {
-  const response = await apiClient.POST("/api/v1/projects/{id}/branches/prepare", {
-    params: { path: { id: projectId } },
-    body: { branch },
-  });
-  if (response.error) throw response.error;
-  return response.data;
+  return unwrap(
+    apiClient.POST("/api/v1/projects/{id}/branches/prepare", {
+      params: { path: { id: projectId } },
+      body: { branch },
+    }),
+  );
 }
 
 export function useChatSessions(projectId?: string) {
@@ -20,17 +21,12 @@ export function useChatSessions(projectId?: string) {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.chat.sessions(projectId),
     queryFn: () =>
-      apiClient
-        .GET("/api/v1/chat/sessions", { params: { query } })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
-        }),
+      unwrap(apiClient.GET("/api/v1/chat/sessions", { params: { query } })),
     enabled: !!projectId,
   });
 
   return {
-    sessions: (data?.sessions ?? []) as ChatSession[],
+    sessions: data?.sessions ?? [],
     isLoading,
     isFetching,
     error: error ?? null,
@@ -41,19 +37,16 @@ export function useChatMessages(sessionId?: string) {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.chat.messages(sessionId!),
     queryFn: () =>
-      apiClient
-        .GET("/api/v1/chat/sessions/{id}/messages", {
+      unwrap(
+        apiClient.GET("/api/v1/chat/sessions/{id}/messages", {
           params: { path: { id: sessionId! } },
-        })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
         }),
+      ),
     enabled: !!sessionId,
   });
 
   return {
-    messages: (data?.messages ?? []) as ChatMessage[],
+    messages: data?.messages ?? [],
     isLoading,
     isFetching,
     error: error ?? null,
@@ -64,12 +57,7 @@ export function useCreateChatSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) =>
-      apiClient
-        .POST("/api/v1/chat/sessions", { body: { projectId } })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
-        }),
+      unwrap(apiClient.POST("/api/v1/chat/sessions", { body: { projectId } })),
     onSuccess: (session) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(session.projectId) });
     },
@@ -80,12 +68,11 @@ export function useDeleteChatSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) =>
-      apiClient
-        .DELETE("/api/v1/chat/sessions/{id}", { params: { path: { id: sessionId } } })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
+      unwrap(
+        apiClient.DELETE("/api/v1/chat/sessions/{id}", {
+          params: { path: { id: sessionId } },
         }),
+      ),
     onSuccess: (_data, sessionId) => {
       queryClient.removeQueries({ queryKey: queryKeys.chat.messages(sessionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
@@ -139,28 +126,16 @@ export async function streamChatMessage(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
+    const { frames, rest } = parseSseBuffer(buffer);
+    buffer = rest;
 
     for (const frame of frames) {
-      const line = frame.trim();
-      if (!line.startsWith("data:")) continue;
-      try {
-        const parsed = JSON.parse(line.replace(/^data:\s*/, "")) as StreamChunk;
-        if (parsed.type === "token") {
-          onChunk(parsed);
-        } else if (parsed.type === "progress") {
-          onChunk(parsed);
-        } else if (parsed.type === "done") {
-          doneMessage = parsed.message;
-          onChunk(parsed);
-        } else if (parsed.type === "error") {
-          onChunk(parsed);
-          return Promise.reject(new Error(parsed.error));
-        }
-      } catch (error) {
-        if (error instanceof SyntaxError) continue;
-        throw error;
+      const chunk = parseSseFrame(frame) as StreamChunk | null;
+      if (!chunk) continue;
+      if (chunk.type === "done") doneMessage = chunk.message;
+      onChunk(chunk);
+      if (chunk.type === "error") {
+        return Promise.reject(new Error(chunk.error));
       }
     }
   }
