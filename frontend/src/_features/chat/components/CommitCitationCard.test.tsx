@@ -8,7 +8,7 @@ type Citation = ChatMessage["citations"][number];
 function citation(overrides: Partial<Citation> = {}): Citation {
   return {
     commitSha: "abcdef1234567890",
-    commitMessage: "add rag chat",
+    commitMessage: "feat: add rag chat",
     author: "dev",
     committedAt: "2024-01-01T00:00:00.000Z",
     filesChanged: ["src/chat/routes.ts"],
@@ -18,21 +18,43 @@ function citation(overrides: Partial<Citation> = {}): Citation {
 }
 
 describe("CommitCitationCard", () => {
-  it("renders the message and the 7-character short sha", () => {
+  it("renders the subject and 7-character short sha", () => {
     render(<CommitCitationCard citation={citation()} />);
-    expect(screen.getByText("add rag chat")).toBeInTheDocument();
+    expect(screen.getByText("feat: add rag chat")).toBeInTheDocument();
     expect(screen.getByText("abcdef1")).toBeInTheDocument();
   });
 
-  it("truncates long commit messages with an ellipsis", () => {
-    const long = "x".repeat(150);
+  it("renders the commit description body", () => {
+    render(
+      <CommitCitationCard
+        citation={citation({
+          commitMessage: "feat: add rag chat\n\n- Store chunks\n- Retrieve by embedding",
+        })}
+      />,
+    );
+    expect(screen.getByText("feat: add rag chat")).toBeInTheDocument();
+    expect(screen.getByText(/Store chunks/)).toBeInTheDocument();
+    expect(screen.getByText(/Retrieve by embedding/)).toBeInTheDocument();
+  });
+
+  it("shows the full subject instead of truncating it", () => {
+    const long = `feat: ${"x".repeat(150)}`;
     render(<CommitCitationCard citation={citation({ commitMessage: long })} />);
-    expect(screen.getByText(`${"x".repeat(100)}…`)).toBeInTheDocument();
+    expect(screen.getByText(long)).toBeInTheDocument();
   });
 
   it("renders the author when present", () => {
     render(<CommitCitationCard citation={citation({ author: "octocat" })} />);
     expect(screen.getByText("octocat")).toBeInTheDocument();
+  });
+
+  it("shows the changed-file count", () => {
+    render(
+      <CommitCitationCard
+        citation={citation({ filesChanged: ["a.ts", "b.ts"] })}
+      />,
+    );
+    expect(screen.getByText("2 files")).toBeInTheDocument();
   });
 
   it("links to the commit when a URL is available", () => {
