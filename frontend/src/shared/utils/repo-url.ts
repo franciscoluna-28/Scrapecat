@@ -11,19 +11,19 @@ export type ParsedRepoUrl = {
  *  - owner/repo
  *  - https://github.com/owner/repo.git
  *  - https://github.com/owner/repo/tree/main
+ * Returns null when there is no `owner/repo` pair to extract.
  */
 export function parseRepoUrl(input: string): ParsedRepoUrl | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  const match = trimmed.match(
-    /(?:github\.com\/)?([^/]+)\/([^/]+?)(?:\.git)?(?:\/|$)/,
-  );
-  if (!match) return null;
+  const cleaned = trimmed
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/^github\.com\//i, "");
 
-  const owner = match[1];
-  const repo = match[2];
+  const [owner, repo] = cleaned.split("/").filter(Boolean);
   if (!owner || !repo) return null;
 
-  return { owner, repo };
+  return { owner, repo: repo.replace(/\.git$/i, "") };
 }
