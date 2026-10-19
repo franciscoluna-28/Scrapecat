@@ -24,7 +24,7 @@ describe("CommitCitationCard", () => {
     expect(screen.getByText("abcdef1")).toBeInTheDocument();
   });
 
-  it("renders the commit description body", () => {
+  it("shows only the subject, not the commit description body", () => {
     render(
       <CommitCitationCard
         citation={citation({
@@ -33,8 +33,7 @@ describe("CommitCitationCard", () => {
       />,
     );
     expect(screen.getByText("feat: add rag chat")).toBeInTheDocument();
-    expect(screen.getByText(/Store chunks/)).toBeInTheDocument();
-    expect(screen.getByText(/Retrieve by embedding/)).toBeInTheDocument();
+    expect(screen.queryByText(/Store chunks/)).not.toBeInTheDocument();
   });
 
   it("shows the full subject instead of truncating it", () => {

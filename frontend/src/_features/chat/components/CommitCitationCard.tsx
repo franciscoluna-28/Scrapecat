@@ -17,15 +17,13 @@ type Props = {
 };
 
 /**
- * A cited commit, rendered like a conventional commit: subject line, body
- * description, then `hash • author • time • files`. The whole card links to the
- * commit when a URL is available.
+ * A cited commit, rendered as its subject plus `hash • author • time • files`.
+ * The whole card links to the commit when a URL is available (the full
+ * description lives there, so it isn't repeated here).
  */
 export function CommitCitationCard({ citation }: Props) {
   const shortSha = citation.commitSha.slice(0, 7);
-  const [subjectLine, ...bodyLines] = citation.commitMessage.split("\n");
-  const subject = subjectLine.trim();
-  const body = bodyLines.join("\n").trim();
+  const subject = citation.commitMessage.split("\n")[0].trim();
   const fileCount = citation.filesChanged.length;
 
   const content = (
@@ -34,11 +32,6 @@ export function CommitCitationCard({ citation }: Props) {
         <CommitMessage className="line-clamp-2" title={subject}>
           {subject || "(no message)"}
         </CommitMessage>
-        {body && (
-          <p className="line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground">
-            {body}
-          </p>
-        )}
         <CommitMetadata className="pt-0.5">
           <CommitHash>{shortSha}</CommitHash>
           {citation.author && (
