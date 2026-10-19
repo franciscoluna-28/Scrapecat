@@ -57,9 +57,12 @@ sequenceDiagram
 
 ## Commit ingestion
 
-Batched and archive-based, run as a deduped in-process job. Callers enqueue
-`ingest-branch` and await it; the handler runs inline, and concurrent callers for
-the same project+branch attach to the in-flight run.
+Batched, run as a deduped in-process job. The job selects a `CommitSource` — the
+self-hosted git archive (`createGitCommitSource`) or the demo GitHub API
+(`createApiCommitSource`) — and a shared orchestrator (`ingestCommits`) runs the
+pipeline either way. Callers enqueue `ingest-branch` and await it; the handler
+runs inline, and concurrent callers for the same project+branch attach to the
+in-flight run.
 
 ```mermaid
 flowchart TD
@@ -75,6 +78,10 @@ flowchart TD
     U --> EM["embedNewChunks (batch, non-blocking)"]
 ```
 
+- **Two sources:** `createGitCommitSource` (self-hosted; native git + per-commit
+  diffs + guardrail, 50-row batches) and `createApiCommitSource` (demo; GitHub
+  REST with best-effort file scopes, a single batch, no guardrail) both feed the
+  same `ingestCommits` orchestrator.
 - **Why batch:** the workload needs everything from a rate-limited API; one clone
   collapses it into a single idempotent fetch. GitHub REST is used only for
   **discovery** (repo/branch listing, connection check) and the clone itself.
