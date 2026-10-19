@@ -1,23 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockEnsureArchive = vi.fn();
-const mockListCommitsInRange = vi.fn();
-const mockGetCommitChangedFiles = vi.fn();
-const mockUpsertCommitChunks = vi.fn();
 const mockGetChunksByShas = vi.fn();
+const mockUpsertCommitChunks = vi.fn();
 const mockEmbedNewChunks = vi.fn();
-
-vi.mock("@/repositories/archive-service", () => ({
-  ensureArchive: (...args: unknown[]) => mockEnsureArchive(...args),
-}));
-
-vi.mock("@/repositories/git-reader", () => ({
-  listCommitsInRange: (...args: unknown[]) => mockListCommitsInRange(...args),
-}));
-
-vi.mock("@/repositories/git-diff", () => ({
-  getCommitChangedFiles: (...args: unknown[]) => mockGetCommitChangedFiles(...args),
-}));
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
   getChunksByShas: (...args: unknown[]) => mockGetChunksByShas(...args),
@@ -28,125 +13,112 @@ vi.mock("@/projects/embed-chunks", () => ({
   embedNewChunks: (...args: unknown[]) => mockEmbedNewChunks(...args),
 }));
 
-import { ingestCommits } from "@/repositories/ingest";
-import type { CommitChangedStats } from "@/repositories/git-diff";
+import { ingestCommits, type CommitSource, type SourceCommit } from "@/repositories/ingest";
+import type { CommitChunkInput } from "@/projects/stores/commit-chunks-store";
 
-const BASE_DIFF: CommitChangedStats = {
-  filesChanged: 1,
-  files: [{ filepath: "a.txt", status: "modified" }],
-};
+function commit(sha: string): SourceCommit {
+  return { sha, message: `msg ${sha}`, author: "t", date: "2026-01-01T00:00:00Z" };
+}
 
-const baseCommit = {
-  sha: "a",
-  message: "fix: bug in parser",
-  author: "t",
-  date: "2026-01-01T00:00:00Z",
-  tree: "t1",
-  parentSha: null,
-};
+function input(c: SourceCommit, projectId: string, branch: string): CommitChunkInput {
+  return {
+    projectId,
+    commitSha: c.sha,
+    branch,
+    commitMessage: c.message,
+    author: c.author,
+    metadata: {},
+    committedAt: new Date(c.date),
+  };
+}
+
+function makeSource(
+  commits: SourceCommit[],
+  opts: { batchSize?: number; tipSha?: string; skippedShas?: string[] } = {},
+): CommitSource {
+  const skipped = new Set(opts.skippedShas ?? []);
+  return {
+    batchSize: opts.batchSize ?? 50,
+    listCommits: vi.fn(async () => ({ commits, tipSha: opts.tipSha ?? "tip123" })),
+    toChunkInputs: vi.fn(async (batch: SourceCommit[], ctx) => {
+      const inputs = batch
+        .filter((c) => !skipped.has(c.sha))
+        .map((c) => input(c, ctx.projectId, ctx.branch));
+      return { inputs, skipped: batch.length - inputs.length };
+    }),
+  };
+}
+
+const call = { owner: "owner", repo: "repo", branch: "main", projectId: "proj" };
 
 beforeEach(() => {
-  mockEnsureArchive.mockReset();
-  mockListCommitsInRange.mockReset();
-  mockGetCommitChangedFiles.mockReset();
-  mockUpsertCommitChunks.mockReset();
-  mockGetChunksByShas.mockReset();
-  mockEmbedNewChunks.mockReset();
+  mockGetChunksByShas.mockReset().mockResolvedValue(new Map());
+  mockUpsertCommitChunks.mockReset().mockResolvedValue(undefined);
+  mockEmbedNewChunks.mockReset().mockResolvedValue({ embedded: 1 });
 });
 
 describe("ingestCommits", () => {
-  it("ingests new commits with file-scope metadata and validation", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([baseCommit]);
-    mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitChangedFiles.mockResolvedValue(BASE_DIFF);
-    mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
+  it("enriches and upserts new commits, then embeds", async () => {
+    const source = makeSource([commit("a")], { tipSha: "tip123" });
 
-    const result = await ingestCommits({
-      owner: "owner",
-      repo: "repo",
-      branch: "main",
-      projectId: "proj",
-      startDate: new Date("2026-01-01T00:00:00Z"),
-      endDate: new Date("2026-01-31T00:00:00Z"),
-    });
+    const result = await ingestCommits(source, call);
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
-    expect(mockGetCommitChangedFiles).toHaveBeenCalledWith({
-      dir: "/repo",
-      parentSha: null,
-      commitSha: "a",
-    });
     expect(mockUpsertCommitChunks).toHaveBeenCalledWith({
-      inputs: [
-        {
-          projectId: "proj",
-          commitSha: "a",
-          branch: "main",
-          commitMessage: "fix: bug in parser",
-          author: "t",
-          metadata: {
-            filesChanged: ["a.txt"],
-            commitUrl: "https://github.com/owner/repo/commit/a",
-            validation: { status: "confirmed", notes: [] },
-          },
-          committedAt: new Date("2026-01-01T00:00:00Z"),
-        },
-      ],
+      inputs: [input(commit("a"), "proj", "main")],
     });
     expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
   });
 
-  it("flags commits whose message is uninformative", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([
-      { ...baseCommit, sha: "b", message: "fix: lol" },
-    ]);
-    mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitChangedFiles.mockResolvedValue({ ...BASE_DIFF, filesChanged: 12 });
-    mockEmbedNewChunks.mockResolvedValue({ embedded: 1 });
+  it("dedupes against stored chunks before enriching them", async () => {
+    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as never]]));
+    const source = makeSource([commit("a")]);
 
-    await ingestCommits({
-      owner: "owner",
-      repo: "repo",
-      branch: "main",
-      projectId: "proj",
-    });
+    const result = await ingestCommits(source, call);
 
-    const [call] = mockUpsertCommitChunks.mock.calls;
-    const meta = call[0].inputs[0].metadata;
-    expect(meta.validation.status).toBe("flagged");
-    expect(meta.validation.notes.length).toBeGreaterThan(0);
+    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
+    expect(source.toChunkInputs).not.toHaveBeenCalled();
+    expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
+    expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });
 
-  it("skips commits with no file changes (empty/no-op)", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([baseCommit]);
-    mockGetChunksByShas.mockResolvedValue(new Map());
-    mockGetCommitChangedFiles.mockResolvedValue({ filesChanged: 0, files: [] });
+  it("batches enrichment and upsert by source.batchSize", async () => {
+    const source = makeSource([commit("a"), commit("b"), commit("c")], { batchSize: 2 });
 
-    const result = await ingestCommits({
-      owner: "owner",
-      repo: "repo",
-      branch: "main",
-      projectId: "proj",
-    });
+    await ingestCommits(source, call);
+
+    expect(source.toChunkInputs).toHaveBeenCalledTimes(2);
+    expect(mockUpsertCommitChunks).toHaveBeenCalledTimes(2);
+    const sizes = mockUpsertCommitChunks.mock.calls.map((c) => c[0].inputs.length);
+    expect(sizes).toEqual([2, 1]);
+  });
+
+  it("skips embedding when the source writes nothing", async () => {
+    const source = makeSource([commit("a")], { skippedShas: ["a"] });
+
+    const result = await ingestCommits(source, call);
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
     expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
     expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });
 
-  it("skips commits that already exist without diffing them", async () => {
-    mockEnsureArchive.mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-    mockListCommitsInRange.mockResolvedValue([baseCommit]);
-    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as any]]));
+  it("reports commitsFound from the full list, not just new commits", async () => {
+    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as never]]));
+    const source = makeSource([commit("a"), commit("b")]);
 
-    const result = await ingestCommits({ owner: "o", repo: "r", branch: "main", projectId: "proj" });
+    const result = await ingestCommits(source, call);
 
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
-    expect(mockGetCommitChangedFiles).not.toHaveBeenCalled();
-    expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
-    expect(mockEmbedNewChunks).not.toHaveBeenCalled();
+    expect(result.commitsFound).toBe(2);
+    expect(result.chunksWritten).toBe(1);
+  });
+
+  it("emits commits → ingest → embedding progress stages in order", async () => {
+    const stages: string[] = [];
+    const source = makeSource([commit("a")], { batchSize: 1 });
+
+    await ingestCommits(source, { ...call, onProgress: (stage) => stages.push(stage) });
+
+    expect(stages).toEqual(["commits", "ingest", "embedding"]);
   });
 });

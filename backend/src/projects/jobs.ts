@@ -1,5 +1,6 @@
 import { env } from "@/config/env";
 import { ingestCommits, type IngestProgress } from "@/repositories/ingest";
+import { createGitCommitSource } from "@/repositories/git-source";
 import { ingestCommitsFromApi } from "@/repositories/ingest-api";
 import { wipeJobScratch } from "@/repositories/archive-service";
 import { registerJobHandler } from "@/shared/queue";
@@ -26,14 +27,8 @@ registerJobHandler("ingest-branch", async (payload, report, ctx) => {
   }
 
   try {
-    return await ingestCommits({
-      owner,
-      repo,
-      branch,
-      projectId,
-      onProgress,
-      jobId: ctx.jobId,
-    });
+    const source = createGitCommitSource({ owner, repo, branch, jobId: ctx.jobId });
+    return await ingestCommits(source, { owner, repo, branch, projectId, onProgress });
   } finally {
     // No-op unless the s3 store is active (disposable job scratch).
     await wipeJobScratch(ctx.jobId);
