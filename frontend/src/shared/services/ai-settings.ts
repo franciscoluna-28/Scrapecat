@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../api/client";
+import { apiClient, unwrap } from "../api/client";
 import { queryKeys } from "./keys";
 import type { paths } from "@/src/shared/api/types";
 
@@ -18,11 +18,7 @@ export type AISettings = {
 export function useAISettings() {
   const { data, error, isLoading } = useQuery({
     queryKey: queryKeys.settings.ai,
-    queryFn: () =>
-      apiClient.GET("/api/v1/settings/ai").then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+    queryFn: () => unwrap(apiClient.GET("/api/v1/settings/ai")),
   });
 
   return {
@@ -36,11 +32,7 @@ export function useUpdateAISettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (body: AISettings) =>
-      apiClient.PUT("/api/v1/settings/ai", { body }).then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+    mutationFn: (body: AISettings) => unwrap(apiClient.PUT("/api/v1/settings/ai", { body })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.ai });
     },

@@ -13,13 +13,15 @@ export const apiClient = createClient<paths>({
   },
 });
 
-export async function apiFetch<T>(
-  url: string,
-  options?: RequestInit,
+/**
+ * Unwraps an `openapi-fetch` result: throws on `error`, returns `data` (typed
+ * from the generated spec). Keeps the error-first pattern in one place so
+ * callers don't repeat `if (result.error) throw result.error`.
+ */
+export async function unwrap<T>(
+  request: Promise<{ data?: T; error?: unknown }>,
 ): Promise<T> {
-  const res = await fetch(url, options);
-  if (!res.ok) {
-    throw new Error(`API request failed: ${res.status}`);
-  }
-  return res.json();
+  const { data, error } = await request;
+  if (error) throw error;
+  return data as T;
 }

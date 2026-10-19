@@ -7,7 +7,6 @@ import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
 import { GitHubConnectForm } from "@/src/_features/github/components/GitHubConnectForm";
 import { useGitHubConnection } from "@/src/_features/github/services/github-api";
 import { IS_DEMO } from "@/src/shared/constants";
-import type { GitHubRepository } from "@/src/shared/types";
 
 type Props = {
   onProjectSelected: (projectId: string) => void;
@@ -91,7 +90,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
             </div>
 
             <RepositoryList
-              repositories={repositories as GitHubRepository[]}
+              repositories={repositories}
               isLoading={isFetching}
               existingProjectIds={existingProjectIds}
               connecting={connecting}

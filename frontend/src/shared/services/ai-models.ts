@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../api/client";
+import { apiClient, unwrap } from "../api/client";
 import { queryKeys } from "./keys";
 import type { AIModel } from "@/src/shared/types";
 
@@ -12,11 +12,7 @@ export function useModels(provider?: string, modality?: "chat" | "embeddings") {
 
   const { data, error, isLoading } = useQuery({
     queryKey: queryKeys.models.list(provider, modality),
-    queryFn: () =>
-      apiClient.GET("/api/v1/models", { params: { query } }).then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+    queryFn: () => unwrap(apiClient.GET("/api/v1/models", { params: { query } })),
   });
 
   return {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/src/shared/api/client";
+import { apiClient, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { BRAND } from "@/src/shared/constants";
+import type { GitHubRepository } from "@/src/shared/types";
 
 export const GITHUB_PAT_URL = `https://github.com/settings/tokens/new?description=${BRAND.name}&scopes=repo,read:user`;
 
@@ -16,13 +17,7 @@ export type GitHubConnection = {
 export function useGitHubConnection() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.github.connection,
-    queryFn: () =>
-      apiClient
-        .GET("/api/v1/github/connection")
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data as GitHubConnection;
-        }),
+    queryFn: () => unwrap(apiClient.GET("/api/v1/github/connection")),
   });
 
   return {
@@ -83,8 +78,8 @@ export function useRepositories(filters: {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.repositories.list(filters),
     queryFn: () =>
-      apiClient
-        .GET("/api/v1/repositories", {
+      unwrap(
+        apiClient.GET("/api/v1/repositories", {
           params: {
             query: {
               type: filters.type,
@@ -93,15 +88,12 @@ export function useRepositories(filters: {
               per_page: filters.per_page,
             },
           },
-        })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
         }),
+      ),
   });
 
   return {
-    repositories: data ?? [],
+    repositories: (data ?? []) as GitHubRepository[],
     isLoading,
     isValidating: isFetching,
     isFetching,
@@ -114,14 +106,11 @@ export function useBranches(owner: string, repo: string) {
   const { data, error, isLoading } = useQuery({
     queryKey: queryKeys.branches.list(owner, repo),
     queryFn: () =>
-      apiClient
-        .GET("/api/v1/repositories/{owner}/{repo}/branches", {
+      unwrap(
+        apiClient.GET("/api/v1/repositories/{owner}/{repo}/branches", {
           params: { path: { owner, repo } },
-        })
-        .then((r) => {
-          if (r.error) throw r.error;
-          return r.data;
         }),
+      ),
     enabled: !!owner && !!repo,
   });
 
