@@ -21,6 +21,17 @@ export const DEFAULT_EMBEDDING_PROVIDER = EMBEDDING_PROVIDERS[0].id;
 export type ChatProvider = (typeof PROVIDERS)[number]["id"];
 export type EmbeddingProvider = (typeof EMBEDDING_PROVIDERS)[number]["id"];
 
+// Who the answers are written for. The backend maps each id to a tone; keep
+// the ids in sync with backend `chat/prompts.ts` (PERSONAS).
+export const PERSONAS = [
+  { id: "founder", label: "Founder", description: "Plain language, business impact" },
+  { id: "cto", label: "CTO", description: "Balanced business + technical" },
+  { id: "engineer", label: "Engineer", description: "Detailed and technical" },
+] as const;
+
+export type Persona = (typeof PERSONAS)[number]["id"];
+export const DEFAULT_PERSONA: Persona = "founder";
+
 export const GITHUB_REPOSITORY_TYPES = [
   { value: "all", label: "All" },
   { value: "owner", label: "Owner" },

@@ -97,6 +97,7 @@ export async function streamChatMessage(
   onChunk: (chunk: StreamChunk) => void,
   model?: string,
   provider?: string,
+  persona?: string,
 ): Promise<ChatMessage> {
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
@@ -109,6 +110,7 @@ export async function streamChatMessage(
       ...(branch ? { branch } : {}),
       ...(model ? { model } : {}),
       ...(provider ? { provider } : {}),
+      ...(persona ? { persona } : {}),
     }),
   });
 
