@@ -53,6 +53,9 @@ export const SendMessageBody = Type.Object({
   branch: Type.Optional(Type.String({ minLength: 1 })),
   model: Type.Optional(Type.String({ minLength: 1 })),
   provider: Type.Optional(Type.String({ minLength: 1 })),
+  persona: Type.Optional(
+    Type.Union([Type.Literal("founder"), Type.Literal("cto"), Type.Literal("engineer")]),
+  ),
 });
 
 export const DeleteSessionResponse = Type.Object({

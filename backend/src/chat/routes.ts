@@ -88,7 +88,7 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
  */
 export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
-  const { content, branch, model, provider } = req.body as Static<typeof SendMessageBody>;
+  const { content, branch, model, provider, persona } = req.body as Static<typeof SendMessageBody>;
   const anonymousId = getAnonymousId(req);
 
   const session = await chatSessionsStore.getSession({ id });
@@ -138,6 +138,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       branch,
       model,
       provider,
+      persona,
       onProgress: (stage, msg, done, total) => {
         send({ type: "progress", stage, message: msg, done, total });
       },

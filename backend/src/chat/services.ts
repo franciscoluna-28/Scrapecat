@@ -9,7 +9,7 @@ import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { retrieveCommits } from "@/chat/retrieval";
 import { parseQueryWindow, hasTemporalIntent } from "@/chat/date-window";
 import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
-import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
+import { buildSystemPrompt, buildUserMessage, resolvePersona } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
 import * as projectsStore from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
@@ -98,10 +98,11 @@ export async function streamChatMessage(opts: {
   branch?: string | null;
   model?: string;
   provider?: string;
+  persona?: string;
   onToken: (chunk: string) => void;
   onProgress?: IngestProgress;
 }): Promise<ChatMessageDTO> {
-  const { sessionId, content, branch, model, provider, onToken, onProgress } = opts;
+  const { sessionId, content, branch, model, provider, persona, onToken, onProgress } = opts;
 
   const session = await chatSessionsStore.getSession({ id: sessionId });
   if (!session) throw new SessionNotFoundError();
@@ -175,7 +176,7 @@ export async function streamChatMessage(opts: {
   const { provider: resolvedProvider, model: resolvedModel, apiKey } = await resolveProviderAndKey({ provider, model });
 
   const messages: { role: "user" | "assistant" | "system"; content: string }[] = [
-    { role: "system", content: buildSystemPrompt(project?.repositoryName) },
+    { role: "system", content: buildSystemPrompt(project?.repositoryName, new Date(), resolvePersona(persona)) },
     ...priorTurns,
     {
       role: "user",
