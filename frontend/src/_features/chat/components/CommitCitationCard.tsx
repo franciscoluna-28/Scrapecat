@@ -8,6 +8,11 @@ import {
   CommitSeparator,
   CommitTimestamp,
 } from "@/src/components/ai-elements/commit";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/src/components/ui/hover-card";
 import { cn } from "@/src/shared/lib/utils";
 import { ExternalLink } from "lucide-react";
 import type { ChatMessage } from "@/src/shared/types";
@@ -17,16 +22,18 @@ type Props = {
 };
 
 /**
- * A cited commit, rendered as its subject plus `hash • author • time • files`.
- * The whole card links to the commit when a URL is available (the full
- * description lives there, so it isn't repeated here).
+ * A cited commit: the subject plus `hash • author • time • files`. The whole
+ * card links to the commit, and hovering (or focusing) it reveals the full
+ * commit description without leaving the page.
  */
 export function CommitCitationCard({ citation }: Props) {
   const shortSha = citation.commitSha.slice(0, 7);
-  const subject = citation.commitMessage.split("\n")[0].trim();
+  const [subjectLine, ...bodyLines] = citation.commitMessage.split("\n");
+  const subject = subjectLine.trim();
+  const body = bodyLines.join("\n").trim();
   const fileCount = citation.filesChanged.length;
 
-  const content = (
+  const cardBody = (
     <div className="flex items-start justify-between gap-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <CommitMessage className="line-clamp-2" title={subject}>
@@ -60,19 +67,41 @@ export function CommitCitationCard({ citation }: Props) {
 
   const cardClassName = "block rounded-lg border bg-background p-3";
 
-  if (citation.commitUrl) {
-    return (
-      <a
-        href={citation.commitUrl}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Open commit"
-        className={cn(cardClassName, "transition-colors hover:bg-muted/50")}
-      >
-        {content}
-      </a>
-    );
-  }
+  const trigger = citation.commitUrl ? (
+    <a
+      href={citation.commitUrl}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Open commit"
+      className={cn(cardClassName, "transition-colors hover:bg-muted/50")}
+    >
+      {cardBody}
+    </a>
+  ) : (
+    <div className={cardClassName}>{cardBody}</div>
+  );
 
-  return <div className={cardClassName}>{content}</div>;
+  return (
+    <HoverCard openDelay={100} closeDelay={50}>
+      <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
+      <HoverCardContent align="start" className="w-80">
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">{subject || "(no message)"}</span>
+          <p className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {body || "No description."}
+          </p>
+          {citation.commitUrl && (
+            <a
+              href={citation.commitUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium underline-offset-2 hover:underline"
+            >
+              Open on GitHub →
+            </a>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }

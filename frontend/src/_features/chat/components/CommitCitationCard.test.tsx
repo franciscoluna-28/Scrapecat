@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { CommitCitationCard } from "./CommitCitationCard";
 import type { ChatMessage } from "@/src/shared/types";
 
@@ -24,18 +25,6 @@ describe("CommitCitationCard", () => {
     expect(screen.getByText("abcdef1")).toBeInTheDocument();
   });
 
-  it("shows only the subject, not the commit description body", () => {
-    render(
-      <CommitCitationCard
-        citation={citation({
-          commitMessage: "feat: add rag chat\n\n- Store chunks\n- Retrieve by embedding",
-        })}
-      />,
-    );
-    expect(screen.getByText("feat: add rag chat")).toBeInTheDocument();
-    expect(screen.queryByText(/Store chunks/)).not.toBeInTheDocument();
-  });
-
   it("shows the full subject instead of truncating it", () => {
     const long = `feat: ${"x".repeat(150)}`;
     render(<CommitCitationCard citation={citation({ commitMessage: long })} />);
@@ -49,19 +38,37 @@ describe("CommitCitationCard", () => {
 
   it("shows the changed-file count", () => {
     render(
-      <CommitCitationCard
-        citation={citation({ filesChanged: ["a.ts", "b.ts"] })}
-      />,
+      <CommitCitationCard citation={citation({ filesChanged: ["a.ts", "b.ts"] })} />,
     );
     expect(screen.getByText("2 files")).toBeInTheDocument();
   });
 
-  it("links to the commit when a URL is available", () => {
+  it("links the whole card to the commit", () => {
     render(<CommitCitationCard citation={citation()} />);
     const link = screen.getByLabelText("Open commit");
     expect(link).toHaveAttribute(
       "href",
       "https://github.com/owner/repo/commit/abcdef1234567890",
     );
+  });
+
+  it("renders a non-link card when there is no URL", () => {
+    render(<CommitCitationCard citation={citation({ commitUrl: null })} />);
+    expect(screen.queryByLabelText("Open commit")).not.toBeInTheDocument();
+  });
+
+  it("reveals the commit description on hover", async () => {
+    render(
+      <CommitCitationCard
+        citation={citation({
+          commitMessage: "feat: add rag chat\n\n- Store chunks\n- Retrieve by embedding",
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/Store chunks/)).not.toBeInTheDocument();
+
+    await userEvent.hover(screen.getByLabelText("Open commit"));
+    expect(await screen.findByText(/Store chunks/)).toBeInTheDocument();
   });
 });
