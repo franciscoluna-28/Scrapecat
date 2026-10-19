@@ -13,8 +13,13 @@ import {
 import { queryKeys } from "@/src/shared/services/keys";
 import { useChatModelStore } from "@/src/store/chat-model";
 import type { ChatMessage } from "@/src/shared/types";
-
-const STREAMING_PREFIX = "local-assistant";
+import {
+  STREAMING_PREFIX,
+  appendDraft,
+  appendToken,
+  replaceStreaming,
+  removeStreaming,
+} from "./live-messages";
 
 type UseAIChatOptions = {
   projectId: string | null;
@@ -116,7 +121,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         citations: [],
         createdAt: new Date().toISOString(),
       };
-      setLiveMessages((m) => [...m, ...(!isNewSession ? [userMsg] : []), draft]);
+      setLiveMessages((m) => appendDraft(m, userMsg, draft, !isNewSession));
       requestAnimationFrame(() => scrollToBottom(true));
 
       await streamChatMessage(sid, trimmed, branch, (chunk) => {
@@ -126,19 +131,9 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
           setIngestionProgress(null);
         }
         if (chunk.type === "token") {
-          setLiveMessages((m) => {
-            const copy = [...m];
-            const idx = copy.findIndex((msg) => msg.id.startsWith(STREAMING_PREFIX));
-            if (idx >= 0) copy[idx] = { ...copy[idx], content: copy[idx].content + chunk.content };
-            return copy;
-          });
+          setLiveMessages((m) => appendToken(m, chunk.content));
         } else if (chunk.type === "done") {
-          setLiveMessages((m) => {
-            const copy = [...m];
-            const idx = copy.findIndex((msg) => msg.id.startsWith(STREAMING_PREFIX));
-            if (idx >= 0) copy[idx] = { ...chunk.message };
-            return copy;
-          });
+          setLiveMessages((m) => replaceStreaming(m, chunk.message));
         } else if (chunk.type === "error") {
           toast.error(chunk.error);
         }
@@ -151,7 +146,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
     } catch {
       setIngestionProgress(null);
-      setLiveMessages((m) => m.filter((msg) => !msg.id.startsWith(STREAMING_PREFIX)));
+      setLiveMessages(removeStreaming);
     } finally {
       setIsStreaming(false);
     }
