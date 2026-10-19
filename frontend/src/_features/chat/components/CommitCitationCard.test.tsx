@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { CommitCitationCard } from "./CommitCitationCard";
 import type { ChatMessage } from "@/src/shared/types";
 
@@ -23,6 +22,17 @@ describe("CommitCitationCard", () => {
     render(<CommitCitationCard citation={citation()} />);
     expect(screen.getByText("feat: add rag chat")).toBeInTheDocument();
     expect(screen.getByText("abcdef1")).toBeInTheDocument();
+  });
+
+  it("renders a short, single-line description", () => {
+    render(
+      <CommitCitationCard
+        citation={citation({
+          commitMessage: "feat: add rag chat\n\n- Store chunks\n- Retrieve by embedding",
+        })}
+      />,
+    );
+    expect(screen.getByText(/Store chunks/)).toBeInTheDocument();
   });
 
   it("shows the full subject instead of truncating it", () => {
@@ -55,20 +65,5 @@ describe("CommitCitationCard", () => {
   it("renders a non-link card when there is no URL", () => {
     render(<CommitCitationCard citation={citation({ commitUrl: null })} />);
     expect(screen.queryByLabelText("Open commit")).not.toBeInTheDocument();
-  });
-
-  it("reveals the commit description on hover", async () => {
-    render(
-      <CommitCitationCard
-        citation={citation({
-          commitMessage: "feat: add rag chat\n\n- Store chunks\n- Retrieve by embedding",
-        })}
-      />,
-    );
-
-    expect(screen.queryByText(/Store chunks/)).not.toBeInTheDocument();
-
-    await userEvent.hover(screen.getByLabelText("Open commit"));
-    expect(await screen.findByText(/Store chunks/)).toBeInTheDocument();
   });
 });
