@@ -5,9 +5,10 @@ import { Skeleton } from "@/src/components/ui/skeleton";
 import { Progress } from "@/src/components/ui/progress";
 import { Spinner } from "@/src/components/ui/spinner";
 import { ConversationEmptyState } from "@/src/components/ai-elements/conversation";
-import { BookOpen, GitCommitHorizontal, Database, Zap } from "lucide-react";
+import { GitCommitHorizontal, Database, Zap } from "lucide-react";
 import type { ChatMessage } from "@/src/shared/types";
 import { MessageView } from "./MessageView";
+import { Logo } from "@/src/components/global/Logo";
 
 type IngestionProgress = {
   stage: string;
@@ -59,9 +60,11 @@ export function ChatMessages({
     return (
       <ConversationEmptyState
         className="flex-1"
-        icon={<BookOpen className="size-12" />}
+        icon={
+          <Logo shouldDisplayMetadata={false} shouldDisplayBrandName={false} />
+        }
         title={`Ask about ${projectName}`}
-        description="For example, when was the RAG chat added, or what shipped this week."
+        description="For example, when authentication was added, or what shipped this week."
       />
     );
   }
@@ -74,7 +77,9 @@ export function ChatMessages({
             key={m.id}
             message={m}
             streaming={m.id === streamingId}
-            awaitingResponse={m.id === streamingId && awaitingResponse && !ingestionProgress}
+            awaitingResponse={
+              m.id === streamingId && awaitingResponse && !ingestionProgress
+            }
           />
         ))}
         {ingestionProgress && (
@@ -82,12 +87,15 @@ export function ChatMessages({
             <Spinner className="size-3.5" />
             {stageIcon[ingestionProgress.stage] ?? null}
             <span className="flex-1 truncate">{ingestionProgress.message}</span>
-            {ingestionProgress.done != null && ingestionProgress.total != null && (
-              <Progress
-                className="w-20 h-1"
-                value={(ingestionProgress.done / ingestionProgress.total) * 100}
-              />
-            )}
+            {ingestionProgress.done != null &&
+              ingestionProgress.total != null && (
+                <Progress
+                  className="w-20 h-1"
+                  value={
+                    (ingestionProgress.done / ingestionProgress.total) * 100
+                  }
+                />
+              )}
           </div>
         )}
         <div ref={bottomRef} />
