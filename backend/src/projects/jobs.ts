@@ -1,7 +1,7 @@
 import { env } from "@/config/env";
 import { ingestCommits, type IngestProgress } from "@/repositories/ingest";
 import { createGitCommitSource } from "@/repositories/git-source";
-import { ingestCommitsFromApi } from "@/repositories/ingest-api";
+import { createApiCommitSource } from "@/repositories/api-source";
 import { wipeJobScratch } from "@/repositories/archive-service";
 import { registerJobHandler } from "@/shared/queue";
 
@@ -14,8 +14,8 @@ export type IngestJobPayload = {
 
 /**
  * The one heavy ingestion job. Registered as a side effect so the queue can
- * resolve it. The demo/self-hosted split lives here, exactly as it did inline
- * before.
+ * resolve it. The demo/self-hosted split selects the commit source; the shared
+ * orchestrator runs the pipeline either way.
  */
 registerJobHandler("ingest-branch", async (payload, report, ctx) => {
   const { owner, repo, branch, projectId } = payload as IngestJobPayload;
@@ -23,7 +23,8 @@ registerJobHandler("ingest-branch", async (payload, report, ctx) => {
     report({ stage, message, done, total });
 
   if (env.isDemoMode) {
-    return ingestCommitsFromApi({ owner, repo, branch, projectId, onProgress });
+    const source = createApiCommitSource({ owner, repo, branch });
+    return ingestCommits(source, { owner, repo, branch, projectId, onProgress });
   }
 
   try {
