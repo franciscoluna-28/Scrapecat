@@ -129,10 +129,14 @@ Every shortcut below is intentional and tracked, not accidental.
 
 ### Git provider coupling
 
-External data flows through `src/shared/integrations/git-provider/` (an Octokit
-adapter behind an interface), but it is imported directly by consuming
-routes/services with no DI — adding GitLab/Bitbucket means touching each call
-site.
+External data flows through `src/shared/integrations/git-provider/`. The
+registry owns each provider's URLs, clone auth, env key, and client factory;
+`getGitProvider(provider, token)` returns the interface, never a concrete
+adapter. Connection routes are provider-generic
+(`/api/v1/git-providers/:provider/connection`) and all token precedence lives in
+`resolveGitToken`. Adding GitLab is a registry entry plus an adapter, not a
+call-site sweep. Full DI is deliberately unused: the registry/factory is the
+seam and is enough for one adapter per provider.
 
 ### Database coupling
 
@@ -142,7 +146,9 @@ through per-domain stores; routes never import `db` directly.
 ### No dependency injection
 
 Services are imported at the top of files, not injected. Swapping implementations
-means changing import paths everywhere; tests compensate with `vi.mock()`.
+means changing import paths everywhere; tests compensate with `vi.mock()`. This
+is acceptable while each role has one implementation; revisit only when a real
+multi-tenant/runtime plugin need appears.
 
 ### No auth layer
 
@@ -168,12 +174,13 @@ handles one-time re-embedding.
 
 Decouple in phases, no big-bang rewrites:
 
-1. **Git provider interface** — one adapter interface so routes don't know the
-   source (GitHub/GitLab/Bitbucket).
+1. **Git provider interface** — done: the registry/factory returns the interface,
+   and provider-generic connection routes own auth.
 2. **Data access layer** — per-domain stores (already largely in place); vector
    search infrastructure is ready.
-3. **Dependency injection** — wire providers and stores via Fastify's `decorate`
-   so routes receive dependencies instead of importing them.
+3. **Next provider** — add a GitLab adapter and registry entry. Demo ingestion
+   remains GitHub-only until a GitLab API source is justified.
 
-Each migration: extract interface → implement behind it → run both in parallel →
-flip the default → remove the old one.
+Full DI is not on the roadmap: the factory is the seam, and injecting services
+would add ceremony without a second consumer. Each future migration: implement
+behind the interface → keep the default → remove the old path when unused.

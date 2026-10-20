@@ -25,7 +25,7 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-1 | **GitLab adapter + DI refactor** | integrations | Bigger than an adapter: `GitProvider` is discovery-only and imported directly with no DI (`architecture.md:130-135`), so GitLab means touching every call site. Needs provider-aware `commitUrl` (`git-source.ts:86` is hardcoded to `github.com`), GitLab clone auth (PAT/OAuth header vs GitHub `http.extraheader`), and a GitLab ingestion path (demo API path is GitHub-only). Schema already anticipates it (`projects.git_provider`, `credentials.gitlab`). Do the DI refactor properly — not a bolt-on. |
+| P2-1 | **GitLab adapter** | integrations | The seam is ready: registry/factory, provider-aware URLs and clone auth, and generic connection routes all exist. Remaining work is a `GitlabAdapter`, one `REGISTRY.gitlab` entry (`GITLAB_TOKEN`, GitLab URLs/auth), and a frontend provider selector. Demo/serverless ingestion is still GitHub-only, so either gate GitLab to self-hosted or add a GitLab API source separately. |
 | P2-2 | **Scheduled / webhook re-ingest** | ingestion | Ingestion is on-demand per chat, so "what did engineering do today?" depends on someone opening the app. A GitHub webhook or cron re-ingest is what makes the core promise actually true. |
 | P2-3 | **Orphaned archive cleanup on delete** | storage | Deleting a project cascades in Postgres but orphans its S3 object / fs clone (`AGENTS.md:82`). Regenerable but silently leaks. Add a delete hook. |
 
@@ -41,11 +41,11 @@ All P0 items are complete — see [Done](#done--completed).
 
 ## Sequencing rationale
 
-Eval harness + reranking → providers + embedding invalidation → GitLab (behind
-the DI refactor). Product differentiators (personas, integrations) and auth stay
-deferred until retrieval quality is measurable and the platform is
-multi-tenant-ready. See `docs/architecture.md` ("Tech debt" / "What needs to
-happen") for the underlying structural debt.
+Eval harness + reranking → providers + embedding invalidation → GitLab.
+Product differentiators (personas, integrations) and auth stay deferred until
+retrieval quality is measurable and the platform is multi-tenant-ready. See
+`docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
+structural debt.
 
 ## Done — completed
 
