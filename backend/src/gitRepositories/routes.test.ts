@@ -213,6 +213,14 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("rejects an invalid date", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/commits?startDate=2024-13-15",
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
