@@ -50,6 +50,7 @@ import { VerificationStatusResponse } from "@/verification/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
   RepoOwnerParams,
+  BranchesQuery,
   CommitsQuery,
   CommitsResponse,
   CommitsCountQuery,
@@ -211,6 +212,7 @@ export async function buildApp(instance?: FastifyInstance) {
       description: "List branches for a repository",
       tags: ["repositories"],
       params: RepoOwnerParams,
+      querystring: BranchesQuery,
       response: { 200: BranchesResponse, 400: ErrorResponse },
     },
 }, listBranches);

@@ -36,7 +36,8 @@ export const queryKeys = {
   },
   branches: {
     all: ["branches"] as const,
-    list: (owner: string, repo: string) => ["branches", "list", owner, repo] as const,
+    list: (owner: string, repo: string, provider?: string) =>
+      ["branches", "list", owner, repo, provider] as const,
   },
   credentials: {
     all: ["credentials"] as const,

@@ -43,6 +43,7 @@ export function Chat() {
   const { branches, defaultBranch } = useBranches(
     activeProjectData?.providerOwner ?? "",
     activeProjectData?.repositoryName ?? "",
+    activeProjectData?.gitProvider,
   );
 
   const branch = projectId ? getBranch(projectId, defaultBranch) : null;

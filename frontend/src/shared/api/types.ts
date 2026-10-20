@@ -356,6 +356,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     type?: string;
                     sort?: string;
                     direction?: string;
@@ -420,7 +421,9 @@ export interface paths {
         /** @description List branches for a repository */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    provider?: "github" | "gitlab";
+                };
                 header?: never;
                 path: {
                     owner: string;
@@ -474,6 +477,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     limit?: number;
                     startDate?: string;
                     endDate?: string;
@@ -537,6 +541,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     startDate?: string;
                     endDate?: string;
                     branch?: string;
@@ -608,7 +613,7 @@ export interface paths {
                         "application/json": {
                             projects: {
                                 id: string;
-                                gitProvider: string;
+                                gitProvider: "github" | "gitlab";
                                 providerProjectId: string;
                                 providerOwner: string;
                                 repositoryName: string;
@@ -666,7 +671,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            gitProvider: string;
+                            gitProvider: "github" | "gitlab";
                             providerProjectId: string;
                             providerOwner: string;
                             repositoryName: string;
@@ -1310,6 +1315,7 @@ export interface paths {
                         branch?: string;
                         model?: string;
                         provider?: string;
+                        persona?: "founder" | "cto" | "engineer";
                     };
                 };
             };

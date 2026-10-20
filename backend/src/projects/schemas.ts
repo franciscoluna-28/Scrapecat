@@ -1,10 +1,14 @@
 import { Type } from "@sinclair/typebox";
+import {
+  GitProviderSchema,
+  OptionalGitProviderSchema,
+} from "@/shared/typebox";
 
 export const ProjectsResponse = Type.Object({
   projects: Type.Array(
     Type.Object({
       id: Type.String(),
-      gitProvider: Type.String(),
+      gitProvider: GitProviderSchema,
       providerProjectId: Type.String(),
       providerOwner: Type.String(),
       repositoryName: Type.String(),
@@ -31,9 +35,7 @@ export const PrepareBranchResponse = Type.Object({
 });
 
 export const CreateProjectBody = Type.Object({
-  gitProvider: Type.Optional(
-    Type.Union([Type.Literal("github"), Type.Literal("gitlab")], { default: "github" }),
-  ),
+  gitProvider: OptionalGitProviderSchema,
   providerProjectId: Type.String(),
   providerOwner: Type.String(),
   repositoryName: Type.String(),
@@ -42,7 +44,7 @@ export const CreateProjectBody = Type.Object({
 
 export const CreateProjectResponse = Type.Object({
   id: Type.String(),
-  gitProvider: Type.String(),
+  gitProvider: GitProviderSchema,
   providerProjectId: Type.String(),
   providerOwner: Type.String(),
   repositoryName: Type.String(),

@@ -102,13 +102,17 @@ export function useRepositories(filters: {
   };
 }
 
-export function useBranches(owner: string, repo: string) {
+export function useBranches(
+  owner: string,
+  repo: string,
+  provider?: "github" | "gitlab",
+) {
   const { data, error, isLoading } = useQuery({
-    queryKey: queryKeys.branches.list(owner, repo),
+    queryKey: queryKeys.branches.list(owner, repo, provider),
     queryFn: () =>
       unwrap(
         apiClient.GET("/api/v1/repositories/{owner}/{repo}/branches", {
-          params: { path: { owner, repo } },
+          params: { path: { owner, repo }, query: { provider } },
         }),
       ),
     enabled: !!owner && !!repo,

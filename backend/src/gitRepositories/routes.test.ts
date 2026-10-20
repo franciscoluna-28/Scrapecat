@@ -127,7 +127,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
 
   beforeAll(async () => {
     app = await buildApp();
-    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", defaultBranch: "main" });
+    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", gitProvider: "github", defaultBranch: "main" });
   });
 
   afterAll(async () => {
@@ -227,7 +227,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
 
   beforeAll(async () => {
     app = await buildApp();
-    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", defaultBranch: "main" });
+    mockGetProjectByOwnerRepo.mockResolvedValue({ id: "p1", gitProvider: "github", defaultBranch: "main" });
   });
 
   afterAll(async () => {

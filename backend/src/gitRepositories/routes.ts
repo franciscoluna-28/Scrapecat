@@ -3,7 +3,6 @@ import { env } from "@/config/env";
 import {
   getGitProvider,
   commitUrl,
-  type GitProviderId,
 } from "@/shared/integrations/git-provider";
 import { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
@@ -14,6 +13,7 @@ import { listCommitsForProject } from "@/projects/stores/commit-chunks-store";
 import type { Static } from "@sinclair/typebox";
 import {
   RepoOwnerParams,
+  BranchesQuery,
   CommitsQuery,
   CommitsCountQuery,
   RepositoriesQuery,
@@ -21,21 +21,6 @@ import {
 
 function parseDate(value?: string): Date | undefined {
   return value ? new Date(`${value}T00:00:00.000Z`) : undefined;
-}
-
-/**
- * Resolves a repository's provider from its project row. The provider is a
- * property of the project, never a global env setting. Unregistered repos fall
- * back to GitHub (the only implemented provider) so discovery still works
- * before a project is created.
- */
-async function resolveRepoProvider(owner: string, repo: string) {
-  const project = await projectsStore.getProjectByOwnerRepo({
-    providerOwner: owner,
-    repositoryName: repo,
-  });
-  const gitProvider: GitProviderId = project?.gitProvider ?? "github";
-  return { project, gitProvider };
 }
 
 export async function listRepositories(
@@ -79,9 +64,11 @@ export async function listBranches(
   reply: FastifyReply,
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
+  const { provider: providerQuery } = req.query as Static<typeof BranchesQuery>;
+  // The client passes the project's provider, so discovery needs no DB read.
+  const gitProvider = providerQuery ?? "github";
 
   try {
-    const { gitProvider } = await resolveRepoProvider(owner, repo);
     const provider = getGitProvider(gitProvider, await resolveGitToken(gitProvider));
     const [allBranches, defaultBranch] = await Promise.all([
       provider.listBranches(owner, repo),
@@ -109,12 +96,18 @@ export async function listCommits(
   reply: FastifyReply,
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
-  const { limit, startDate, endDate, branch } = req.query as Static<typeof CommitsQuery>;
+  const {
+    provider: providerQuery,
+    limit,
+    startDate,
+    endDate,
+    branch,
+  } = req.query as Static<typeof CommitsQuery>;
 
   try {
-    const { project, gitProvider } = await resolveRepoProvider(owner, repo);
-
     if (env.isDemoMode) {
+      // Demo has no guaranteed project row; the client supplies the provider.
+      const gitProvider = providerQuery ?? "github";
       // Demo reads use the GitHub REST API; fail fast for other providers.
       getGitProviderConfig(gitProvider);
       const ref =
@@ -142,8 +135,13 @@ export async function listCommits(
       });
     }
 
+    const project = await projectsStore.getProjectByOwnerRepo({
+      providerOwner: owner,
+      repositoryName: repo,
+    });
     if (!project) return reply.send({ commits: [] });
 
+    const gitProvider = project.gitProvider;
     const rows = await listCommitsForProject({
       projectId: project.id,
       branch: branch || project.defaultBranch,
@@ -170,12 +168,17 @@ export async function countCommits(
   reply: FastifyReply,
 ) {
   const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
-  const { startDate, endDate, branch } = req.query as Static<typeof CommitsCountQuery>;
+  const {
+    provider: providerQuery,
+    startDate,
+    endDate,
+    branch,
+  } = req.query as Static<typeof CommitsCountQuery>;
 
   try {
-    const { project, gitProvider } = await resolveRepoProvider(owner, repo);
-
     if (env.isDemoMode) {
+      // Demo has no guaranteed project row; the client supplies the provider.
+      const gitProvider = providerQuery ?? "github";
       getGitProviderConfig(gitProvider);
       const ref =
         branch ||
@@ -194,6 +197,10 @@ export async function countCommits(
       return reply.send({ count: commits.length });
     }
 
+    const project = await projectsStore.getProjectByOwnerRepo({
+      providerOwner: owner,
+      repositoryName: repo,
+    });
     if (!project) return reply.send({ count: 0 });
 
     const rows = await listCommitsForProject({
