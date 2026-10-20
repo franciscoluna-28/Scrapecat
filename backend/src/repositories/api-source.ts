@@ -1,4 +1,5 @@
 import { timed } from "@/shared/timing";
+import { commitUrl } from "@/shared/integrations/git-provider";
 import { getChangedFilesForShas, listCommitsFromApi } from "@/repositories/github-api";
 import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
 import type { CommitSource, SourceContext } from "@/repositories/ingest";
@@ -44,7 +45,7 @@ export function createApiCommitSource(opts: {
         author: c.author,
         metadata: {
           filesChanged: (filesBySha.get(c.sha) ?? []).map((f) => f.filepath),
-          commitUrl: c.url ?? `https://github.com/${owner}/${repo}/commit/${c.sha}`,
+          commitUrl: c.url ?? commitUrl(owner, repo, c.sha),
         },
         committedAt: new Date(c.date),
       }));

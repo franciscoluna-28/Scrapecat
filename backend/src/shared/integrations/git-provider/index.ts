@@ -7,13 +7,17 @@ export type {
   RepositoryFilters,
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
+export { GIT_WEB_BASE, commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
 
 const providerCache = new Map<string | null, GithubAdapter>();
 
-function createProvider(token: string | null) {
+function createProvider(token: string | null): GithubAdapter {
   const resolved = token || env.GITHUB_TOKEN;
-  if (env.GIT_PROVIDER === "github" || !env.GIT_PROVIDER) {
-    return new GithubAdapter(resolved);
+  // Only GitHub is implemented. Previously this conditional returned a GitHub
+  // adapter on both branches, silently ignoring GIT_PROVIDER=gitlab — fail loud
+  // instead so a misconfiguration can't masquerade as working GitLab support.
+  if (env.GIT_PROVIDER && env.GIT_PROVIDER !== "github") {
+    throw new Error(`Git provider "${env.GIT_PROVIDER}" is not implemented yet`);
   }
   return new GithubAdapter(resolved);
 }

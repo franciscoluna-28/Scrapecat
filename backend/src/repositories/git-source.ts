@@ -1,4 +1,5 @@
 import { timed } from "@/shared/timing";
+import { commitUrl } from "@/shared/integrations/git-provider";
 import { ensureArchive } from "@/repositories/archive-service";
 import { listCommitsInRange } from "@/repositories/git-reader";
 import { getCommitChangedFiles, type CommitChangedStats } from "@/repositories/git-diff";
@@ -105,7 +106,7 @@ export function createGitCommitSource(opts: {
           author: c.author,
           metadata: {
             filesChanged: d.stats.files.map((f) => f.filepath),
-            commitUrl: `https://github.com/${ctx.owner}/${ctx.repo}/commit/${c.sha}`,
+            commitUrl: commitUrl(ctx.owner, ctx.repo, c.sha),
             validation: { status: guard.status, notes: guard.notes },
           },
           committedAt: new Date(c.date),

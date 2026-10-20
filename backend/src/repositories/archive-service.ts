@@ -5,6 +5,7 @@ import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { getArchiveStore, type ArchiveKey } from "@/shared/storage";
+import { cloneUrl } from "@/shared/integrations/git-provider/urls";
 import { runGit, authArgs } from "@/repositories/git";
 import { resolveGithubToken } from "@/github/token";
 
@@ -43,7 +44,7 @@ function archiveDir(owner: string, repo: string, branch: string, jobId?: string)
 }
 
 function remoteUrl(owner: string, repo: string): string {
-  return `https://github.com/${owner}/${repo}.git`;
+  return cloneUrl(owner, repo);
 }
 
 async function isRepo(dir: string): Promise<boolean> {

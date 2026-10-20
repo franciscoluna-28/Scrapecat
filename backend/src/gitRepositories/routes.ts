@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { env } from "@/config/env";
-import { getGitProvider } from "@/shared/integrations/git-provider";
+import { getGitProvider, commitUrl } from "@/shared/integrations/git-provider";
 import { restrictDemoBranches } from "@/shared/demo-branches";
 import { resolveGithubToken } from "@/github/token";
 import { listCommitsFromApi } from "@/repositories/github-api";
@@ -126,7 +126,7 @@ export async function listCommits(
         date: c.committedAt.toISOString(),
         url:
           c.metadata?.commitUrl ??
-          `https://github.com/${owner}/${repo}/commit/${c.commitSha}`,
+          commitUrl(owner, repo, c.commitSha),
       })),
     });
   } catch (error: any) {
