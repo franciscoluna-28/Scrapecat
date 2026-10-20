@@ -3,7 +3,7 @@ import http from "http";
 
 const OPENAPI_JSON_URL = "http://localhost:4000/docs/json";
 
-function waitForServer(url: string, maxRetries = 15): Promise<void> {
+function waitForServer(url: string, maxRetries = 60): Promise<void> {
   return new Promise((resolve, reject) => {
     let retries = 0;
     const check = () => {
@@ -26,12 +26,26 @@ function waitForServer(url: string, maxRetries = 15): Promise<void> {
 
 async function main() {
   console.log("Starting backend...");
-  const backend = spawn("pnpm", ["--filter", "backend", "dev"], {
+  const backend = spawn("pnpm", ["--filter", "@scrapecat/backend", "dev"], {
     stdio: "ignore",
     shell: true,
     env: { ...process.env, PORT: "4000" },
   });
 
+  const stopBackend = () => {
+    if (!backend.pid) return;
+    try {
+      if (process.platform === "win32") {
+        execSync(`taskkill /pid ${backend.pid} /T /F`, { stdio: "ignore" });
+      } else {
+        backend.kill();
+      }
+    } catch {
+      // already stopped
+    }
+  };
+
+  let exitCode = 0;
   try {
     await waitForServer(OPENAPI_JSON_URL);
     console.log("Backend is ready. Generating types...");
@@ -42,10 +56,10 @@ async function main() {
     console.log("Types generated successfully.");
   } catch (err) {
     console.error("Failed to generate types:", err);
-    process.exit(1);
+    exitCode = 1;
   } finally {
-    backend.kill();
-    process.exit(0);
+    stopBackend();
+    process.exit(exitCode);
   }
 }
 
