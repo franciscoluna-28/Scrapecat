@@ -161,6 +161,23 @@ impossible to open as multi-tenant SaaS without a rework.
 - No transactions: project upsert and chunk ingest are separate writes. A mid-way
   failure leaves chunks persisted (safe today — chunks are the cache).
 
+### Unbounded pending embedding reads
+
+`embedNewChunks` loads every pending row for a project with
+`listPendingChunks(projectId)` before embedding them in batches. The write side
+is set-based (one `UPDATE ... FROM unnest(...)` per batch), but the read side is
+not bounded.
+
+This is an accepted trade-off at the current scale: pending normally means the
+commits from the current ingest, re-runs find almost nothing, and the demo caps
+commits. It becomes a memory risk with very large repositories or a persistent
+embedding backlog. `EMBEDDING_BATCH_SIZE` bounds the vectors held per batch, not
+the pending row list.
+
+If this becomes measurable, replace the single read with a bounded loop
+(`LIMIT batchSize` until empty) or a keyset/cursor. Do not add a surrounding
+transaction: the pipeline is idempotent and each batch write is atomic.
+
 ### Diff grounding is file-level, not content-level
 
 The prompt is grounded on provable diff **scope** (files, line counts, commit

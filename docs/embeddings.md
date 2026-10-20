@@ -86,6 +86,9 @@ processes rows where that is false, so re-running over stored commits embeds
 - **Graceful degradation:** embedding failures leave rows pending; ingestion never
   fails because of the embed step.
 - **Resumable:** every step is idempotent and safe to re-run (dedupe by SHA).
+- **Batched writes:** each embedding batch is written with one UNNEST-based
+  `UPDATE`. The arrays are bound as parameters, so the SQL text stays fixed and
+  only the payload scales with batch size.
 
 ## Status
 

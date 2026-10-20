@@ -38,6 +38,7 @@ All P0 items are complete — see [Done](#done--completed).
 | P3-3 | **Persona-driven synthesis** | product | Custom tone mapping for CTOs/Founders/Board (`README.md:29`). |
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:27`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:30`). |
+| P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching; writes are set-based but the read is unbounded. Acceptable for current repo sizes; revisit for very large histories or persistent embedding backlogs. See `architecture.md` → "Unbounded pending embedding reads". |
 
 ## Sequencing rationale
 
