@@ -1,5 +1,6 @@
 import { timed } from "@/shared/timing";
-import { commitUrl } from "@/shared/integrations/git-provider";
+import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
+import { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
 import { getChangedFilesForShas, listCommitsFromApi } from "@/repositories/github-api";
 import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
 import type { CommitSource, SourceContext } from "@/repositories/ingest";
@@ -14,11 +15,14 @@ import type { CommitSource, SourceContext } from "@/repositories/ingest";
  * here — demo chunks carry no `metadata.validation`.
  */
 export function createApiCommitSource(opts: {
+  gitProvider: GitProviderId;
   owner: string;
   repo: string;
   branch: string;
 }): CommitSource {
-  const { owner, repo, branch } = opts;
+  const { gitProvider, owner, repo, branch } = opts;
+  // Fail fast for unimplemented providers instead of silently reading GitHub.
+  getGitProviderConfig(gitProvider);
 
   return {
     batchSize: Infinity,
@@ -45,7 +49,7 @@ export function createApiCommitSource(opts: {
         author: c.author,
         metadata: {
           filesChanged: (filesBySha.get(c.sha) ?? []).map((f) => f.filepath),
-          commitUrl: c.url ?? commitUrl(owner, repo, c.sha),
+          commitUrl: c.url ?? commitUrl(gitProvider, owner, repo, c.sha),
         },
         committedAt: new Date(c.date),
       }));

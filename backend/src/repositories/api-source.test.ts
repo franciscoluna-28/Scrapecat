@@ -27,7 +27,7 @@ beforeEach(() => {
 
 describe("createApiCommitSource", () => {
   it("lists commits via the API and uses the first commit as the tip", async () => {
-    const source = createApiCommitSource({ owner: "o", repo: "r", branch: "main" });
+    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
 
     const { commits, tipSha } = await source.listCommits({});
 
@@ -37,7 +37,7 @@ describe("createApiCommitSource", () => {
 
   it("returns an empty tip when there are no commits", async () => {
     mockListCommitsFromApi.mockResolvedValue([]);
-    const source = createApiCommitSource({ owner: "o", repo: "r", branch: "main" });
+    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
 
     const { commits, tipSha } = await source.listCommits({});
 
@@ -49,7 +49,7 @@ describe("createApiCommitSource", () => {
     mockGetChangedFilesForShas.mockResolvedValue(
       new Map([["a", [{ filepath: "a.txt", status: "modified" }]]]),
     );
-    const source = createApiCommitSource({ owner: "o", repo: "r", branch: "main" });
+    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
     await source.listCommits({});
 
     const { inputs, skipped } = await source.toChunkInputs([apiCommit], CTX);
@@ -78,7 +78,7 @@ describe("createApiCommitSource", () => {
   });
 
   it("defaults filesChanged to [] when the file fetch misses a sha", async () => {
-    const source = createApiCommitSource({ owner: "o", repo: "r", branch: "main" });
+    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
     await source.listCommits({});
 
     const { inputs } = await source.toChunkInputs([apiCommit], CTX);
@@ -87,7 +87,7 @@ describe("createApiCommitSource", () => {
   });
 
   it("uses a single batch", () => {
-    const source = createApiCommitSource({ owner: "o", repo: "r", branch: "main" });
+    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
     expect(source.batchSize).toBe(Infinity);
   });
 });

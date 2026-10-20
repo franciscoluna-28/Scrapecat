@@ -74,7 +74,7 @@ export async function listCommitsFromApi(opts: {
         message,
         author: raw.commit?.author?.name || raw.commit?.author?.email || "unknown",
         date: date.toISOString(),
-        url: raw.html_url ?? commitUrl(owner, repo, raw.sha),
+        url: raw.html_url ?? commitUrl("github", owner, repo, raw.sha),
       });
       if (out.length >= max) break;
     }

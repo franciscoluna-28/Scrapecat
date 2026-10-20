@@ -1,4 +1,8 @@
 import { execFile } from "node:child_process";
+import {
+  getGitProviderConfig,
+  type GitProviderId,
+} from "@/shared/integrations/git-provider/registry";
 
 const MAX_OUTPUT_BYTES = 100 * 1024 * 1024;
 
@@ -44,12 +48,12 @@ export async function runGit(opts: {
 }
 
 /**
- * Auth flags for GitHub HTTPS. The token travels via an extra HTTP header
- * (the GitHub Actions convention) so it never appears in the URL. When no token
- * is available, an empty array lets git clone public repositories anonymously.
+ * Auth flags for HTTPS clones, provider-aware. The token travels via an extra
+ * HTTP header so it never appears in the URL or argv. With no token, an empty
+ * array lets git clone public repositories anonymously.
  */
-export function authArgs(token?: string | null): string[] {
+export function authArgs(provider: GitProviderId, token?: string | null): string[] {
   if (!token) return [];
-  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
-  return ["-c", `http.extraheader=AUTHORIZATION: basic ${basic}`];
+  const authorization = getGitProviderConfig(provider).authorization(token);
+  return ["-c", `http.extraheader=AUTHORIZATION: ${authorization}`];
 }

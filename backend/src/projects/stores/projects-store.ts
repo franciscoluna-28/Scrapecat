@@ -103,7 +103,9 @@ export async function getProjectByProviderId({
 /**
  * Finds a project by its human-readable owner/repo, case-insensitively. Used to
  * reuse an existing project no matter which id format created it (the external
- * id has historically been `owner/repo` or the numeric provider id).
+ * id has historically been `owner/repo` or the numeric provider id). When
+ * `gitProvider` is omitted the lookup spans providers, so callers with only a
+ * repo URL can recover the project's provider.
  */
 export async function getProjectByOwnerRepo({
   gitProvider,
@@ -111,22 +113,23 @@ export async function getProjectByOwnerRepo({
   repositoryName,
   tx,
 }: {
-  gitProvider: GitProvider;
+  gitProvider?: GitProvider;
   providerOwner: string;
   repositoryName: string;
   tx?: DbOrTx;
 }) {
   const client = tx || db;
+  const conditions = [
+    sql`lower(${projects.providerOwner}) = lower(${providerOwner})`,
+    sql`lower(${projects.repositoryName}) = lower(${repositoryName})`,
+  ];
+  if (gitProvider) {
+    conditions.unshift(eq(projects.gitProvider, gitProvider));
+  }
   const [row] = await client
     .select()
     .from(projects)
-    .where(
-      and(
-        eq(projects.gitProvider, gitProvider),
-        sql`lower(${projects.providerOwner}) = lower(${providerOwner})`,
-        sql`lower(${projects.repositoryName}) = lower(${repositoryName})`,
-      ),
-    )
+    .where(and(...conditions))
     .limit(1);
   return row ?? null;
 }

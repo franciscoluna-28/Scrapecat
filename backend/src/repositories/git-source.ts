@@ -1,5 +1,5 @@
 import { timed } from "@/shared/timing";
-import { commitUrl } from "@/shared/integrations/git-provider";
+import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
 import { ensureArchive } from "@/repositories/archive-service";
 import { listCommitsInRange } from "@/repositories/git-reader";
 import { getCommitChangedFiles, type CommitChangedStats } from "@/repositories/git-diff";
@@ -42,12 +42,13 @@ async function mapLimit<T, R>(
  * uninformative or contradictory messages are flagged in `metadata.validation`.
  */
 export function createGitCommitSource(opts: {
+  gitProvider: GitProviderId;
   owner: string;
   repo: string;
   branch: string;
   jobId?: string;
 }): CommitSource {
-  const { owner, repo, branch, jobId } = opts;
+  const { gitProvider, owner, repo, branch, jobId } = opts;
   let archiveDir = "";
 
   return {
@@ -55,7 +56,7 @@ export function createGitCommitSource(opts: {
 
     async listCommits({ since, until }) {
       const archive = await timed("ingest.ensureArchive", { owner, repo, branch }, () =>
-        ensureArchive({ owner, repo, branch, jobId }),
+        ensureArchive({ gitProvider, owner, repo, branch, jobId }),
       );
       archiveDir = archive.dir;
 
@@ -106,7 +107,7 @@ export function createGitCommitSource(opts: {
           author: c.author,
           metadata: {
             filesChanged: d.stats.files.map((f) => f.filepath),
-            commitUrl: commitUrl(ctx.owner, ctx.repo, c.sha),
+            commitUrl: commitUrl(gitProvider, ctx.owner, ctx.repo, c.sha),
             validation: { status: guard.status, notes: guard.notes },
           },
           committedAt: new Date(c.date),

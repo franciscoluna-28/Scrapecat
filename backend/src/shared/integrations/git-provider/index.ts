@@ -1,5 +1,9 @@
 import { env } from "@/config/env";
 import { GithubAdapter } from "@/shared/integrations/git-provider/github-adapter";
+import {
+  getGitProviderConfig,
+  type GitProviderId,
+} from "@/shared/integrations/git-provider/registry";
 
 export type { GitProvider } from "@/shared/integrations/git-provider/provider";
 export type {
@@ -7,27 +11,27 @@ export type {
   RepositoryFilters,
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
-export { GIT_WEB_BASE, commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
+export type { GitProviderId } from "@/shared/integrations/git-provider/registry";
+export { GIT_PROVIDERS, isGitProviderId } from "@/shared/integrations/git-provider/registry";
+export { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
+export { commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
 
-const providerCache = new Map<string | null, GithubAdapter>();
+const providerCache = new Map<string, GithubAdapter>();
 
-function createProvider(token: string | null): GithubAdapter {
-  const resolved = token || env.GITHUB_TOKEN;
-  // Only GitHub is implemented. Previously this conditional returned a GitHub
-  // adapter on both branches, silently ignoring GIT_PROVIDER=gitlab — fail loud
-  // instead so a misconfiguration can't masquerade as working GitLab support.
-  if (env.GIT_PROVIDER && env.GIT_PROVIDER !== "github") {
-    throw new Error(`Git provider "${env.GIT_PROVIDER}" is not implemented yet`);
+/**
+ * Returns the adapter for a provider (from the project/request) and token. The
+ * token defaults to that provider's server-side env var. Unimplemented
+ * providers fail fast instead of silently using GitHub.
+ */
+export function getGitProvider(provider: GitProviderId, token?: string | null) {
+  const config = getGitProviderConfig(provider);
+  const resolved = token || env[config.tokenEnvKey] || "";
+  const key = `${config.id}:${resolved}`;
+
+  let adapter = providerCache.get(key);
+  if (!adapter) {
+    adapter = new GithubAdapter(resolved);
+    providerCache.set(key, adapter);
   }
-  return new GithubAdapter(resolved);
-}
-
-export function getGitProvider(token?: string | null) {
-  const key = token ?? (env.GITHUB_TOKEN || null);
-  let provider = providerCache.get(key);
-  if (!provider) {
-    provider = createProvider(key);
-    providerCache.set(key, provider);
-  }
-  return provider;
+  return adapter;
 }

@@ -4,7 +4,7 @@ import * as projectsStore from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
 import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
 import { getGitProvider } from "@/shared/integrations/git-provider";
-import { resolveGithubToken } from "@/github/token";
+import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import type { Static } from "@sinclair/typebox";
 
 function projectResponse(project: {
@@ -78,10 +78,10 @@ export async function createProject(req: FastifyRequest, reply: FastifyReply) {
     let providerProjectId = body.providerProjectId;
     if (!/^\d+$/.test(providerProjectId)) {
       try {
-        const resolved = await getGitProvider(await resolveGithubToken()).getRepositoryId(
-          body.providerOwner,
-          body.repositoryName,
-        );
+        const resolved = await getGitProvider(
+          gitProvider,
+          await resolveGitToken(gitProvider),
+        ).getRepositoryId(body.providerOwner, body.repositoryName);
         if (resolved) providerProjectId = resolved;
       } catch {
         // Non-resolvable (private/offline) — fall back to the client-provided id.

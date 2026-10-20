@@ -6,8 +6,9 @@ import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { getArchiveStore, type ArchiveKey } from "@/shared/storage";
 import { cloneUrl } from "@/shared/integrations/git-provider/urls";
+import { resolveGitToken } from "@/shared/integrations/git-provider/token";
+import type { GitProviderId } from "@/shared/integrations/git-provider/registry";
 import { runGit, authArgs } from "@/repositories/git";
-import { resolveGithubToken } from "@/github/token";
 
 export type RepoArchive = {
   owner: string;
@@ -43,8 +44,8 @@ function archiveDir(owner: string, repo: string, branch: string, jobId?: string)
   return path.resolve(base, owner, repo, branch);
 }
 
-function remoteUrl(owner: string, repo: string): string {
-  return cloneUrl(owner, repo);
+function remoteUrl(gitProvider: GitProviderId, owner: string, repo: string): string {
+  return cloneUrl(gitProvider, owner, repo);
 }
 
 async function isRepo(dir: string): Promise<boolean> {
@@ -84,15 +85,16 @@ async function removeIncompleteArchive(dir: string): Promise<void> {
  * matches. Clone/fetch/log/diff themselves are unchanged.
  */
 async function ensureArchiveUnlocked(opts: {
+  gitProvider: GitProviderId;
   owner: string;
   repo: string;
   branch: string;
   jobId?: string;
 }): Promise<RepoArchive> {
-  const { owner, repo, branch, jobId } = opts;
+  const { gitProvider, owner, repo, branch, jobId } = opts;
   const dir = archiveDir(owner, repo, branch, jobId);
-  const url = remoteUrl(owner, repo);
-  const token = await resolveGithubToken();
+  const url = remoteUrl(gitProvider, owner, repo);
+  const token = await resolveGitToken(gitProvider);
   const store = getArchiveStore();
   const key: ArchiveKey = { owner, repo, branch };
 
@@ -121,7 +123,7 @@ async function ensureArchiveUnlocked(opts: {
     if (existed) {
       await runGit({
         cwd: dir,
-        args: [...authArgs(token), "fetch", "origin"],
+        args: [...authArgs(gitProvider, token), "fetch", "origin"],
         timeoutMs: TRANSFER_TIMEOUT_MS,
         label: "git fetch",
       });
@@ -136,7 +138,7 @@ async function ensureArchiveUnlocked(opts: {
       await runGit({
         cwd: path.dirname(dir),
         args: [
-          ...authArgs(token),
+          ...authArgs(gitProvider, token),
           "clone",
           "--single-branch",
           "--branch",
@@ -163,6 +165,7 @@ async function ensureArchiveUnlocked(opts: {
 }
 
 export async function ensureArchive(opts: {
+  gitProvider: GitProviderId;
   owner: string;
   repo: string;
   branch: string;

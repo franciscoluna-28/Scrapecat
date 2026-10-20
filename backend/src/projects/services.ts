@@ -5,7 +5,7 @@ import * as projectsStore from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
-import { resolveGithubToken } from "@/github/token";
+import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { getJobQueue } from "@/shared/queue";
 import { requestContext } from "@fastify/request-context";
 import "@/projects/jobs";
@@ -49,6 +49,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     const jobId = `ingest:${projectId}:${ref}:all`;
     return queue
       .enqueue("ingest-branch", jobId, {
+        gitProvider: project.gitProvider,
         owner: project.providerOwner,
         repo: project.repositoryName,
         branch: ref,
@@ -69,10 +70,10 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     // default and retry once so a `main`/`master` mismatch self-corrects.
     if (env.isDemoMode) {
       try {
-        const actual = await getGitProvider(await resolveGithubToken()).getDefaultBranch(
-          project.providerOwner,
-          project.repositoryName,
-        );
+        const actual = await getGitProvider(
+          project.gitProvider,
+          await resolveGitToken(project.gitProvider),
+        ).getDefaultBranch(project.providerOwner, project.repositoryName);
         if (actual && actual !== branch && isDemoBranchAllowed(actual, project.defaultBranch)) {
           logger.warn({ projectId, branch, actual }, "ingest failed; retrying with repo default branch");
           return { branch: actual, ...(await ingest(actual)) };

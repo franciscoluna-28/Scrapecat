@@ -66,7 +66,7 @@ export async function getGitHubConnection(_req: FastifyRequest, reply: FastifyRe
 
   let login: string | undefined;
   try {
-    login = (await getGitProvider(token).verifyConnection()).login;
+    login = (await getGitProvider("github", token).verifyConnection()).login;
   } catch {
     login = undefined;
   }

@@ -30,8 +30,8 @@ vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
   };
 });
 
-vi.mock("@/github/token", () => ({
-  resolveGithubToken: vi.fn(async () => null),
+vi.mock("@/shared/integrations/git-provider/token", () => ({
+  resolveGitToken: vi.fn(async () => null),
 }));
 
 import { buildApp } from "@/build-app";
@@ -162,7 +162,6 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
       ],
     });
     expect(mockGetProjectByOwnerRepo).toHaveBeenCalledWith({
-      gitProvider: "github",
       providerOwner: "owner1",
       repositoryName: "repo1",
     });

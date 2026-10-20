@@ -43,11 +43,12 @@ beforeEach(() => {
 
 describe("createGitCommitSource", () => {
   it("ensures the archive and returns commits with the archive tip", async () => {
-    const source = createGitCommitSource({ owner: "owner", repo: "repo", branch: "main" });
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
 
     const { commits, tipSha } = await source.listCommits({});
 
     expect(mockEnsureArchive).toHaveBeenCalledWith({
+      gitProvider: "github",
       owner: "owner",
       repo: "repo",
       branch: "main",
@@ -58,7 +59,7 @@ describe("createGitCommitSource", () => {
   });
 
   it("builds chunk inputs with file scope, github url, and validation", async () => {
-    const source = createGitCommitSource({ owner: "owner", repo: "repo", branch: "main" });
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
     const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
@@ -87,7 +88,7 @@ describe("createGitCommitSource", () => {
   });
 
   it("flags uninformative messages but still stores the commit", async () => {
-    const source = createGitCommitSource({ owner: "owner", repo: "repo", branch: "main" });
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
     const { inputs } = await source.toChunkInputs([{ ...commit, message: "fix: lol" }], CTX);
@@ -98,7 +99,7 @@ describe("createGitCommitSource", () => {
 
   it("skips empty commits and counts them", async () => {
     mockGetCommitChangedFiles.mockResolvedValue({ filesChanged: 0, files: [] });
-    const source = createGitCommitSource({ owner: "owner", repo: "repo", branch: "main" });
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
     const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
@@ -108,7 +109,7 @@ describe("createGitCommitSource", () => {
   });
 
   it("passes the first parent to the diff for non-root commits", async () => {
-    const source = createGitCommitSource({ owner: "owner", repo: "repo", branch: "main" });
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
     await source.toChunkInputs([{ ...commit, parentSha: "p0" }], CTX);

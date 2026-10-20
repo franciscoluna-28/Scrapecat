@@ -4,8 +4,10 @@ import { createGitCommitSource } from "@/repositories/git-source";
 import { createApiCommitSource } from "@/repositories/api-source";
 import { wipeJobScratch } from "@/repositories/archive-service";
 import { registerJobHandler } from "@/shared/queue";
+import type { GitProviderId } from "@/shared/integrations/git-provider";
 
 export type IngestJobPayload = {
+  gitProvider: GitProviderId;
   owner: string;
   repo: string;
   branch: string;
@@ -20,17 +22,17 @@ export type IngestJobPayload = {
  * orchestrator runs the pipeline either way.
  */
 registerJobHandler("ingest-branch", async (payload, report, ctx) => {
-  const { owner, repo, branch, projectId, requestId } = payload as IngestJobPayload;
+  const { gitProvider, owner, repo, branch, projectId, requestId } = payload as IngestJobPayload;
   const onProgress: IngestProgress = (stage, message, done, total) =>
     report({ stage, message, done, total });
 
   if (env.isDemoMode) {
-    const source = createApiCommitSource({ owner, repo, branch });
+    const source = createApiCommitSource({ gitProvider, owner, repo, branch });
     return ingestCommits(source, { owner, repo, branch, projectId, requestId, onProgress });
   }
 
   try {
-    const source = createGitCommitSource({ owner, repo, branch, jobId: ctx.jobId });
+    const source = createGitCommitSource({ gitProvider, owner, repo, branch, jobId: ctx.jobId });
     return await ingestCommits(source, { owner, repo, branch, projectId, requestId, onProgress });
   } finally {
     // No-op unless the s3 store is active (disposable job scratch).

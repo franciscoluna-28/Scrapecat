@@ -1,4 +1,11 @@
 import { Type } from "@sinclair/typebox";
+import { GIT_PROVIDERS } from "@/shared/integrations/git-provider/registry";
+
+const GitProviderQuery = Type.Optional(
+  Type.Union(GIT_PROVIDERS.map((provider) => Type.Literal(provider)), {
+    default: "github",
+  }),
+);
 
 export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
@@ -35,6 +42,7 @@ export const CommitsCountResponse = Type.Object({
 });
 
 export const RepositoriesQuery = Type.Object({
+  provider: GitProviderQuery,
   type: Type.Optional(Type.String({ default: "all" })),
   sort: Type.Optional(Type.String({ default: "updated" })),
   direction: Type.Optional(Type.String({ default: "desc" })),

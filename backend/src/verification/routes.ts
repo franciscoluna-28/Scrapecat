@@ -19,7 +19,7 @@ export async function checkVerification(
       return reply.send({ status: "ok" });
     }
 
-    const { login, rateLimitRemaining } = await getGitProvider(token).verifyConnection();
+    const { login, rateLimitRemaining } = await getGitProvider("github", token).verifyConnection();
 
     return reply.send({
       status: "ok",
