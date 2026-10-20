@@ -1,6 +1,6 @@
 import type { paths } from "@/src/shared/api/types";
 
-export type GitHubRepository = {
+export type GitProviderRepository = {
   id: string;
   name: string;
   full_name: string;
@@ -12,7 +12,7 @@ export type GitHubRepository = {
   forks_count?: number;
 };
 
-export type GitHubProject =
+export type GitProviderProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
 
 export type ChatSession =

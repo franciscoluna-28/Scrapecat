@@ -2,8 +2,8 @@
 
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { DemoModeNotice } from "@/src/components/global/DemoModeNotice";
-import { GitHubConnectionCard } from "@/src/_features/github/components/GitHubConnectionCard";
-import { GitHubRepoSettingsCard } from "@/src/_features/github/components/GitHubRepoSettingsCard";
+import { GitProviderConnectionCard } from "@/src/_features/git-providers/components/GitProviderConnectionCard";
+import { RepositoryDiscoverySettingsCard } from "@/src/_features/git-providers/components/RepositoryDiscoverySettingsCard";
 import { AISettingsManager } from "@/src/_features/settings/components/AISettingsManager";
 import { IS_DEMO } from "@/src/shared/constants";
 
@@ -21,8 +21,8 @@ export default function SettingsPage() {
 
   return (
     <SectionLayout>
-      <GitHubConnectionCard />
-      <GitHubRepoSettingsCard />
+      <GitProviderConnectionCard />
+      <RepositoryDiscoverySettingsCard />
       <div className="mt-8">
         <AISettingsManager />
       </div>

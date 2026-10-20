@@ -11,7 +11,6 @@ import { sweepStaleJobScratch } from "@/repositories/archive-service";
 import { shutdownJobQueue } from "@/shared/queue";
 
 import { health } from "@/health/routes";
-import { checkVerification } from "@/verification/routes";
 import { getMeta } from "@/meta/routes";
 import { listModels } from "@/models/routes";
 import { listRepositories, listBranches, listCommits, countCommits } from "@/gitRepositories/routes";
@@ -21,10 +20,10 @@ import { PrepareBranchBody, PrepareBranchResponse, ProjectIdParams, CreateProjec
 import { listKeys as listCredentials, addKey as addCredential, deleteKey as deleteCredential, verifyKey as verifyCredential } from "@/credentials/routes";
 import { getSettingsRoute, updateSettingsRoute } from "@/settings/routes";
 import {
-  createGitHubToken,
-  getGitHubConnection,
-  deleteGitHubConnection,
-} from "@/github/routes";
+  connectProvider,
+  getProviderConnection,
+  disconnectProvider,
+} from "@/gitConnections/routes";
 import {
   createSession as createChatSession,
   listSessions as listChatSessions,
@@ -46,7 +45,6 @@ import {
 } from "@/chat/schemas";
 import { HealthResponse } from "@/health/schemas";
 import { MetaResponse } from "@/meta/schemas";
-import { VerificationStatusResponse } from "@/verification/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
   RepoOwnerParams,
@@ -69,7 +67,11 @@ import {
   VerifyCredentialResponse,
 } from "@/credentials/schemas";
 import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
-import { GitHubConnectionResponse, AddGitHubTokenBody } from "@/github/schemas";
+import {
+  GitProviderParams,
+  ConnectGitProviderBody,
+  GitConnectionResponse,
+} from "@/gitConnections/schemas";
 
 export async function buildApp(instance?: FastifyInstance) {
   const app =
@@ -156,38 +158,33 @@ export async function buildApp(instance?: FastifyInstance) {
     },
   }, getMeta);
 
-  app.get("/api/v1/verification/status", {
+  app.post("/api/v1/git-providers/:provider/connection", {
     schema: {
-      description: "Verify GitHub token connection status",
-      tags: ["verification"],
-      response: { 200: VerificationStatusResponse },
+      description: "Store a git provider token (connect an account)",
+      tags: ["git-providers"],
+      params: GitProviderParams,
+      body: ConnectGitProviderBody,
+      response: { 201: GitConnectionResponse, 400: ErrorResponse },
     },
-  }, checkVerification);
+  }, connectProvider);
 
-  app.post("/api/v1/github/token", {
+  app.get("/api/v1/git-providers/:provider/connection", {
     schema: {
-      description: "Store a GitHub Personal Access Token (connect GitHub account)",
-      tags: ["github"],
-      body: AddGitHubTokenBody,
-      response: { 201: GitHubConnectionResponse, 400: ErrorResponse },
+      description: "Git provider connection status (stored token / env token / none)",
+      tags: ["git-providers"],
+      params: GitProviderParams,
+      response: { 200: GitConnectionResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
-  }, createGitHubToken);
+  }, getProviderConnection);
 
-  app.get("/api/v1/github/connection", {
+  app.delete("/api/v1/git-providers/:provider/connection", {
     schema: {
-      description: "GitHub connection status (stored token / env token / none)",
-      tags: ["github"],
-      response: { 200: GitHubConnectionResponse, 400: ErrorResponse },
+      description: "Disconnect a git provider (removes the stored token)",
+      tags: ["git-providers"],
+      params: GitProviderParams,
+      response: { 204: {}, 400: ErrorResponse, 404: ErrorResponse },
     },
-  }, getGitHubConnection);
-
-  app.delete("/api/v1/github/connection", {
-    schema: {
-      description: "Disconnect GitHub (removes stored token)",
-      tags: ["github"],
-      response: { 204: {}, 404: ErrorResponse },
-    },
-  }, deleteGitHubConnection);
+  }, disconnectProvider);
 
   app.get("/api/v1/models", {
     schema: {

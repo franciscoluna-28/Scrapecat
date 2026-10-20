@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RepositoryList } from "./RepositoryList";
-import type { GitHubRepository } from "@/src/shared/types";
+import type { GitProviderRepository } from "@/src/shared/types";
 
-function repo(overrides: Partial<GitHubRepository> = {}): GitHubRepository {
+function repo(overrides: Partial<GitProviderRepository> = {}): GitProviderRepository {
   return {
     id: "1",
     name: "repo",
@@ -18,7 +18,7 @@ function repo(overrides: Partial<GitHubRepository> = {}): GitHubRepository {
 }
 
 const baseProps = {
-  repositories: [] as GitHubRepository[],
+  repositories: [] as GitProviderRepository[],
   isLoading: false,
   existingProjectIds: new Set<string>(),
   connecting: false,

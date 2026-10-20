@@ -15,7 +15,7 @@ import {
   EmptyMedia,
 } from "@/src/components/ui/empty";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
-import { useBranches } from "@/src/_features/github/services/github-api";
+import { useBranches } from "@/src/_features/git-providers/services/git-providers-api";
 import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";

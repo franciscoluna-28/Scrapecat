@@ -101,19 +101,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/verification/status": {
+    "/api/v1/git-providers/{provider}/connection": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Verify GitHub token connection status */
+        /** @description Git provider connection status (stored token / env token / none) */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -125,44 +127,45 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            github?: {
-                                login: string;
-                                rateLimitRemaining: number;
-                            };
-                        } | {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
+                            connected: boolean;
+                            source: "token" | "env" | "none";
+                            login?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
             };
         };
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/github/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Store a GitHub Personal Access Token (connect GitHub account) */
+        /** @description Store a git provider token (connect an account) */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody: {
@@ -199,63 +202,14 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/github/connection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description GitHub connection status (stored token / env token / none) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            connected: boolean;
-                            source: "token" | "env" | "none";
-                            login?: string;
-                        };
-                    };
-                };
-                /** @description Default Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        /** @description Disconnect GitHub (removes stored token) */
+        /** @description Disconnect a git provider (removes the stored token) */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -267,6 +221,17 @@ export interface paths {
                     };
                     content: {
                         "application/json": unknown;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
                     };
                 };
                 /** @description Default Response */

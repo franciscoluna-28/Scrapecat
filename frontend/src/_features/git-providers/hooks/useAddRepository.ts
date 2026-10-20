@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { parseRepoUrl } from "@/src/shared/utils/repo-url";
-import { useRepositories } from "@/src/_features/github/services/github-api";
+import { useRepositories } from "@/src/_features/git-providers/services/git-providers-api";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
-import type { GitHubRepository } from "@/src/shared/types";
+import type { GitProviderRepository } from "@/src/shared/types";
 
 type ConnectParams = {
   providerProjectId: string;
@@ -94,7 +94,7 @@ export function useAddRepository(
   // Use the provider's numeric repo id as the external id — the backend also
   // canonicalizes every creation path to it, so the same repo always resolves
   // to one project row (ingestion + embeddings run once).
-  const connectByRepo = (repo: GitHubRepository) =>
+  const connectByRepo = (repo: GitProviderRepository) =>
     connect({
       providerProjectId: repo.id,
       providerOwner: repo.owner.login,

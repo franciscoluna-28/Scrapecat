@@ -42,9 +42,10 @@ export const queryKeys = {
   credentials: {
     all: ["credentials"] as const,
   },
-  github: {
-    all: ["github"] as const,
-    connection: ["github", "connection"] as const,
+  gitConnections: {
+    all: ["git-connections"] as const,
+    connection: (provider: string) =>
+      ["git-connections", "connection", provider] as const,
   },
   chat: {
     all: ["chat"] as const,

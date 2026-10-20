@@ -7,7 +7,7 @@ import {
   type DirectionType,
 } from '@/src/shared/constants'
 
-interface GitHubSettingsState {
+interface RepositoryDiscoveryState {
   repositoryType: RepositoryType
   perPage: number
   sort: SortType
@@ -18,9 +18,9 @@ interface GitHubSettingsState {
   setDirection: (direction: DirectionType) => void
 }
 
-export const useGitHubSettingsStore = create<GitHubSettingsState>()(
+export const useRepositoryDiscoveryStore = create<RepositoryDiscoveryState>()(
   persist(
-    (set, _get) => ({
+    (set) => ({
       repositoryType: 'all',
       perPage: GITHUB_PER_PAGE.default,
       sort: 'updated',

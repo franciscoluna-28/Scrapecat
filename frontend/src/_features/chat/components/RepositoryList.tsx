@@ -2,14 +2,14 @@
 
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { GitBranch } from "lucide-react";
-import type { GitHubRepository } from "@/src/shared/types";
+import type { GitProviderRepository } from "@/src/shared/types";
 
 type RepositoryListProps = {
-  repositories: GitHubRepository[];
+  repositories: GitProviderRepository[];
   isLoading: boolean;
   existingProjectIds: Set<string>;
   connecting: boolean;
-  onSelect: (repo: GitHubRepository) => void;
+  onSelect: (repo: GitProviderRepository) => void;
 };
 
 export function RepositoryList({
@@ -28,7 +28,7 @@ export function RepositoryList({
           </p>
         ) : repositories.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            No repositories found. Check your GITHUB_TOKEN.
+            No repositories found. Check your git provider token.
           </p>
         ) : (
           repositories.map((repo) => {

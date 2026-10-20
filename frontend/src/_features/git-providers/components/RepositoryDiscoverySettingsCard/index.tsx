@@ -19,9 +19,9 @@ import {
   type RepositoryType,
   type SortType,
 } from "@/src/shared/constants";
-import { useGitHubSettingsStore } from "@/src/store/github-settings";
+import { useRepositoryDiscoveryStore } from "@/src/store/repository-discovery";
 
-export function GitHubRepoSettingsCard() {
+export function RepositoryDiscoverySettingsCard() {
   const {
     repositoryType,
     perPage,
@@ -31,15 +31,15 @@ export function GitHubRepoSettingsCard() {
     setPerPage,
     setSort,
     setDirection,
-  } = useGitHubSettingsStore();
+  } = useRepositoryDiscoveryStore();
 
   return (
     <Card>
       <CardContent className="p-6 space-y-6">
         <div>
-          <h3 className="text-base font-semibold">GitHub Settings</h3>
+          <h3 className="text-base font-semibold">Repository Discovery</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Configure how repositories are fetched from GitHub.
+            Configure how repositories are fetched.
           </p>
         </div>
 

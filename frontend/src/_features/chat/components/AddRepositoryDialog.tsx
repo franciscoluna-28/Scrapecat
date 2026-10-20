@@ -1,11 +1,11 @@
 "use client";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/src/components/ui/dialog";
-import { useAddRepository } from "@/src/_features/github/hooks/useAddRepository";
+import { useAddRepository } from "@/src/_features/git-providers/hooks/useAddRepository";
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
-import { GitHubConnectForm } from "@/src/_features/github/components/GitHubConnectForm";
-import { useGitHubConnection } from "@/src/_features/github/services/github-api";
+import { GitProviderConnectForm } from "@/src/_features/git-providers/components/GitProviderConnectForm";
+import { useGitConnection } from "@/src/_features/git-providers/services/git-providers-api";
 import { IS_DEMO } from "@/src/shared/constants";
 
 type Props = {
@@ -30,7 +30,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
     connectByUrl,
   } = useAddRepository(onProjectSelected);
 
-  const { connection } = useGitHubConnection();
+  const { connection } = useGitConnection();
   const connected = connection?.connected ?? false;
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -55,7 +55,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
 
         {!connected && !IS_DEMO ? (
           <div className="space-y-4">
-            <GitHubConnectForm />
+            <GitProviderConnectForm />
             <p className="text-xs text-muted-foreground">
               Connect GitHub first to browse and clone repositories.
             </p>
@@ -66,7 +66,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
                 only) — never ask visitors for their own GitHub token. */}
             {!IS_DEMO && (
               <div className="rounded-md border p-3">
-                <GitHubConnectForm />
+                <GitProviderConnectForm />
               </div>
             )}
 

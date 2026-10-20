@@ -6,21 +6,21 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import {
-  useGitHubConnection,
-  useConnectGitHubToken,
-  useDisconnectGitHub,
+  useGitConnection,
+  useConnectGitProvider,
+  useDisconnectGitProvider,
   GITHUB_PAT_URL,
-} from "@/src/_features/github/services/github-api";
+} from "@/src/_features/git-providers/services/git-providers-api";
 
 type Props = {
   onConnected?: () => void;
   className?: string;
 };
 
-export function GitHubConnectForm({ onConnected, className }: Props) {
-  const { connection, isLoading } = useGitHubConnection();
-  const connect = useConnectGitHubToken();
-  const disconnect = useDisconnectGitHub();
+export function GitProviderConnectForm({ onConnected, className }: Props) {
+  const { connection, isLoading } = useGitConnection();
+  const connect = useConnectGitProvider();
+  const disconnect = useDisconnectGitProvider();
 
   const [token, setToken] = useState("");
 
