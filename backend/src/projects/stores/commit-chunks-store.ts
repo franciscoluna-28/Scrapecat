@@ -62,6 +62,50 @@ export async function upsertCommitChunks({
     });
 }
 
+export type ChunkEmbeddingUpdate = {
+  id: string;
+  embedding: number[];
+  contentHash: string;
+};
+
+function vectorLiteral(embedding: number[]): string {
+  return `[${embedding.join(",")}]`;
+}
+
+/**
+ * Writes a batch of embeddings with one UNNEST-based update. The arrays are
+ * bound as parameters, so the SQL text stays fixed instead of growing with the
+ * batch; only the parameter payload scales. One statement is atomic, and a
+ * partial run simply leaves the remaining rows pending for the next pass.
+ */
+export async function updateChunkEmbeddings({
+  updates,
+  tx,
+}: {
+  updates: ChunkEmbeddingUpdate[];
+  tx?: DbOrTx;
+}) {
+  if (updates.length === 0) return;
+  const client = tx || db;
+  const ids = updates.map((u) => u.id);
+  const embeddings = updates.map((u) => vectorLiteral(u.embedding));
+  const hashes = updates.map((u) => u.contentHash);
+
+  await client.execute(sql`
+    update ${commitChunks} as c
+    set embedding = v.embedding::vector,
+        content_hash = v.content_hash,
+        embedding_hash = v.content_hash,
+        updated_at = now()
+    from unnest(
+      ${sql.param(ids)}::text[],
+      ${sql.param(embeddings)}::text[],
+      ${sql.param(hashes)}::text[]
+    ) as v(id, embedding, content_hash)
+    where c.id = v.id::uuid
+  `);
+}
+
 export async function countChunksForProject({
   projectId,
   branch,

@@ -1,7 +1,11 @@
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import { commitChunks } from "@/db/schema";
-import { contentHashOf, embeddingSource } from "@/projects/stores/commit-chunks-store";
+import {
+  contentHashOf,
+  embeddingSource,
+  updateChunkEmbeddings,
+} from "@/projects/stores/commit-chunks-store";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import { embedTexts } from "@/projects/embeddings";
@@ -36,28 +40,26 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   const pending = await listPendingChunks(projectId);
   if (pending.length === 0) return { embedded: 0 };
 
-  const batchSize = opts?.batchSize ?? env.EMBEDDING_BATCH_SIZE;
+  const batchSize = Math.max(1, opts?.batchSize ?? env.EMBEDDING_BATCH_SIZE);
   let embedded = 0;
   const start = performance.now();
 
   for (let i = 0; i < pending.length; i += batchSize) {
     const batch = pending.slice(i, i + batchSize);
     const batchStart = performance.now();
-    const texts = batch.map((r) => `${fmtDate(r.committedAt)} ${r.commitMessage}`);
+    const texts = batch.map((chunk) => `${fmtDate(chunk.committedAt)} ${chunk.commitMessage}`);
     const vectors = await embedTexts(texts);
 
-    for (let j = 0; j < batch.length; j++) {
-      const hash = batch[j].contentHash ?? contentHashOf(embeddingSource(batch[j].committedAt, batch[j].commitMessage));
-      await db
-        .update(commitChunks)
-        .set({
-          embedding: vectors[j],
-          contentHash: hash,
-          embeddingHash: hash,
-          updatedAt: new Date(),
-        })
-        .where(eq(commitChunks.id, batch[j].id));
-    }
+    await updateChunkEmbeddings({
+      updates: batch.map((chunk, index) => ({
+        id: chunk.id,
+        embedding: vectors[index],
+        contentHash:
+          chunk.contentHash ??
+          contentHashOf(embeddingSource(chunk.committedAt, chunk.commitMessage)),
+      })),
+    });
+
     embedded += batch.length;
     logger.info(
       {
