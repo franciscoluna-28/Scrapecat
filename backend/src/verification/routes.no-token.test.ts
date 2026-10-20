@@ -18,6 +18,12 @@ vi.mock("@/config/env", () => ({
     GITHUB_TOKEN: "",
     GIT_PROVIDER: "github",
     CORS_ORIGIN: "*",
+    corsOrigins: ["*"],
+    LOG_LEVEL: "silent",
+    isDemoMode: false,
+    isDemoRestrictKeys: false,
+    allowAddRepos: true,
+    isVercel: true,
   },
 }));
 
