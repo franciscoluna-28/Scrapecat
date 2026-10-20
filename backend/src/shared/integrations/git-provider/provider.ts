@@ -6,6 +6,8 @@ import type {
 
 export interface GitProvider {
   listRepositories(filters?: RepositoryFilters): Promise<Repository[]>;
+  /** Public repository search, used by the token-less demo path. */
+  searchPublicRepositories(query: string, perPage?: number): Promise<Repository[]>;
   listBranches(owner: string, repo: string): Promise<string[]>;
   getDefaultBranch(owner: string, repo: string): Promise<string>;
   /** The provider's stable numeric repository id (as a string). */

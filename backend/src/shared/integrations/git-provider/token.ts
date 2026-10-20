@@ -14,7 +14,7 @@ import {
  */
 export async function resolveGitToken(provider: GitProviderId): Promise<string | null> {
   const config = getGitProviderConfig(provider);
-  const stored = await getLatestCredential(config.credentialProvider);
+  const stored = await getLatestCredential(provider);
   if (stored) {
     return decrypt(stored.encryptedKey);
   }

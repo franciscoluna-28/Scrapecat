@@ -20,5 +20,5 @@ export interface RepositoryFilters {
 
 export interface ConnectionStatus {
   login: string;
-  rateLimitRemaining: number;
+  rateLimitRemaining?: number;
 }
