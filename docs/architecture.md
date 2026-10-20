@@ -151,7 +151,6 @@ impossible to open as multi-tenant SaaS without a rework.
 
 ### Validation & data-integrity gaps
 
-- `startDate`/`endDate` are unvalidated strings; invalid dates surface as 500s.
 - `limit`/`per_page` on discovery endpoints are validated (1–100) and fail fast.
 - No transactions: project upsert and chunk ingest are separate writes. A mid-way
   failure leaves chunks persisted (safe today — chunks are the cache).

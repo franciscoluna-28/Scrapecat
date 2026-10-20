@@ -10,11 +10,7 @@ not just value — see rationale per item.
 
 ## P0 — Foundation / unblockers
 
-| ID | Item | Area | Why / notes |
-|---|---|---|---|
-| P0-1 | **Request IDs + correlation** | backend | Fastify generates a `reqId` (`build-app.ts:72`) but services log via a separate pino instance (`shared/logger.ts`), so nothing correlates a request to its ingestion job, SSE stream, or `callAI`. Add `genReqId`, echo `x-request-id`, thread the id into the job queue (`ingest-branch` already has a `jobId`) and `callAI`; capture the upstream provider id on errors. Cheapest highest-leverage debugging win. |
-| P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` (`build-app.ts:331`) has no response schema and no error contract once the stream opens. A provider drop leaves the client hanging. Add a terminal `error` event + periodic heartbeat. |
-| P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | Unvalidated strings (`architecture.md:154`) surface invalid dates as 500s. TypeBox-fix so bad input returns 400. Trivial. |
+All P0 items are complete — see [Done](#done--completed).
 
 ## P1 — Highest-value product work
 
@@ -45,8 +41,16 @@ not just value — see rationale per item.
 
 ## Sequencing rationale
 
-Request IDs → eval harness + reranking → providers + embedding invalidation →
-SSE/validation hardening → GitLab (behind the DI refactor). Product differentiators
-(personas, integrations) and auth stay deferred until retrieval quality is
-measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
-("Tech debt" / "What needs to happen") for the underlying structural debt.
+Eval harness + reranking → providers + embedding invalidation → GitLab (behind
+the DI refactor). Product differentiators (personas, integrations) and auth stay
+deferred until retrieval quality is measurable and the platform is
+multi-tenant-ready. See `docs/architecture.md` ("Tech debt" / "What needs to
+happen") for the underlying structural debt.
+
+## Done — completed
+
+| ID | Item | Area | Notes |
+|---|---|---|---|
+| P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
+| P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
+| P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
