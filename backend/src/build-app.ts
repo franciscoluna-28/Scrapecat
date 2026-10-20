@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import type { FastifyError, FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import { fastifyRequestContext } from "@fastify/request-context";
 import { env } from "@/config/env";
 import { sweepStaleJobScratch } from "@/repositories/archive-service";
 import { shutdownJobQueue } from "@/shared/queue";
@@ -69,7 +71,27 @@ import { AISettingsBody, AISettingsGetResponse } from "@/settings/schemas";
 import { GitHubConnectionResponse, AddGitHubTokenBody } from "@/github/schemas";
 
 export async function buildApp(instance?: FastifyInstance) {
-  const app = instance ?? Fastify({ logger: { level: env.LOG_LEVEL } });
+  const app =
+    instance ??
+    Fastify({
+      logger: { level: env.LOG_LEVEL },
+      // Reuse an inbound `x-request-id` when a proxy/client provides one, else
+      // mint one. The id is echoed back and is the correlation key for logs.
+      genReqId: () => randomUUID(),
+      requestIdHeader: "x-request-id",
+    });
+
+  // AsyncLocalStorage-backed request context: makes `req.id` available to the
+  // shared logger (and anything else) for the whole request lifecycle.
+  await app.register(fastifyRequestContext, {
+    defaultStoreValues: (req) => ({ reqId: req.id }),
+  });
+
+  // Echo the id so clients can quote it in bug reports.
+  app.addHook("onRequest", (req, reply, done) => {
+    reply.header("x-request-id", req.id);
+    done();
+  });
 
   // s3 mode treats local scratch as disposable: clear any dirs a crashed
   // worker left behind, and release queue resources on shutdown.

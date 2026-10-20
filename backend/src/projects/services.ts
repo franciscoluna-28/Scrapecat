@@ -7,6 +7,7 @@ import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGithubToken } from "@/github/token";
 import { getJobQueue } from "@/shared/queue";
+import { requestContext } from "@fastify/request-context";
 import "@/projects/jobs";
 
 /**
@@ -52,6 +53,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
         repo: project.repositoryName,
         branch: ref,
         projectId,
+        requestId: requestContext.get("reqId"),
       })
       .then(() =>
         queue.runAndWait<IngestResult>(jobId, (p) =>

@@ -10,3 +10,23 @@ describe("GET /api/v1/health", () => {
     await app.close();
   });
 });
+
+describe("request id correlation", () => {
+  it("mints and echoes x-request-id", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/v1/health" });
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    await app.close();
+  });
+
+  it("reuses an inbound x-request-id", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/health",
+      headers: { "x-request-id": "abc-123" },
+    });
+    expect(res.headers["x-request-id"]).toBe("abc-123");
+    await app.close();
+  });
+});

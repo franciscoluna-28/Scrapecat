@@ -1,9 +1,30 @@
 import { OpenRouter } from "@openrouter/sdk";
 import OpenAI from "openai";
 import { env } from "@/config/env";
+import { logger } from "@/shared/logger";
 import { getProviderConfig, type ProviderName } from "@/shared/integrations/providers/registry";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+/**
+ * Pulls the provider's own request id off an SDK error so a failed upstream
+ * call can be reported back to the provider (OpenAI exposes `x-request-id`
+ * header and `request_id`; OpenRouter mirrors the header).
+ */
+function providerRequestId(error: unknown): string | undefined {
+  const e = error as {
+    headers?: Record<string, unknown>;
+    request_id?: string;
+    response?: { headers?: { get?: (name: string) => string | null } };
+  };
+  const header = e?.headers?.["x-request-id"] ?? e?.headers?.["x-requestid"];
+  return (
+    (typeof header === "string" ? header : undefined) ??
+    e?.request_id ??
+    e?.response?.headers?.get?.("x-request-id") ??
+    undefined
+  );
+}
 
 export interface AIMessage {
   role: "system" | "user" | "assistant";
@@ -134,25 +155,42 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
     throw new Error(`Missing API key for provider: ${provider}`);
   }
 
-  if (config.sdk === "openrouter") {
-    return callOpenRouter(request.messages, model, apiKey, temperature, maxTokens, request.onChunk);
-  }
+  try {
+    if (config.sdk === "openrouter") {
+      return await callOpenRouter(request.messages, model, apiKey, temperature, maxTokens, request.onChunk);
+    }
 
-  if (config.sdk === "openai-compatible") {
-    const baseUrl =
-      provider === "ollama" ? `${env.OLLAMA_BASE_URL}/v1` : config.baseUrl;
-    return callOpenAICompatible(
-      request.messages,
-      model,
-      apiKey || "ollama",
-      baseUrl,
-      temperature,
-      maxTokens,
-      request.onChunk,
+    if (config.sdk === "openai-compatible") {
+      const baseUrl =
+        provider === "ollama" ? `${env.OLLAMA_BASE_URL}/v1` : config.baseUrl;
+      return await callOpenAICompatible(
+        request.messages,
+        model,
+        apiKey || "ollama",
+        baseUrl,
+        temperature,
+        maxTokens,
+        request.onChunk,
+      );
+    }
+
+    throw new Error(`Unknown SDK type for provider: ${provider}`);
+  } catch (error) {
+    const upstreamId = providerRequestId(error);
+    logger.error(
+      {
+        provider,
+        model,
+        providerRequestId: upstreamId,
+        err: (error as Error)?.message ?? String(error),
+      },
+      "callAI failed",
     );
+    if (upstreamId && error instanceof Error) {
+      (error as Error & { providerRequestId?: string }).providerRequestId = upstreamId;
+    }
+    throw error;
   }
-
-  throw new Error(`Unknown SDK type for provider: ${provider}`);
 }
 
 export function cleanResponse(rawContent: string): string {

@@ -78,11 +78,12 @@ export async function ingestCommits(
     projectId: string;
     startDate?: Date;
     endDate?: Date;
+    requestId?: string;
     onProgress?: IngestProgress;
   },
 ): Promise<IngestResult> {
   const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
-  const base = { owner, repo, branch, projectId };
+  const base = { owner, repo, branch, projectId, ...(opts.requestId ? { reqId: opts.requestId } : {}) };
 
   const { commits, tipSha } = await source.listCommits({ since: startDate, until: endDate });
   onProgress?.("commits", `Found ${commits.length} commits`, commits.length, commits.length);
