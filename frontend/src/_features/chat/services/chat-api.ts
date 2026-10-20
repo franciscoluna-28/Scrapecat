@@ -83,7 +83,7 @@ export function useDeleteChatSession() {
 export type StreamChunk =
   | { type: "token"; content: string }
   | { type: "done"; message: ChatMessage }
-  | { type: "error"; error: string }
+  | { type: "error"; error: string; requestId?: string }
   | { type: "progress"; stage: string; message: string; done?: number; total?: number };
 
 /**

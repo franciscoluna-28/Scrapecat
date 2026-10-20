@@ -189,8 +189,9 @@ describe("chat routes", () => {
     expect(res.headers["access-control-allow-origin"]).toBeTruthy();
     const frames = res.body
       .split("\n\n")
-      .filter(Boolean)
+      .filter((f) => f.trim().startsWith("data:"))
       .map((f) => JSON.parse(f.replace(/^data: /, "")));
+    expect(res.body).toContain("retry: 3000");
     expect(frames).toEqual([
       { type: "token", content: "Hello" },
       { type: "token", content: " world" },

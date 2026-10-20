@@ -41,6 +41,14 @@ describe("parseSseFrame", () => {
     expect(parseSseFrame("event: ping")).toBeNull();
   });
 
+  it("ignores heartbeat comment frames", () => {
+    expect(parseSseFrame(": ping")).toBeNull();
+  });
+
+  it("ignores the retry preamble", () => {
+    expect(parseSseFrame("retry: 3000")).toBeNull();
+  });
+
   it("ignores non-data lines before the data line", () => {
     expect(parseSseFrame('event: token\ndata: {"type":"done"}')).toEqual({ type: "done" });
   });

@@ -17,6 +17,9 @@ import {
 import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
 import { env } from "@/config/env";
 
+/** Interval between SSE comment heartbeats (see `streamMessage`). */
+const SSE_HEARTBEAT_MS = 15_000;
+
 function getAnonymousId(req: FastifyRequest): string {
   return (req.headers["x-anonymous-id"] as string) || "anonymous";
 }
@@ -117,12 +120,15 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+    "x-request-id": req.id,
   });
 
   let closed = false;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
   const close = () => {
     if (closed) return;
     closed = true;
+    if (heartbeat) clearInterval(heartbeat);
     res.end();
   };
   req.raw.on("close", close);
@@ -130,6 +136,16 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const send = (data: unknown) => {
     if (!closed) res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+
+  // Comment frames keep intermediaries from closing an idle stream and let the
+  // client distinguish "still working" from "provider hung". `parseSseFrame`
+  // ignores frames without a `data:` line.
+  heartbeat = setInterval(() => {
+    if (!closed) res.write(": ping\n\n");
+  }, SSE_HEARTBEAT_MS);
+  if (typeof heartbeat.unref === "function") heartbeat.unref();
+
+  res.write("retry: 3000\n\n");
 
   try {
     const message = await streamChatMessage({
@@ -152,7 +168,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       error instanceof SessionNotFoundError
         ? "Chat session not found"
         : (error as Error)?.message ?? "Failed to generate reply";
-    send({ type: "error", error: message });
+    send({ type: "error", error: message, requestId: req.id });
   } finally {
     close();
   }
