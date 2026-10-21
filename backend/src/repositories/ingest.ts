@@ -149,10 +149,24 @@ export async function ingestCommits(
   }
 
   let embedded = 0;
-  if (chunksWritten > 0) {
+  const expectsEmbedding = chunksWritten > 0;
+  if (expectsEmbedding) {
     onProgress?.("embedding", "Embedding commit summaries");
+  }
+  // Always re-check pending embeddings: a previous run may have stored chunks
+  // before the provider was available. `embedNewChunks` no-ops when none are
+  // pending, and a failure must not fail the whole ingest.
+  try {
     const result = await timed("ingest.embedNewChunks", base, () => embedNewChunks(projectId));
     embedded = result.embedded;
+  } catch (error) {
+    logger.warn(
+      { ...base, err: (error as Error)?.message ?? String(error) },
+      "ingest.embeddingSkipped",
+    );
+    if (expectsEmbedding) {
+      onProgress?.("embedding", "Commits stored; embeddings will run later");
+    }
   }
 
   logger.info(

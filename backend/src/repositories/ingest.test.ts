@@ -70,6 +70,19 @@ describe("ingestCommits", () => {
     expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
   });
 
+  it("keeps ingested chunks when embedding fails", async () => {
+    mockEmbedNewChunks.mockRejectedValue(
+      new Error("401 Missing Authentication header"),
+    );
+    const source = makeSource([commit("a")]);
+
+    const result = await ingestCommits(source, call);
+
+    expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
+    expect(mockUpsertCommitChunks).toHaveBeenCalled();
+    expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
+  });
+
   it("dedupes against stored chunks before enriching them", async () => {
     mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as never]]));
     const source = makeSource([commit("a")]);
@@ -79,7 +92,6 @@ describe("ingestCommits", () => {
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
     expect(source.toChunkInputs).not.toHaveBeenCalled();
     expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
-    expect(mockEmbedNewChunks).not.toHaveBeenCalled();
   });
 
   it("batches enrichment and upsert by source.batchSize", async () => {
@@ -93,14 +105,15 @@ describe("ingestCommits", () => {
     expect(sizes).toEqual([2, 1]);
   });
 
-  it("skips embedding when the source writes nothing", async () => {
+  it("re-checks pending embeddings when the source writes nothing", async () => {
     const source = makeSource([commit("a")], { skippedShas: ["a"] });
 
     const result = await ingestCommits(source, call);
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
     expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
-    expect(mockEmbedNewChunks).not.toHaveBeenCalled();
+    // Chunks may exist from an earlier run where the provider was unavailable.
+    expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
   });
 
   it("reports commitsFound from the full list, not just new commits", async () => {
