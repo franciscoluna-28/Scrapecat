@@ -96,7 +96,7 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
 
 - Subscribe and copy the API key from the OpenCode Console.
 - Store it in **Settings → API Keys**, or set `OPENCODE_GO_API_KEY`.
-- Pick an OpenCode Go model in the chat model selector. Only models served on the OpenAI-compatible `/chat/completions` endpoint are listed.
+- Pick an OpenCode Go model in the chat model selector. Models are listed with their native endpoint (OpenAI Chat Completions, OpenAI Responses, or Anthropic Messages); Scrapecat routes each model to the matching protocol automatically.
 
 ## Environment Setup
 
