@@ -23,6 +23,8 @@ type Props = {
   /** Controlled provider (optional) — used by the add-repository dialog. */
   provider?: GitProviderId;
   onProviderChange?: (provider: GitProviderId) => void;
+  /** Dense layout for the add-repository dialog; Settings keeps the roomy one. */
+  compact?: boolean;
 };
 
 export function GitProviderConnectForm({
@@ -30,6 +32,7 @@ export function GitProviderConnectForm({
   className,
   provider: controlledProvider,
   onProviderChange,
+  compact = false,
 }: Props) {
   const [internalProvider, setInternalProvider] =
     useState<GitProviderId>("github");
@@ -60,35 +63,92 @@ export function GitProviderConnectForm({
   }
 
   if (connection?.connected) {
+    const label =
+      connection.source === "env"
+        ? compact
+          ? `${meta.label} · server connection`
+          : `Connected via server ${meta.label} token`
+        : compact
+          ? `${meta.label} · @${connection.login ?? meta.label.toLowerCase()}`
+          : `Connected as @${connection.login ?? meta.label.toLowerCase()}`;
+
     return (
-      <div className={`space-y-3 ${className ?? ""}`}>
+      <div className={`${compact ? "space-y-2" : "space-y-3"} ${className ?? ""}`}>
         {AVAILABLE_PROVIDERS.length > 1 && (
-          <ProviderTabs
-            provider={provider}
-            onSelect={selectProvider}
-          />
+          <ProviderTabs provider={provider} onSelect={selectProvider} />
         )}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="size-4 text-primary" />
-            <span>
-              {connection.source === "env"
-                ? `Connected via server ${meta.label} token`
-                : `Connected as @${connection.login ?? meta.label.toLowerCase()}`}
-            </span>
+        <div
+          className={`flex items-center justify-between gap-2 ${compact ? "text-xs" : "text-sm"}`}
+        >
+          <div className="flex min-w-0 items-center gap-1.5">
+            <CheckCircle2
+              className={`shrink-0 text-primary ${compact ? "size-3.5" : "size-4"}`}
+            />
+            <span className="truncate">{label}</span>
           </div>
           {connection.source !== "env" && (
             <Button
               variant="ghost"
-              size="sm"
+              size={compact ? "xs" : "sm"}
+              className="shrink-0 text-muted-foreground"
               onClick={() => disconnect.mutate()}
               disabled={disconnect.isPending}
             >
-              <LogOut className="size-3.5" />
+              <LogOut className="size-3" />
               Disconnect
             </Button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  // Compact: token entry in a single row, help text reduced to one small link.
+  if (compact) {
+    return (
+      <div className={`space-y-2 ${className ?? ""}`}>
+        {AVAILABLE_PROVIDERS.length > 1 && (
+          <ProviderTabs provider={provider} onSelect={selectProvider} />
+        )}
+
+        <div className="flex items-center gap-2">
+          <Input
+            id="git-provider-token"
+            type="password"
+            autoComplete="off"
+            aria-label={meta.tokenLabel}
+            placeholder={meta.tokenPlaceholder}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+          <Button
+            size="sm"
+            className="shrink-0"
+            disabled={!token.trim() || connect.isPending}
+            onClick={async () => {
+              await connect.mutateAsync(token.trim());
+              setToken("");
+              onConnected?.();
+            }}
+          >
+            {connect.isPending ? "Connecting…" : "Connect"}
+          </Button>
+        </div>
+
+        <a
+          href={meta.patUrl}
+          target="_blank"
+          rel="noreferrer"
+          title={`Scopes: ${meta.scopes}`}
+          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Create a {meta.label} token
+          <ExternalLink className="size-3" />
+        </a>
+
+        {connect.isError && (
+          <p className="text-xs text-destructive">{(connect.error as Error).message}</p>
+        )}
       </div>
     );
   }

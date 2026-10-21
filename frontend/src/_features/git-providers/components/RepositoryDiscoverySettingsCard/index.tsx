@@ -35,7 +35,7 @@ export function RepositoryDiscoverySettingsCard() {
 
   return (
     <Card>
-      <CardContent className="p-6 space-y-6">
+      <CardContent className="p-4 space-y-4">
         <div>
           <h3 className="text-base font-semibold">Repository Discovery</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -43,7 +43,7 @@ export function RepositoryDiscoverySettingsCard() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor="type">Repository Type</Label>
             <Select

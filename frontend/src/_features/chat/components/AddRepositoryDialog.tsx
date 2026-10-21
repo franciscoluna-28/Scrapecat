@@ -63,13 +63,14 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
         </DialogHeader>
 
         {!hasRepositories ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <GitProviderConnectForm
               provider={provider}
               onProviderChange={setProvider}
+              compact
             />
             <p className="text-xs text-muted-foreground">
-              Connect a git provider first to browse and clone repositories.
+              Connect one provider to browse repositories.
             </p>
           </div>
         ) : (
@@ -77,10 +78,11 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
             {/* Demo mode uses the deployer's server-side token (public repos
                 only) — never ask visitors for their own GitHub token. */}
             {!IS_DEMO && (
-              <div className="rounded-md border p-3">
+              <div className="rounded-md border p-2">
                 <GitProviderConnectForm
                   provider={provider}
                   onProviderChange={setProvider}
+                  compact
                 />
               </div>
             )}
