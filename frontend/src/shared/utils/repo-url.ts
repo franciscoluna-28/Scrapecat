@@ -1,6 +1,10 @@
+import type { GitProviderId } from "@/src/shared/constants";
+
 export type ParsedRepoUrl = {
   owner: string;
   repo: string;
+  /** Set when the URL host identifies a provider (github.com, gitlab.com, …). */
+  provider?: GitProviderId;
 };
 
 /** Path segments that mark the start of a UI route after `owner/repo`. */
@@ -16,6 +20,18 @@ const PATH_MARKERS = new Set([
 
 function isHostSegment(segment: string): boolean {
   return /^[^/\s]+\.[^/\s]+$/.test(segment) || segment.toLowerCase() === "localhost";
+}
+
+/**
+ * Best-effort provider detection from the host. Self-hosted instances on
+ * arbitrary domains are left undefined and fall back to the selected provider.
+ */
+function inferProvider(host?: string): GitProviderId | undefined {
+  const normalized = host?.toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized.includes("github")) return "github";
+  if (normalized.includes("gitlab")) return "gitlab";
+  return undefined;
 }
 
 /**
@@ -39,8 +55,10 @@ export function parseRepoUrl(input: string): ParsedRepoUrl | null {
 
   const segments = path.split("/").filter(Boolean);
   // Drop a leading host segment (github.com, gitlab.com, self-hosted instances
-  // such as git.example.com).
-  if (segments.length > 0 && isHostSegment(segments[0])) segments.shift();
+  // such as git.example.com), remembering it for provider detection.
+  const first = segments[0];
+  const host = first && isHostSegment(first) ? segments.shift() : undefined;
+  const provider = inferProvider(host);
 
   // Stop at the first UI route marker (only meaningful after `owner/repo`).
   const markerIndex = segments.findIndex(
@@ -53,5 +71,5 @@ export function parseRepoUrl(input: string): ParsedRepoUrl | null {
   const owner = repoPath.slice(0, -1).join("/");
   if (!owner || !repo) return null;
 
-  return { owner, repo };
+  return provider ? { owner, repo, provider } : { owner, repo };
 }

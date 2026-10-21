@@ -2,11 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RepositoryList } from "./RepositoryList";
-import type { GitProviderRepository } from "@/src/shared/types";
+import type { GitProviderRepositoryItem } from "@/src/shared/types";
 
-function repo(overrides: Partial<GitProviderRepository> = {}): GitProviderRepository {
+function repo(
+  overrides: Partial<GitProviderRepositoryItem> = {},
+): GitProviderRepositoryItem {
   return {
     id: "1",
+    provider: "github",
     name: "repo",
     full_name: "owner/repo",
     private: false,
@@ -18,7 +21,7 @@ function repo(overrides: Partial<GitProviderRepository> = {}): GitProviderReposi
 }
 
 const baseProps = {
-  repositories: [] as GitProviderRepository[],
+  repositories: [] as GitProviderRepositoryItem[],
   isLoading: false,
   existingProjectIds: new Set<string>(),
   connecting: false,
@@ -41,7 +44,7 @@ describe("RepositoryList", () => {
       <RepositoryList
         {...baseProps}
         repositories={[repo()]}
-        existingProjectIds={new Set(["1"])}
+        existingProjectIds={new Set(["github:1"])}
       />,
     );
     expect(screen.getByText("owner/repo")).toBeInTheDocument();
@@ -59,5 +62,24 @@ describe("RepositoryList", () => {
   it("disables rows while connecting", () => {
     render(<RepositoryList {...baseProps} repositories={[repo()]} connecting />);
     expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("differentiates providers by icon and keeps connection keys per host", () => {
+    render(
+      <RepositoryList
+        {...baseProps}
+        repositories={[
+          repo({ provider: "github" }),
+          repo({ provider: "gitlab" }),
+        ]}
+        existingProjectIds={new Set(["github:1"])}
+      />,
+    );
+
+    expect(screen.getByLabelText("GitHub")).toBeInTheDocument();
+    expect(screen.getByLabelText("GitLab")).toBeInTheDocument();
+    expect(screen.getAllByText("owner/repo")).toHaveLength(2);
+    // Same numeric id on the other host is a different project.
+    expect(screen.getAllByText(/Already connected/)).toHaveLength(1);
   });
 });

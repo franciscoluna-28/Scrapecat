@@ -1,10 +1,18 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueries,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { apiClient, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
-import type { GitProviderId } from "@/src/shared/constants";
-import type { GitProviderRepository } from "@/src/shared/types";
+import {
+  AVAILABLE_PROVIDERS,
+  type GitProviderId,
+} from "@/src/shared/constants";
+import type { GitProviderRepositoryItem } from "@/src/shared/types";
 
 export type GitConnection = {
   connected: boolean;
@@ -12,15 +20,25 @@ export type GitConnection = {
   login?: string;
 };
 
+type RepositoryQuery = {
+  type: string;
+  sort: string;
+  direction: string;
+  per_page: number;
+};
+
+function fetchGitConnection(provider: GitProviderId): Promise<GitConnection> {
+  return unwrap(
+    apiClient.GET("/api/v1/git-providers/{provider}/connection", {
+      params: { path: { provider } },
+    }),
+  );
+}
+
 export function useGitConnection(provider: GitProviderId = "github") {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.gitConnections.connection(provider),
-    queryFn: () =>
-      unwrap(
-        apiClient.GET("/api/v1/git-providers/{provider}/connection", {
-          params: { path: { provider } },
-        }),
-      ),
+    queryFn: () => fetchGitConnection(provider),
   });
 
   return {
@@ -28,6 +46,32 @@ export function useGitConnection(provider: GitProviderId = "github") {
     isLoading,
     error: error ?? null,
     refetch,
+  };
+}
+
+/**
+ * Connection state for every provider this build offers. Demo builds only
+ * include GitHub, so GitLab is never queried there.
+ */
+export function useGitConnections() {
+  const results = useQueries({
+    queries: AVAILABLE_PROVIDERS.map((provider) => ({
+      queryKey: queryKeys.gitConnections.connection(provider),
+      queryFn: () => fetchGitConnection(provider),
+    })),
+  });
+
+  const connections: Partial<Record<GitProviderId, GitConnection | null>> = {};
+  AVAILABLE_PROVIDERS.forEach((provider, index) => {
+    connections[provider] = results[index]?.data ?? null;
+  });
+
+  return {
+    connections,
+    connectedProviders: AVAILABLE_PROVIDERS.filter(
+      (provider) => connections[provider]?.connected,
+    ),
+    isLoading: results.some((result) => result.isLoading),
   };
 }
 
@@ -86,38 +130,33 @@ export type RepoCommit = {
   url?: string;
 };
 
-export function useRepositories(filters: {
-  provider?: GitProviderId;
-  type: string;
-  sort: string;
-  direction: string;
-  per_page: number;
-}) {
+async function fetchRepositories(
+  filters: RepositoryQuery,
+): Promise<GitProviderRepositoryItem[]> {
+  const repositories = await unwrap(
+    apiClient.GET("/api/v1/repositories", {
+      params: { query: filters },
+    }),
+  );
+  return repositories as GitProviderRepositoryItem[];
+}
+
+/**
+ * Repository discovery for every provider the backend can read from. The
+ * server owns provider selection (connected only, GitHub-only in demo) and
+ * tags each repository with its host, so this stays a single request.
+ */
+export function useRepositoryFeed(filters: RepositoryQuery) {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.repositories.list(filters),
-    queryFn: () =>
-      unwrap(
-        apiClient.GET("/api/v1/repositories", {
-          params: {
-            query: {
-              provider: filters.provider,
-              type: filters.type,
-              sort: filters.sort,
-              direction: filters.direction,
-              per_page: filters.per_page,
-            },
-          },
-        }),
-      ),
+    queryFn: () => fetchRepositories(filters),
   });
 
   return {
-    repositories: (data ?? []) as GitProviderRepository[],
+    repositories: data ?? [],
     isLoading,
-    isValidating: isFetching,
     isFetching,
     error: error ?? null,
-    hasError: !!error,
   };
 }
 

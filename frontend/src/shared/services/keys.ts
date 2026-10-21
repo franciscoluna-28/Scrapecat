@@ -15,6 +15,7 @@ export const queryKeys = {
   repositories: {
     all: ["repositories"] as const,
     list: (filters: {
+      provider?: string;
       type: string;
       sort: string;
       direction: string;

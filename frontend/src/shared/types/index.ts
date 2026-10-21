@@ -1,4 +1,5 @@
 import type { paths } from "@/src/shared/api/types";
+import type { GitProviderId } from "@/src/shared/constants";
 
 export type GitProviderRepository = {
   id: string;
@@ -10,6 +11,11 @@ export type GitProviderRepository = {
   default_branch?: string;
   stargazers_count?: number;
   forks_count?: number;
+};
+
+/** A repository from one provider, tagged so merged feeds keep their origin. */
+export type GitProviderRepositoryItem = GitProviderRepository & {
+  provider: GitProviderId;
 };
 
 export type GitProviderProject =

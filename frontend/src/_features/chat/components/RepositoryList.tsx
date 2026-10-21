@@ -1,15 +1,16 @@
 "use client";
 
 import { ScrollArea } from "@/src/components/ui/scroll-area";
-import { GitBranch } from "lucide-react";
-import type { GitProviderRepository } from "@/src/shared/types";
+import { GitProviderIcon } from "@/src/_features/git-providers/components/GitProviderIcon";
+import type { GitProviderRepositoryItem } from "@/src/shared/types";
 
 type RepositoryListProps = {
-  repositories: GitProviderRepository[];
+  repositories: GitProviderRepositoryItem[];
   isLoading: boolean;
+  /** Composite `${provider}:${repoId}` keys — ids are only unique per host. */
   existingProjectIds: Set<string>;
   connecting: boolean;
-  onSelect: (repo: GitProviderRepository) => void;
+  onSelect: (repo: GitProviderRepositoryItem) => void;
 };
 
 export function RepositoryList({
@@ -32,15 +33,19 @@ export function RepositoryList({
           </p>
         ) : (
           repositories.map((repo) => {
-            const isConnected = existingProjectIds.has(repo.id);
+            const key = `${repo.provider}:${repo.id}`;
+            const isConnected = existingProjectIds.has(key);
             return (
               <button
-                key={repo.id}
+                key={key}
                 onClick={() => onSelect(repo)}
                 disabled={connecting}
                 className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent transition-colors disabled:opacity-50"
               >
-                <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+                <GitProviderIcon
+                  provider={repo.provider}
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="truncate font-medium">
                     {repo.owner.login}/{repo.name}

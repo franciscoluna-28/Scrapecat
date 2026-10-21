@@ -6,7 +6,6 @@ import { useAddRepository } from "@/src/_features/git-providers/hooks/useAddRepo
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
 import { GitProviderConnectForm } from "@/src/_features/git-providers/components/GitProviderConnectForm";
-import { useGitConnection } from "@/src/_features/git-providers/services/git-providers-api";
 import {
   GIT_PROVIDER_META,
   IS_DEMO,
@@ -32,13 +31,15 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
     connecting,
     repositories,
     isFetching,
+    connectedProviders,
     existingProjectIds,
     connectByRepo,
     connectByUrl,
   } = useAddRepository(onProjectSelected, provider);
 
-  const { connection } = useGitConnection(provider);
-  const connected = connection?.connected ?? false;
+  // Demo serves public GitHub search without a token, so the list is usable
+  // even though no provider is "connected".
+  const hasRepositories = IS_DEMO || connectedProviders.length > 0;
   const meta = GIT_PROVIDER_META[provider];
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -61,14 +62,14 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           </DialogDescription>
         </DialogHeader>
 
-        {!connected && !IS_DEMO ? (
+        {!hasRepositories ? (
           <div className="space-y-4">
             <GitProviderConnectForm
               provider={provider}
               onProviderChange={setProvider}
             />
             <p className="text-xs text-muted-foreground">
-              Connect {meta.label} first to browse and clone repositories.
+              Connect a git provider first to browse and clone repositories.
             </p>
           </div>
         ) : (
