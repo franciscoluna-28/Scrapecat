@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { OptionalGitProviderSchema } from "@/shared/typebox";
+import { GitProviderSchema, OptionalGitProviderSchema } from "@/shared/typebox";
 
 export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
@@ -42,7 +42,8 @@ export const CommitsCountResponse = Type.Object({
 });
 
 export const RepositoriesQuery = Type.Object({
-  provider: OptionalGitProviderSchema,
+  // No default: omitting `provider` means "every connected provider".
+  provider: Type.Optional(GitProviderSchema),
   type: Type.Optional(Type.String({ default: "all" })),
   sort: Type.Optional(Type.String({ default: "updated" })),
   direction: Type.Optional(Type.String({ default: "desc" })),

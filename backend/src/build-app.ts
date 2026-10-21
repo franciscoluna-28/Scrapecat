@@ -197,7 +197,7 @@ export async function buildApp(instance?: FastifyInstance) {
 
   app.get("/api/v1/repositories", {
     schema: {
-      description: "List GitHub repositories for the authenticated user",
+      description: "List repositories from every connected git provider",
       tags: ["repositories"],
       querystring: RepositoriesQuery,
       response: { 200: RepositoriesResponse, 400: ErrorResponse, 500: ErrorResponse },

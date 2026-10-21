@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 
 const mockProvider = {
   listRepositories: vi.fn(),
@@ -8,6 +8,7 @@ const mockProvider = {
 };
 
 vi.mock("@/shared/integrations/git-provider", () => ({
+  GIT_PROVIDERS: ["github", "gitlab"],
   getGitProvider: vi.fn(() => mockProvider),
 }));
 
@@ -30,11 +31,19 @@ vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
   };
 });
 
+const { mockResolveGitToken } = vi.hoisted(() => ({
+  mockResolveGitToken: vi.fn(),
+}));
+
 vi.mock("@/shared/integrations/git-provider/token", () => ({
-  resolveGitToken: vi.fn(async () => null),
+  resolveGitToken: (provider: string) => mockResolveGitToken(provider),
 }));
 
 import { buildApp } from "@/build-app";
+
+beforeEach(() => {
+  mockResolveGitToken.mockResolvedValue(null);
+});
 
 describe("GET /api/v1/repositories", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -47,13 +56,18 @@ describe("GET /api/v1/repositories", () => {
     await app.close();
   });
 
-  it("returns repositories list", async () => {
+  beforeEach(() => {
+    mockProvider.listRepositories.mockReset();
+    mockProvider.searchPublicRepositories.mockReset();
+  });
+
+  it("returns repositories list tagged with their provider", async () => {
     const repos: any = [{ name: "repo1", owner: "user1", fullName: "user1/repo1" }];
     mockProvider.searchPublicRepositories.mockResolvedValue(repos);
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(repos);
+    expect(res.json()).toEqual(repos.map((repo: any) => ({ ...repo, provider: "github" })));
   });
 
   it("passes query parameters", async () => {
@@ -65,6 +79,37 @@ describe("GET /api/v1/repositories", () => {
     });
 
     expect(mockProvider.searchPublicRepositories).toHaveBeenCalledWith("stars:>100", 5);
+  });
+
+  it("tags an explicitly requested provider", async () => {
+    const repos = [{ name: "repo1", updated_at: "2024-01-01T00:00:00Z" }];
+    mockProvider.searchPublicRepositories.mockResolvedValue(repos);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories?provider=gitlab",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([{ ...repos[0], provider: "gitlab" }]);
+  });
+
+  it("merges repositories from every connected provider", async () => {
+    mockResolveGitToken.mockImplementation(async (provider: string) =>
+      provider === "github" || provider === "gitlab" ? `${provider}-token` : null,
+    );
+    mockProvider.listRepositories.mockResolvedValue([
+      { name: "repo1", updated_at: "2024-01-01T00:00:00Z" },
+    ]);
+
+    const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
+
+    expect(res.statusCode).toBe(200);
+    const providers = (res.json() as { provider: string }[])
+      .map((repository) => repository.provider)
+      .sort();
+    expect(providers).toEqual(["github", "gitlab"]);
+    expect(mockProvider.listRepositories).toHaveBeenCalledTimes(2);
   });
 
   it("returns 500 on error", async () => {
@@ -162,6 +207,22 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
       ],
     });
     expect(mockGetProjectByOwnerRepo).toHaveBeenCalledWith({
+      gitProvider: "github",
+      providerOwner: "owner1",
+      repositoryName: "repo1",
+    });
+  });
+
+  it("scopes the project lookup to the requested provider", async () => {
+    mockListCommitsForProject.mockResolvedValue([]);
+
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/repositories/owner1/repo1/commits?provider=gitlab",
+    });
+
+    expect(mockGetProjectByOwnerRepo).toHaveBeenCalledWith({
+      gitProvider: "gitlab",
       providerOwner: "owner1",
       repositoryName: "repo1",
     });

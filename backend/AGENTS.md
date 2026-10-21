@@ -54,9 +54,9 @@ Strip extended-thinking output with `cleanResponse()` before using model respons
 
 ## Read-path model
 
-The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; GitHub's REST API is also used for discovery.
+The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; the provider REST APIs are also used for discovery.
 
-- **Discovery** (repos/branches) hits GitHub live: `src/gitRepositories/routes.ts`. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
+- **Discovery** (repos/branches) hits the connected providers live: `src/gitRepositories/routes.ts`. `GET /api/v1/repositories` fans out to every provider with a resolvable token (GitHub-only in demo), tags each row with `provider`, and merges by recency; passing `?provider=` still selects one host. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
 - **Chat retrieval** (`POST /api/v1/chat/sessions/:id/messages`) ingests the branch via the job queue (see `src/shared/queue/`), then reads `commit_chunks`.
 
 ## Database (`src/db/`)

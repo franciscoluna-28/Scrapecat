@@ -1,8 +1,11 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { env } from "@/config/env";
 import {
+  GIT_PROVIDERS,
   getGitProvider,
   commitUrl,
+  type GitProviderId,
+  type Repository,
 } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { restrictDemoBranches } from "@/shared/demo-branches";
@@ -17,6 +20,17 @@ import {
   CommitsCountQuery,
   RepositoriesQuery,
 } from "@/gitRepositories/schemas";
+
+type RepositoryWithProvider = Repository & { provider: GitProviderId };
+
+type DiscoveryTarget = { provider: GitProviderId; token: string | null };
+
+type DiscoveryFilters = {
+  type: string;
+  sort: string;
+  direction: string;
+  perPage: number;
+};
 
 function parseDate(value?: string): Date | undefined {
   return value ? new Date(`${value}T00:00:00.000Z`) : undefined;
@@ -34,6 +48,43 @@ function unsupportedInDemo(provider: string): string | null {
   return null;
 }
 
+/**
+ * Discovery fans out to every provider the server can actually read from:
+ * demo is GitHub-only, otherwise a provider counts when a stored/env token
+ * exists. With no tokens at all, keep the anonymous public GitHub fallback.
+ */
+async function resolveDiscoveryTargets(): Promise<DiscoveryTarget[]> {
+  if (env.isDemoMode) return [{ provider: "github", token: null }];
+
+  const all = await Promise.all(
+    GIT_PROVIDERS.map(async (provider) => {
+      try {
+        return { provider, token: await resolveGitToken(provider) };
+      } catch (error) {
+        // A broken credential for one host must not hide the other host.
+        console.error(`Error resolving ${provider} token:`, error);
+        return { provider, token: null };
+      }
+    }),
+  );
+  const connected = all.filter((target) => target.token);
+  return connected.length > 0 ? connected : [{ provider: "github", token: null }];
+}
+
+async function fetchProviderRepositories(
+  { provider, token }: DiscoveryTarget,
+  filters: DiscoveryFilters,
+): Promise<RepositoryWithProvider[]> {
+  const client = getGitProvider(provider, token);
+  // Anonymous/demo reads are public-only; never expose a token owner's repos.
+  const repositories =
+    token && !env.isDemoMode
+      ? await client.listRepositories(filters)
+      : await client.searchPublicRepositories("stars:>100", filters.perPage);
+
+  return repositories.map((repository) => ({ ...repository, provider }));
+}
+
 export async function listRepositories(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -45,27 +96,59 @@ export async function listRepositories(
     direction,
     per_page,
   } = req.query as Static<typeof RepositoriesQuery>;
-  const provider = providerQuery ?? "github";
-
-  const unsupported = unsupportedInDemo(provider);
-  if (unsupported) return reply.status(400).send({ error: unsupported });
+  const filters: DiscoveryFilters = {
+    type: type || "all",
+    sort: sort || "updated",
+    direction: direction || "desc",
+    perPage: per_page || 10,
+  };
 
   try {
-    const token = await resolveGitToken(provider);
-    // Demo mode is public-only: never call /user/repos, which would expose the
-    // token owner's private repositories. Always use public search instead.
-    if (token && !env.isDemoMode) {
-      const repositories = await getGitProvider(provider, token).listRepositories({
-        type: type || "all",
-        sort: sort || "updated",
-        direction: direction || "desc",
-        perPage: per_page,
-      });
+    // Explicit provider keeps the single-host behavior (still provider-tagged).
+    if (providerQuery) {
+      const unsupported = unsupportedInDemo(providerQuery);
+      if (unsupported) return reply.status(400).send({ error: unsupported });
+
+      const token = await resolveGitToken(providerQuery);
+      const repositories = await fetchProviderRepositories(
+        { provider: providerQuery, token },
+        filters,
+      );
       return reply.send(repositories);
     }
-    // No token — fall back to public repo search so demo works without API keys
-    const providerClient = getGitProvider(provider, null);
-    const repositories = await providerClient.searchPublicRepositories("stars:>100", per_page || 10);
+
+    const targets = await resolveDiscoveryTargets();
+    const settled = await Promise.allSettled(
+      targets.map((target) => fetchProviderRepositories(target, filters)),
+    );
+
+    const repositories: RepositoryWithProvider[] = [];
+    let failures = 0;
+
+    settled.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        repositories.push(...result.value);
+        return;
+      }
+      failures += 1;
+      console.error(
+        `Error fetching ${targets[index]?.provider} repositories:`,
+        result.reason,
+      );
+    });
+
+    // Only fail the request when every provider failed; otherwise show the
+    // hosts that did respond.
+    if (failures === settled.length) {
+      return reply.status(500).send({ error: "Failed to fetch repositories" });
+    }
+
+    repositories.sort((a, b) =>
+      filters.direction === "asc"
+        ? (a.updated_at ?? "").localeCompare(b.updated_at ?? "")
+        : (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+    );
+
     return reply.send(repositories);
   } catch (error) {
     console.error("Error fetching repositories:", error);
@@ -154,6 +237,7 @@ export async function listCommits(
     }
 
     const project = await projectsStore.getProjectByOwnerRepo({
+      gitProvider: providerQuery ?? "github",
       providerOwner: owner,
       repositoryName: repo,
     });
@@ -217,6 +301,7 @@ export async function countCommits(
     }
 
     const project = await projectsStore.getProjectByOwnerRepo({
+      gitProvider: providerQuery ?? "github",
       providerOwner: owner,
       repositoryName: repo,
     });
