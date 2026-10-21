@@ -317,7 +317,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List GitHub repositories for the authenticated user */
+        /** @description List repositories from every connected git provider */
         get: {
             parameters: {
                 query?: {
@@ -961,7 +961,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
@@ -992,7 +992,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                        chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
                         chatModel: string;
                         embeddingProvider: "openrouter" | "ollama";
                         embeddingModel: string;
@@ -1007,7 +1007,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;

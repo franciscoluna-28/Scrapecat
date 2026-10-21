@@ -193,6 +193,7 @@ export async function streamChatMessage(opts: {
     provider: resolvedProvider,
     model: resolvedModel,
     apiKey,
+    sessionId,
     maxTokens: 8192,
     messages,
     onChunk: (chunk) => onToken(chunk),

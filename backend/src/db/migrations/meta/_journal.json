@@ -162,6 +162,13 @@
       "when": 1791203724973,
       "tag": "0022_rag_only",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792608185554,
+      "tag": "0023_opencode_go_provider",
+      "breakpoints": true
     }
   ]
 }

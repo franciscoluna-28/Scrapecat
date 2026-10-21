@@ -68,7 +68,7 @@ Tables defined in `src/db/schema.ts`:
 - **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
 - **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
-- **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`), `name` is unique
+- **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`), `name` is unique
 
 All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
 
@@ -100,7 +100,7 @@ Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:gener
 
 ## Provider naming (`src/shared/integrations/providers/registry.ts`)
 
-Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `github` | `gitlab`). No aliasing layer.
+Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only; embeddings stay on OpenRouter/Ollama.
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
@@ -154,6 +154,7 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `AI_MODEL` | Default model override |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
+| `OPENCODE_GO_API_KEY` | For the OpenCode Go chat provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
 | `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |

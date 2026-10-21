@@ -34,6 +34,25 @@ describe("GET /api/v1/models", () => {
     expect(body).toHaveProperty("models");
     expect(body.models.length).toBeGreaterThan(0);
     expect(body.models.map((m: any) => m.provider)).toContain("openrouter");
+    expect(body.models.map((m: any) => m.provider)).toContain("opencode-go");
+  });
+
+  it("returns the OpenCode Go chat-completions models", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/models?provider=opencode-go" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.models.length).toBeGreaterThan(0);
+    expect(body.models.every((m: any) => m.provider === "opencode-go")).toBe(true);
+    expect(body.models.map((m: any) => m.id)).toContain("deepseek-v4.1-flash");
+  });
+
+  it("returns no OpenCode Go embeddings", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/models?provider=opencode-go&modality=embeddings",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ models: [] });
   });
 
   it("filters by provider", async () => {

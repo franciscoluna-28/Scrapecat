@@ -90,6 +90,14 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
 
 > **Docker users:** When running in Docker, the backend connects to Ollama via `host.docker.internal`. If Ollama is running on your host machine, no extra config is needed.
 
+### 4. OpenCode Go (Optional, Chat)
+
+[OpenCode Go](https://opencode.ai/console) is an optional subscription gateway for open coding models (GLM, Kimi, DeepSeek, MiMo, and others). It is **chat-only** — embeddings still use OpenRouter or Ollama.
+
+- Subscribe and copy the API key from the OpenCode Console.
+- Store it in **Settings → API Keys**, or set `OPENCODE_GO_API_KEY`.
+- Pick an OpenCode Go model in the chat model selector. Only models served on the OpenAI-compatible `/chat/completions` endpoint are listed.
+
 ## Environment Setup
 
 ```bash

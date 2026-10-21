@@ -27,6 +27,34 @@ const OPENAI_FALLBACK = [
   { id: "o3-mini", name: "o3-mini", free: false, description: "" },
 ];
 
+/** Only Go models served on the OpenAI-compatible /chat/completions endpoint.
+GPT/Claude/Gemini/Grok/Qwen/Muse use Responses/Anthropic/Google endpoints.
+*/
+const OPENCODE_GO_CHAT_MODELS: Record<string, string> = {
+  "deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
+  "deepseek-v4-pro": "DeepSeek V4 Pro",
+  "glm-5.2": "GLM 5.2",
+  "glm-5.3": "GLM 5.3",
+  "glm-5.3-flash": "GLM 5.3 Flash",
+  "kimi-k2.7-code": "Kimi K2.7 Code",
+  "kimi-k3": "Kimi K3",
+  "longcat-2.0": "LongCat 2.0",
+  "longcat-2.5-preview-free": "LongCat 2.5 Preview Free",
+  "mimo-v2.5": "MiMo-V2.5",
+  "mimo-v2.5-pro": "MiMo-V2.5-Pro",
+  "mimo-v2.6-flash": "MiMo-V2.6-Flash",
+  "mimo-v2.6-pro": "MiMo-V2.6-Pro",
+  hy3: "Hy3",
+  "hy4-preview": "Hy4 Preview",
+  "minimax-m3.1-flash-free": "MiniMax M3.1 Flash Free",
+  "step-5-preview": "Step 5 Preview",
+  "beam-free": "Beam Free",
+};
+
+const OPENCODE_GO_FALLBACK = Object.entries(OPENCODE_GO_CHAT_MODELS).map(
+  ([id, name]) => ({ id, name, free: id.endsWith("-free"), description: "" }),
+);
+
 const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
   deepseek: DEEPSEEK_FALLBACK,
   openai: OPENAI_FALLBACK,
@@ -97,6 +125,13 @@ export async function listModels(
     return reply.send({ models });
   }
 
+  if (provider === "opencode-go") {
+    if (modality === "embeddings") return reply.send({ models: [] });
+    return reply.send({
+      models: OPENCODE_GO_FALLBACK.map((m) => ({ ...m, provider: "opencode-go" })),
+    });
+  }
+
   if (modality === "embeddings") {
     const models = await fetchOpenRouterEmbeddingModels();
     return reply.send({ models });
@@ -142,6 +177,7 @@ export async function listModels(
     ...openrouterModels.map((m) => ({ ...m, provider: "openrouter" as const })),
     ...DEEPSEEK_FALLBACK.map((m) => ({ ...m, provider: "deepseek" as const })),
     ...OPENAI_FALLBACK.map((m) => ({ ...m, provider: "openai" as const })),
+    ...OPENCODE_GO_FALLBACK.map((m) => ({ ...m, provider: "opencode-go" as const })),
   ];
 
   return reply.send({ models: all });

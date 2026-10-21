@@ -10,6 +10,7 @@ export const envSchema = z.object({
   AI_MODEL: z.string().default("mimo-v2.6-flash"),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
+  OPENCODE_GO_API_KEY: z.string().default(""),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_API_KEY: z.string().default("ollama"),
   GITHUB_TOKEN: z.string().default(""),

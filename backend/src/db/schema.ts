@@ -14,6 +14,7 @@ const AVAILABLE_CREDENTIAL_PROVIDERS = [
   "openai",
   "openrouter",
   "deepseek",
+  "opencode-go",
   "ollama",
   "github",
   "gitlab",

@@ -2,7 +2,11 @@ import { OpenRouter } from "@openrouter/sdk";
 import OpenAI from "openai";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
-import { getProviderConfig, type ProviderName } from "@/shared/integrations/providers/registry";
+import {
+  getProviderConfig,
+  getProviderHeaders,
+  PROVIDER_USER_AGENT,
+} from "@/shared/integrations/providers/registry";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -38,6 +42,7 @@ export interface AIRequest {
   maxTokens?: number;
   apiKey?: string;
   provider?: string;
+  sessionId?: string;
   stream?: boolean;
   onChunk?: (chunk: string) => void;
 }
@@ -83,9 +88,14 @@ async function callOpenAICompatible(
   baseUrl: string,
   temperature: number,
   maxTokens: number,
+  headers: Record<string, string>,
   onChunk?: (chunk: string) => void,
 ): Promise<AIResponse> {
-  const client = new OpenAI({ apiKey, baseURL: baseUrl });
+  const client = new OpenAI({
+    apiKey,
+    baseURL: baseUrl,
+    defaultHeaders: { "User-Agent": PROVIDER_USER_AGENT, ...headers },
+  });
 
   if (onChunk) {
     return streamChatCompletions(client, { model, messages, temperature, maxTokens }, onChunk);
@@ -170,6 +180,7 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
         baseUrl,
         temperature,
         maxTokens,
+        getProviderHeaders(provider, request.sessionId),
         request.onChunk,
       );
     }

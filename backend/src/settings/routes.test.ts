@@ -70,6 +70,41 @@ describe("AI settings routes", () => {
     });
   });
 
+  it("accepts OpenCode Go as a chat provider", async () => {
+    vi.mocked(settingsServices.updateAISettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      chatProvider: "opencode-go",
+      chatModel: "deepseek-v4.1-flash",
+    });
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/settings/ai",
+      payload: {
+        chatProvider: "opencode-go",
+        chatModel: "deepseek-v4.1-flash",
+        embeddingProvider: "openrouter",
+        embeddingModel: "openai/text-embedding-3-small",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects OpenCode Go as an embedding provider", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/settings/ai",
+      payload: {
+        chatProvider: "openrouter",
+        chatModel: "google/gemma-4-31b-it",
+        embeddingProvider: "opencode-go",
+        embeddingModel: "some-embedding-model",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(settingsServices.updateAISettings).not.toHaveBeenCalled();
+  });
+
   it("PUT /api/v1/settings/ai returns 400 for invalid provider", async () => {
     const res = await app.inject({
       method: "PUT",
