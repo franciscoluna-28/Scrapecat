@@ -105,3 +105,53 @@ export const DEMO_QUESTIONS: { suggestion: string; label: string }[] = [
 // ingested — e.g. for the hackathon demo after seeding.
 export const ALLOW_ADD_REPOS =
   process.env.NEXT_PUBLIC_ALLOW_ADD_REPOS !== "false";
+
+// Git providers. `GitProviderId` mirrors the backend registry (and the DB enum);
+// keep both in sync when adding a provider.
+export type GitProviderId = "github" | "gitlab";
+
+export const GIT_PROVIDER_IDS: GitProviderId[] = ["github", "gitlab"];
+
+/** Demo ingestion is GitHub-only, so don't offer providers it can't serve. */
+export const AVAILABLE_PROVIDERS: GitProviderId[] = IS_DEMO
+  ? ["github"]
+  : GIT_PROVIDER_IDS;
+
+export const GITHUB_PAT_URL = `https://github.com/settings/tokens/new?description=${BRAND.name}&scopes=repo,read:user`;
+
+/**
+ * GitLab.com token page. Self-hosted instances use the same path under their
+ * own host — users paste a token from whichever instance they connect.
+ */
+export const GITLAB_PAT_URL = `https://gitlab.com/-/user_settings/personal_access_tokens?name=${encodeURIComponent(BRAND.name)}&scopes=read_api,read_repository`;
+
+export type GitProviderMeta = {
+  id: GitProviderId;
+  label: string;
+  patUrl: string;
+  scopes: string;
+  tokenLabel: string;
+  tokenPlaceholder: string;
+  description: string;
+};
+
+export const GIT_PROVIDER_META: Record<GitProviderId, GitProviderMeta> = {
+  github: {
+    id: "github",
+    label: "GitHub",
+    patUrl: GITHUB_PAT_URL,
+    scopes: "repo and read:user",
+    tokenLabel: "GitHub personal access token",
+    tokenPlaceholder: "ghp_…",
+    description: "Connect your GitHub account to browse and clone repositories.",
+  },
+  gitlab: {
+    id: "gitlab",
+    label: "GitLab",
+    patUrl: GITLAB_PAT_URL,
+    scopes: "read_api and read_repository",
+    tokenLabel: "GitLab personal access token",
+    tokenPlaceholder: "glpat-…",
+    description: "Connect your GitLab account to browse and clone repositories.",
+  },
+};

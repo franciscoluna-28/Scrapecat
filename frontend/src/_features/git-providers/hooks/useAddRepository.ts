@@ -7,6 +7,10 @@ import { apiClient } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { parseRepoUrl } from "@/src/shared/utils/repo-url";
 import { useRepositories } from "@/src/_features/git-providers/services/git-providers-api";
+import {
+  GIT_PROVIDER_META,
+  type GitProviderId,
+} from "@/src/shared/constants";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
 import type { GitProviderRepository } from "@/src/shared/types";
 
@@ -20,9 +24,11 @@ type ConnectParams = {
 
 export function useAddRepository(
   onProjectSelected: (projectId: string) => void,
+  provider: GitProviderId = "github",
 ) {
   const queryClient = useQueryClient();
   const { repositories, isFetching } = useRepositories({
+    provider,
     type: "all",
     sort: "updated",
     direction: "desc",
@@ -53,6 +59,7 @@ export function useAddRepository(
   }: ConnectParams) => {
     const existing = projects.find(
       (p) =>
+        p.gitProvider === provider &&
         p.providerOwner === providerOwner &&
         p.repositoryName === repositoryName,
     );
@@ -67,7 +74,7 @@ export function useAddRepository(
     try {
       const res = await apiClient.POST("/api/v1/projects", {
         body: {
-          gitProvider: "github",
+          gitProvider: provider,
           providerProjectId,
           providerOwner,
           repositoryName,
@@ -107,7 +114,7 @@ export function useAddRepository(
     const parsed = parseRepoUrl(value);
     if (!parsed) {
       setError(
-        "Enter a valid GitHub URL or owner/repo, e.g. https://github.com/owner/repo",
+        `Enter a valid ${GIT_PROVIDER_META[provider].label} URL or owner/repo`,
       );
       return;
     }

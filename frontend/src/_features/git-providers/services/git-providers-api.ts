@@ -3,12 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
-import { BRAND } from "@/src/shared/constants";
+import type { GitProviderId } from "@/src/shared/constants";
 import type { GitProviderRepository } from "@/src/shared/types";
-
-export type GitProviderId = "github" | "gitlab";
-
-export const GITHUB_PAT_URL = `https://github.com/settings/tokens/new?description=${BRAND.name}&scopes=repo,read:user`;
 
 export type GitConnection = {
   connected: boolean;
@@ -91,6 +87,7 @@ export type RepoCommit = {
 };
 
 export function useRepositories(filters: {
+  provider?: GitProviderId;
   type: string;
   sort: string;
   direction: string;
@@ -103,6 +100,7 @@ export function useRepositories(filters: {
         apiClient.GET("/api/v1/repositories", {
           params: {
             query: {
+              provider: filters.provider,
               type: filters.type,
               sort: filters.sort,
               direction: filters.direction,

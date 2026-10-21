@@ -3,27 +3,55 @@ export type ParsedRepoUrl = {
   repo: string;
 };
 
+/** Path segments that mark the start of a UI route after `owner/repo`. */
+const PATH_MARKERS = new Set([
+  "-",
+  "tree",
+  "blob",
+  "commits",
+  "tags",
+  "branches",
+  "releases",
+]);
+
+function isHostSegment(segment: string): boolean {
+  return /^[^/\s]+\.[^/\s]+$/.test(segment) || segment.toLowerCase() === "localhost";
+}
+
 /**
- * Parses a GitHub repository URL into owner/repo.
- * Accepts forms like:
+ * Parses a repository URL into owner/repo.
+ * Accepts GitHub and GitLab forms (including nested GitLab groups and
+ * self-hosted hosts):
  *  - https://github.com/owner/repo
  *  - github.com/owner/repo
  *  - owner/repo
  *  - https://github.com/owner/repo.git
  *  - https://github.com/owner/repo/tree/main
+ *  - https://gitlab.com/group/subgroup/repo/-/tree/main
  * Returns null when there is no `owner/repo` pair to extract.
  */
 export function parseRepoUrl(input: string): ParsedRepoUrl | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  const cleaned = trimmed
-    .replace(/^https?:\/\//i, "")
-    .replace(/^www\./i, "")
-    .replace(/^github\.com\//i, "");
+  let path = trimmed.replace(/^https?:\/\//i, "");
+  path = path.split(/[?#]/)[0];
 
-  const [owner, repo] = cleaned.split("/").filter(Boolean);
+  const segments = path.split("/").filter(Boolean);
+  // Drop a leading host segment (github.com, gitlab.com, self-hosted instances
+  // such as git.example.com).
+  if (segments.length > 0 && isHostSegment(segments[0])) segments.shift();
+
+  // Stop at the first UI route marker (only meaningful after `owner/repo`).
+  const markerIndex = segments.findIndex(
+    (segment, index) => index >= 2 && PATH_MARKERS.has(segment.toLowerCase()),
+  );
+  const repoPath = markerIndex === -1 ? segments : segments.slice(0, markerIndex);
+  if (repoPath.length < 2) return null;
+
+  const repo = repoPath[repoPath.length - 1].replace(/\.git$/i, "");
+  const owner = repoPath.slice(0, -1).join("/");
   if (!owner || !repo) return null;
 
-  return { owner, repo: repo.replace(/\.git$/i, "") };
+  return { owner, repo };
 }

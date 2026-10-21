@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/src/components/ui/dialog";
 import { useAddRepository } from "@/src/_features/git-providers/hooks/useAddRepository";
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
 import { GitProviderConnectForm } from "@/src/_features/git-providers/components/GitProviderConnectForm";
 import { useGitConnection } from "@/src/_features/git-providers/services/git-providers-api";
-import { IS_DEMO } from "@/src/shared/constants";
+import {
+  GIT_PROVIDER_META,
+  IS_DEMO,
+  type GitProviderId,
+} from "@/src/shared/constants";
 
 type Props = {
   onProjectSelected: (projectId: string) => void;
@@ -16,6 +21,8 @@ type Props = {
 };
 
 export function AddRepositoryDialog({ onProjectSelected, children, open: controlledOpen, onOpenChange }: Props) {
+  const [provider, setProvider] = useState<GitProviderId>("github");
+
   const {
     open: internalOpen,
     setOpen: internalSetOpen,
@@ -28,10 +35,11 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
     existingProjectIds,
     connectByRepo,
     connectByUrl,
-  } = useAddRepository(onProjectSelected);
+  } = useAddRepository(onProjectSelected, provider);
 
-  const { connection } = useGitConnection();
+  const { connection } = useGitConnection(provider);
   const connected = connection?.connected ?? false;
+  const meta = GIT_PROVIDER_META[provider];
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange ?? internalSetOpen;
@@ -49,15 +57,18 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           <DialogDescription>
             {IS_DEMO
               ? "Add a public GitHub repository by URL, or pick from popular public repos."
-              : "Pick from your GitHub repos or paste a URL."}
+              : "Pick from your GitHub or GitLab repos or paste a URL."}
           </DialogDescription>
         </DialogHeader>
 
         {!connected && !IS_DEMO ? (
           <div className="space-y-4">
-            <GitProviderConnectForm />
+            <GitProviderConnectForm
+              provider={provider}
+              onProviderChange={setProvider}
+            />
             <p className="text-xs text-muted-foreground">
-              Connect GitHub first to browse and clone repositories.
+              Connect {meta.label} first to browse and clone repositories.
             </p>
           </div>
         ) : (
@@ -66,7 +77,10 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
                 only) — never ask visitors for their own GitHub token. */}
             {!IS_DEMO && (
               <div className="rounded-md border p-3">
-                <GitProviderConnectForm />
+                <GitProviderConnectForm
+                  provider={provider}
+                  onProviderChange={setProvider}
+                />
               </div>
             )}
 
@@ -83,6 +97,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
               onConnect={connectByUrl}
               connecting={connecting}
               error={error}
+              placeholder={`Paste a ${meta.label} URL or owner/repo`}
             />
 
             <div className="text-xs text-muted-foreground">
