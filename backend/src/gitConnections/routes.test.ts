@@ -7,7 +7,7 @@ const mockProvider = {
 vi.mock("@/shared/integrations/git-provider", () => ({
   getGitProvider: vi.fn(() => mockProvider),
   getGitProviderConfig: vi.fn((provider: string) => {
-    if (provider !== "github") {
+    if (provider !== "github" && provider !== "gitlab") {
       throw new Error(`Git provider "${provider}" is not implemented yet`);
     }
     return { id: provider };
@@ -96,15 +96,38 @@ describe("POST /api/v1/git-providers/:provider/connection", () => {
     expect(mockStore.upsertCredential).not.toHaveBeenCalled();
   });
 
-  it("rejects an unimplemented provider", async () => {
+  it("stores a valid GitLab token under the gitlab provider", async () => {
+    mockProvider.verifyConnection.mockResolvedValue({ login: "gl-user" });
+    mockStore.upsertCredential.mockResolvedValue({ id: "2" });
+
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/git-providers/gitlab/connection",
-      payload: { token: "glpat" },
+      payload: { token: "glpat_valid" },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({
+      connected: true,
+      source: "token",
+      login: "gl-user",
+    });
+    expect(mockStore.upsertCredential).toHaveBeenCalledWith({
+      provider: "gitlab",
+      encryptedKey: "glpat_valid",
+      keyHint: "glpa...",
+    });
+  });
+
+  it("rejects an unknown provider", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/git-providers/bitbucket/connection",
+      payload: { token: "tok" },
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/not implemented/);
+    expect(res.json()).toHaveProperty("error");
   });
 });
 
@@ -177,14 +200,32 @@ describe("GET /api/v1/git-providers/:provider/connection", () => {
     });
   });
 
-  it("rejects an unimplemented provider", async () => {
+  it("reports a GitLab connection independently of GitHub", async () => {
+    mockResolveGitToken.mockResolvedValue("glpat_env");
+    mockStore.getLatestCredential.mockResolvedValue(null);
+    mockProvider.verifyConnection.mockResolvedValue({ login: "gl-env-user" });
+
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/git-providers/gitlab/connection",
     });
 
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      connected: true,
+      source: "env",
+      login: "gl-env-user",
+    });
+  });
+
+  it("rejects an unknown provider", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/git-providers/bitbucket/connection",
+    });
+
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/not implemented/);
+    expect(res.json()).toHaveProperty("error");
   });
 });
 

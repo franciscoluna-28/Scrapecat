@@ -17,12 +17,12 @@ flowchart TB
     subgraph D["Data"]
         PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
         STORE["Per-domain stores (routes never touch db directly)"]
-        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit (discovery only)"]
+        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit / GitLab REST (discovery only)"]
     end
     FE --> API --> PG
     API --> STORE --> PG
     API --> INFRA
-    INFRA -.->|future| EXT["GitLab · Bitbucket"]
+    INFRA -.->|future| EXT["Bitbucket"]
 ```
 
 ## RAG pipeline
@@ -134,9 +134,10 @@ registry owns each provider's URLs, clone auth, env key, and client factory;
 `getGitProvider(provider, token)` returns the interface, never a concrete
 adapter. Connection routes are provider-generic
 (`/api/v1/git-providers/:provider/connection`) and all token precedence lives in
-`resolveGitToken`. Adding GitLab is a registry entry plus an adapter, not a
-call-site sweep. Full DI is deliberately unused: the registry/factory is the
-seam and is enough for one adapter per provider.
+`resolveGitToken`. Adding a provider is a registry entry plus an adapter, not a
+call-site sweep — GitLab (`GitlabAdapter` + a thin `fetch` client, self-hosted
+via `GITLAB_HOST`) was exactly that. Full DI is deliberately unused: the
+registry/factory is the seam and is enough for one adapter per provider.
 
 ### Database coupling
 
@@ -195,8 +196,9 @@ Decouple in phases, no big-bang rewrites:
    and provider-generic connection routes own auth.
 2. **Data access layer** — per-domain stores (already largely in place); vector
    search infrastructure is ready.
-3. **Next provider** — add a GitLab adapter and registry entry. Demo ingestion
-   remains GitHub-only until a GitLab API source is justified.
+3. **Next provider** — GitLab is done (gitlab.com by default, `GITLAB_HOST` for
+   self-hosted). Demo ingestion remains GitHub-only; a Bitbucket adapter would
+   follow the same registry/adapter pattern.
 
 Full DI is not on the roadmap: the factory is the seam, and injecting services
 would add ceremony without a second consumer. Each future migration: implement

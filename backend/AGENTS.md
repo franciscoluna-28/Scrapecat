@@ -106,7 +106,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`) in
 
 Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `searchPublicRepositories`, `listBranches`, `getDefaultBranch`, `getRepositoryId`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface. The default branch is resolved via the provider API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
 
-Currently only `GithubAdapter` (`github-adapter.ts`) is implemented, using `@octokit/core` with throttling and retry plugins. Shared Octokit construction lives in `octokit.ts` (`createOctokit(token?)`; token optional for anonymous public access). The factory `getGitProvider(provider, token?)` in `index.ts` returns the interface via the registry's `createAdapter`; the provider comes from the project/request (`project.gitProvider`), never a global env setting. The app-layer `GitProviderId` is defined in `registry.ts`, independent of the DB enum. Provider wiring lives in `registry.ts` (`getGitProviderConfig`): token env var, commit/clone URLs, clone auth header, and adapter factory. Unimplemented providers throw instead of silently falling back to GitHub. Token resolution goes through `resolveGitToken(provider)`; connection storage/verification lives in `src/gitConnections/`. Demo commit reads do not use this interface — they live in `src/repositories/github-api.ts`.
+`GithubAdapter` (`github-adapter.ts`) uses `@octokit/core` with throttling and retry plugins; shared construction lives in `octokit.ts` (`createOctokit(token?)`, token optional for anonymous public access). `GitlabAdapter` (`gitlab-adapter.ts`) uses a thin native-`fetch` client in `gitlab-client.ts` (auth, timeout, bounded retry, `x-next-page` pagination) — deliberately not a GitLab SDK, since the discovery surface is small and we need retry/backoff the SDK does not provide. `GITLAB_HOST` selects the instance (default `https://gitlab.com`) and is used for API, web, and clone URLs; nested `group/subgroup/project` paths are URL-encoded. The factory `getGitProvider(provider, token?)` in `index.ts` returns the interface via the registry's `createAdapter`; the provider comes from the project/request (`project.gitProvider`), never a global env setting. The app-layer `GitProviderId` is defined in `registry.ts`, independent of the DB enum. Provider wiring lives in `registry.ts` (`getGitProviderConfig`): host, token env var, commit/clone URLs, clone auth header, and adapter factory. Unimplemented providers throw instead of silently falling back to GitHub. Token resolution goes through `resolveGitToken(provider)`; connection storage/verification lives in `src/gitConnections/`. Demo commit reads do not use this interface — they live in `src/repositories/github-api.ts`, and demo mode rejects non-GitHub providers (`gitRepositories/routes.ts`, `api-source.ts`).
 
 Git connection API: `GET|POST|DELETE /api/v1/git-providers/:provider/connection` is the single token lifecycle for every provider (stored credential or env fallback). Do not add provider-specific connection routes.
 
@@ -149,7 +149,8 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `ENCRYPTION_KEY` | Required; any base64 32-byte string |
 | `OPENROUTER_API_KEY` | For OpenRouter (warned if missing) |
 | `GITHUB_TOKEN` | GitHub personal access token (warned if missing); used for the archive clone |
-| `GITLAB_TOKEN` | GitLab personal access token (reserved for the future GitLab adapter) |
+| `GITLAB_TOKEN` | GitLab personal access token (`read_api`, `read_repository`); discovery + archive clone |
+| `GITLAB_HOST` | GitLab instance origin (default `https://gitlab.com`); set for self-hosted |
 | `AI_MODEL` | Default model override |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
@@ -165,4 +166,5 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 - `src/shared/queue/` — in-process job queue, handler registry, and the `ingest-branch` job
 - `src/repositories/` — archive clone/hydrate, git reading, ingestion orchestrator
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
+- `src/shared/integrations/git-provider/gitlab-client.ts` + `gitlab-adapter.ts` — GitLab REST client (auth/retry/pagination), self-hosted host, field mapping
 - `src/credentials/encryption.ts` — AES-256-GCM details

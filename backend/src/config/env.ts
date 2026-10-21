@@ -14,6 +14,9 @@ export const envSchema = z.object({
   OLLAMA_API_KEY: z.string().default("ollama"),
   GITHUB_TOKEN: z.string().default(""),
   GITLAB_TOKEN: z.string().default(""),
+  // Git host origin for GitLab discovery/clone. Defaults to gitlab.com; set it
+  // to an instance URL (e.g. https://gitlab.example.com) for self-hosted.
+  GITLAB_HOST: z.string().default("https://gitlab.com"),
   ENCRYPTION_KEY: z.string().default(""),
   // Postgres connection pool size. Serverless hosts (Vercel) should use a
   // pooled connection string and set this to 1 to avoid exhausting connections.

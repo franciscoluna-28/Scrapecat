@@ -4,7 +4,6 @@ import {
   getGitProvider,
   commitUrl,
 } from "@/shared/integrations/git-provider";
-import { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { restrictDemoBranches } from "@/shared/demo-branches";
 import { listCommitsFromApi } from "@/repositories/github-api";
@@ -23,6 +22,18 @@ function parseDate(value?: string): Date | undefined {
   return value ? new Date(`${value}T00:00:00.000Z`) : undefined;
 }
 
+/**
+ * Demo ingestion reads the public GitHub REST API only (no git binary). GitLab
+ * is a self-hosted-path provider for now, so reject it up front instead of
+ * silently querying GitHub for a GitLab repository.
+ */
+function unsupportedInDemo(provider: string): string | null {
+  if (env.isDemoMode && provider !== "github") {
+    return "Demo mode only supports GitHub repositories";
+  }
+  return null;
+}
+
 export async function listRepositories(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -35,6 +46,9 @@ export async function listRepositories(
     per_page,
   } = req.query as Static<typeof RepositoriesQuery>;
   const provider = providerQuery ?? "github";
+
+  const unsupported = unsupportedInDemo(provider);
+  if (unsupported) return reply.status(400).send({ error: unsupported });
 
   try {
     const token = await resolveGitToken(provider);
@@ -67,6 +81,9 @@ export async function listBranches(
   const { provider: providerQuery } = req.query as Static<typeof BranchesQuery>;
   // The client passes the project's provider, so discovery needs no DB read.
   const gitProvider = providerQuery ?? "github";
+
+  const unsupported = unsupportedInDemo(gitProvider);
+  if (unsupported) return reply.status(400).send({ error: unsupported });
 
   try {
     const provider = getGitProvider(gitProvider, await resolveGitToken(gitProvider));
@@ -109,7 +126,8 @@ export async function listCommits(
       // Demo has no guaranteed project row; the client supplies the provider.
       const gitProvider = providerQuery ?? "github";
       // Demo reads use the GitHub REST API; fail fast for other providers.
-      getGitProviderConfig(gitProvider);
+      const unsupported = unsupportedInDemo(gitProvider);
+      if (unsupported) return reply.status(400).send({ error: unsupported });
       const ref =
         branch ||
         (await getGitProvider(gitProvider, await resolveGitToken(gitProvider)).getDefaultBranch(
@@ -179,7 +197,8 @@ export async function countCommits(
     if (env.isDemoMode) {
       // Demo has no guaranteed project row; the client supplies the provider.
       const gitProvider = providerQuery ?? "github";
-      getGitProviderConfig(gitProvider);
+      const unsupported = unsupportedInDemo(gitProvider);
+      if (unsupported) return reply.status(400).send({ error: unsupported });
       const ref =
         branch ||
         (await getGitProvider(gitProvider, await resolveGitToken(gitProvider)).getDefaultBranch(

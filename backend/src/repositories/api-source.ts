@@ -1,6 +1,5 @@
 import { timed } from "@/shared/timing";
 import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
-import { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
 import { getChangedFilesForShas, listCommitsFromApi } from "@/repositories/github-api";
 import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
 import type { CommitSource, SourceContext } from "@/repositories/ingest";
@@ -21,8 +20,9 @@ export function createApiCommitSource(opts: {
   branch: string;
 }): CommitSource {
   const { gitProvider, owner, repo, branch } = opts;
-  // Fail fast for unimplemented providers instead of silently reading GitHub.
-  getGitProviderConfig(gitProvider);
+  if (gitProvider !== "github") {
+    throw new Error(`Demo mode does not support ${gitProvider} ingestion`);
+  }
 
   return {
     batchSize: Infinity,

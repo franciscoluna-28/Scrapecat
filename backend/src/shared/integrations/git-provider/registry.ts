@@ -1,10 +1,12 @@
+import { env } from "@/config/env";
 import { GithubAdapter } from "@/shared/integrations/git-provider/github-adapter";
+import { GitlabAdapter } from "@/shared/integrations/git-provider/gitlab-adapter";
+import { normalizeGitlabHost } from "@/shared/integrations/git-provider/gitlab-client";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
 
 /**
  * App-layer git providers. Deliberately separate from the DB enum: the
  * persistence layer owns its own type, and the application maps between them.
- * `gitlab` is a valid provider identity but has no implementation yet.
  */
 export const GIT_PROVIDERS = ["github", "gitlab"] as const;
 export type GitProviderId = (typeof GIT_PROVIDERS)[number];
@@ -17,6 +19,8 @@ export type GitProviderId = (typeof GIT_PROVIDERS)[number];
  */
 export type GitProviderConfig = {
   id: GitProviderId;
+  /** Web/API origin for the host (env-driven for self-hosted GitLab). */
+  host: string;
   tokenEnvKey: "GITHUB_TOKEN" | "GITLAB_TOKEN";
   commitPath: (owner: string, repo: string, sha: string) => string;
   cloneUrl: (owner: string, repo: string) => string;
@@ -25,8 +29,12 @@ export type GitProviderConfig = {
   createAdapter: (token: string | null) => GitProvider;
 };
 
+/** Self-hosted instances are supported by pointing GITLAB_HOST at the install. */
+const GITLAB_HOST = normalizeGitlabHost(env.GITLAB_HOST);
+
 const GITHUB: GitProviderConfig = {
   id: "github",
+  host: "https://github.com",
   tokenEnvKey: "GITHUB_TOKEN",
   commitPath: (owner, repo, sha) => `https://github.com/${owner}/${repo}/commit/${sha}`,
   cloneUrl: (owner, repo) => `https://github.com/${owner}/${repo}.git`,
@@ -35,8 +43,22 @@ const GITHUB: GitProviderConfig = {
   createAdapter: (token) => new GithubAdapter(token),
 };
 
+const GITLAB: GitProviderConfig = {
+  id: "gitlab",
+  host: GITLAB_HOST,
+  tokenEnvKey: "GITLAB_TOKEN",
+  commitPath: (owner, repo, sha) =>
+    `${GITLAB_HOST}/${owner}/${repo}/-/commit/${sha}`,
+  cloneUrl: (owner, repo) => `${GITLAB_HOST}/${owner}/${repo}.git`,
+  // GitLab authenticates HTTPS git with a PAT as the `oauth2` user.
+  authorization: (token) =>
+    `basic ${Buffer.from(`oauth2:${token}`).toString("base64")}`,
+  createAdapter: (token) => new GitlabAdapter(token, GITLAB_HOST),
+};
+
 const REGISTRY: Partial<Record<GitProviderId, GitProviderConfig>> = {
   github: GITHUB,
+  gitlab: GITLAB,
 };
 
 /**

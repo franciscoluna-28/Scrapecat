@@ -99,6 +99,8 @@ cp backend/.env.example backend/.env
 At minimum, set `OPENROUTER_API_KEY` (LLM access — free key at
 [openrouter.ai/keys](https://openrouter.ai/keys)) and, for self-hosted,
 `GITHUB_TOKEN` (repository access — [github.com/settings/tokens](https://github.com/settings/tokens)).
+GitLab is supported too: connect a token in Settings, or set `GITLAB_TOKEN`
+(`read_api`, `read_repository`) and `GITLAB_HOST` for a self-hosted instance.
 
 For the full list of backend and frontend variables, their defaults, and
 copy-paste demo/self-hosted configurations, see

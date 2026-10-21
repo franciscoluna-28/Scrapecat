@@ -25,9 +25,9 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-1 | **GitLab adapter** | integrations | The seam is ready: registry/factory, provider-aware URLs and clone auth, and generic connection routes all exist. Remaining work is a `GitlabAdapter`, one `REGISTRY.gitlab` entry (`GITLAB_TOKEN`, GitLab URLs/auth), and a frontend provider selector. Demo/serverless ingestion is still GitHub-only, so either gate GitLab to self-hosted or add a GitLab API source separately. |
 | P2-2 | **Scheduled / webhook re-ingest** | ingestion | Ingestion is on-demand per chat, so "what did engineering do today?" depends on someone opening the app. A GitHub webhook or cron re-ingest is what makes the core promise actually true. |
 | P2-3 | **Orphaned archive cleanup on delete** | storage | Deleting a project cascades in Postgres but orphans its S3 object / fs clone (`AGENTS.md:82`). Regenerable but silently leaks. Add a delete hook. |
+| P2-4 | **Per-instance GitLab hosts** | integrations | `GITLAB_HOST` is a server-wide setting. Multi-tenant/self-hosted-per-project needs the host stored alongside the project/credential (the credentials table is keyed by provider only, so two instances would collide). |
 
 ## P3 — Deferred / strategic
 
@@ -42,7 +42,8 @@ All P0 items are complete — see [Done](#done--completed).
 
 ## Sequencing rationale
 
-Eval harness + reranking → providers + embedding invalidation → GitLab.
+Eval harness + reranking → providers + embedding invalidation → next provider
+(GitLab landed; Bitbucket would follow the same adapter pattern).
 Product differentiators (personas, integrations) and auth stay deferred until
 retrieval quality is measurable and the platform is multi-tenant-ready. See
 `docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
@@ -55,3 +56,4 @@ structural debt.
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
+| P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
