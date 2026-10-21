@@ -29,7 +29,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
                 <SidebarMenuButton size="lg" asChild>
                   <a href="/app">
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                      <Image src={LogoImage} alt={BRAND.logoAlt} width={28} height={28} className="size-7" />
+                      <Image src={LogoImage} alt={BRAND.logoAlt} width={28} height={28} />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">{BRAND.name}</span>
