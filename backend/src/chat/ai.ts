@@ -1,27 +1,25 @@
-import { OpenRouter } from "@openrouter/sdk";
-import OpenAI from "openai";
+import { generateText, streamText } from "ai";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
-import {
-  getProviderConfig,
-  getProviderHeaders,
-  PROVIDER_USER_AGENT,
-} from "@/shared/integrations/providers/registry";
-
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+import { resolveModel } from "@/shared/integrations/providers/catalog";
+import { createLanguageModel } from "@/shared/integrations/providers/protocols";
+import { getProviderConfig } from "@/shared/integrations/providers/registry";
 
 /**
  * Pulls the provider's own request id off an SDK error so a failed upstream
- * call can be reported back to the provider (OpenAI exposes `x-request-id`
- * header and `request_id`; OpenRouter mirrors the header).
+ * call can be reported back to the provider.
  */
 function providerRequestId(error: unknown): string | undefined {
   const e = error as {
+    responseHeaders?: Record<string, string | undefined>;
     headers?: Record<string, unknown>;
     request_id?: string;
     response?: { headers?: { get?: (name: string) => string | null } };
   };
-  const header = e?.headers?.["x-request-id"] ?? e?.headers?.["x-requestid"];
+  const header =
+    e?.responseHeaders?.["x-request-id"] ??
+    e?.headers?.["x-request-id"] ??
+    e?.headers?.["x-requestid"];
   return (
     (typeof header === "string" ? header : undefined) ??
     e?.request_id ??
@@ -52,100 +50,18 @@ export interface AIResponse {
   finishReason?: string | null;
 }
 
-async function callOpenRouter(
-  messages: AIMessage[],
-  model: string,
-  apiKey: string,
-  temperature: number,
-  maxTokens: number,
-  onChunk?: (chunk: string) => void,
-): Promise<AIResponse> {
-  if (onChunk) {
-    const client = new OpenAI({ apiKey, baseURL: OPENROUTER_BASE_URL });
-    return streamChatCompletions(client, { model, messages, temperature, maxTokens }, onChunk);
-  }
-
-  const openRouter = new OpenRouter({ apiKey });
-  const result = await openRouter.chat.send({
-    chatRequest: { model, messages, temperature, maxTokens },
-  });
-
-  const rawContent =
-    (typeof (result as any).choices?.[0]?.message?.content === "string"
-      ? (result as any).choices[0].message.content
-      : "") || "";
-
+function splitMessages(messages: AIMessage[]) {
   return {
-    content: rawContent,
-    finishReason: (result as any).choices?.[0]?.finish_reason ?? null,
+    system: messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content)
+      .join("\n\n"),
+    conversation: messages.flatMap((message) =>
+      message.role === "system"
+        ? []
+        : [{ role: message.role, content: message.content }],
+    ),
   };
-}
-
-async function callOpenAICompatible(
-  messages: AIMessage[],
-  model: string,
-  apiKey: string,
-  baseUrl: string,
-  temperature: number,
-  maxTokens: number,
-  headers: Record<string, string>,
-  onChunk?: (chunk: string) => void,
-): Promise<AIResponse> {
-  const client = new OpenAI({
-    apiKey,
-    baseURL: baseUrl,
-    defaultHeaders: { "User-Agent": PROVIDER_USER_AGENT, ...headers },
-  });
-
-  if (onChunk) {
-    return streamChatCompletions(client, { model, messages, temperature, maxTokens }, onChunk);
-  }
-
-  const result = await client.chat.completions.create({
-    model,
-    messages,
-    temperature,
-    max_tokens: maxTokens,
-  });
-
-  return {
-    content: result.choices?.[0]?.message?.content ?? "",
-    finishReason: result.choices?.[0]?.finish_reason ?? null,
-  };
-}
-
-async function streamChatCompletions(
-  client: OpenAI,
-  params: {
-    model: string;
-    messages: AIMessage[];
-    temperature: number;
-    maxTokens: number;
-  },
-  onChunk: (chunk: string) => void,
-): Promise<AIResponse> {
-  let content = "";
-  let finishReason: string | null | undefined;
-
-  const stream = await client.chat.completions.create({
-    model: params.model,
-    messages: params.messages,
-    temperature: params.temperature,
-    max_tokens: params.maxTokens,
-    stream: true,
-  });
-
-  for await (const part of stream) {
-    const delta = part.choices?.[0]?.delta?.content;
-    if (delta) {
-      content += delta;
-      onChunk(delta);
-    }
-    const reason = part.choices?.[0]?.finish_reason;
-    if (reason) finishReason = reason;
-  }
-
-  return { content, finishReason: finishReason ?? null };
 }
 
 export async function callAI(request: AIRequest): Promise<AIResponse> {
@@ -156,8 +72,15 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
     throw new Error(`Unsupported provider: ${provider}`);
   }
 
-  const apiKey = request.apiKey || (env as unknown as Record<string, string>)[config.envKey] || "";
-  const model = request.model || config.defaultModel;
+  const apiKey =
+    request.apiKey ||
+    env[config.envKey] ||
+    (provider === "ollama" ? "ollama" : "");
+  const model = resolveModel(
+    provider,
+    request.model || config.defaultModel,
+    config.defaultProtocol,
+  );
   const temperature = request.temperature ?? 0.1;
   const maxTokens = request.maxTokens ?? 4096;
 
@@ -165,40 +88,50 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
     throw new Error(`Missing API key for provider: ${provider}`);
   }
 
+  const { system, conversation } = splitMessages(request.messages);
+  const languageModel = createLanguageModel({
+    provider,
+    config,
+    model,
+    apiKey,
+    sessionId: request.sessionId,
+  });
+  const settings = {
+    model: languageModel,
+    messages: conversation,
+    temperature,
+    maxOutputTokens: maxTokens,
+    ...(system ? { system } : {}),
+  };
+
   try {
-    if (config.sdk === "openrouter") {
-      return await callOpenRouter(request.messages, model, apiKey, temperature, maxTokens, request.onChunk);
+    if (request.onChunk) {
+      const result = streamText(settings);
+      for await (const chunk of result.textStream) {
+        request.onChunk(chunk);
+      }
+      return {
+        content: await result.text,
+        finishReason: await result.finishReason,
+      };
     }
 
-    if (config.sdk === "openai-compatible") {
-      const baseUrl =
-        provider === "ollama" ? `${env.OLLAMA_BASE_URL}/v1` : config.baseUrl;
-      return await callOpenAICompatible(
-        request.messages,
-        model,
-        apiKey || "ollama",
-        baseUrl,
-        temperature,
-        maxTokens,
-        getProviderHeaders(provider, request.sessionId),
-        request.onChunk,
-      );
-    }
-
-    throw new Error(`Unknown SDK type for provider: ${provider}`);
+    const result = await generateText(settings);
+    return { content: result.text, finishReason: result.finishReason };
   } catch (error) {
     const upstreamId = providerRequestId(error);
     logger.error(
       {
         provider,
-        model,
+        model: model.id,
         providerRequestId: upstreamId,
         err: (error as Error)?.message ?? String(error),
       },
       "callAI failed",
     );
     if (upstreamId && error instanceof Error) {
-      (error as Error & { providerRequestId?: string }).providerRequestId = upstreamId;
+      (error as Error & { providerRequestId?: string }).providerRequestId =
+        upstreamId;
     }
     throw error;
   }
@@ -224,7 +157,8 @@ export class ProviderKeyError extends Error {
   readonly status = 400;
 
   constructor(provider: string) {
-    const envKey = getProviderConfig(provider)?.envKey ?? "the provider's env key";
+    const envKey =
+      getProviderConfig(provider)?.envKey ?? "the provider's env key";
     super(
       `No API key configured for AI provider "${provider}". Add one in Settings or set ${envKey}.`,
     );
