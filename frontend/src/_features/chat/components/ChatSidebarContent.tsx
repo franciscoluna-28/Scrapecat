@@ -12,6 +12,8 @@ import { SidebarNewChatMenu } from "@/src/_features/chat/components/SidebarNewCh
 import { SidebarProjectList } from "@/src/_features/chat/components/SidebarProjectList";
 import { SidebarNavigation } from "@/src/_features/chat/components/SidebarNavigation";
 import { useSidebarProjects } from "@/src/_features/chat/hooks/useSidebarProjects";
+import { resolveActiveProjectId } from "@/src/_features/chat/hooks/useChatProject";
+import { useActiveProjectStore } from "@/src/store/active-project";
 import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
 import type { DemoProjectEntry } from "@/src/_features/demo/hooks/useDemoProjects";
 
@@ -20,12 +22,21 @@ export function ChatSidebarContent() {
   const searchParams = useSearchParams();
   const {
     projectEntries,
+    projects,
     isLoading: projectsLoading,
     isDemo,
     ensureProject,
   } = useSidebarProjects();
+  const lastProjectId = useActiveProjectStore((s) => s.lastProjectId);
+  const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
 
-  const projectId = searchParams.get("project");
+  const projectId = resolveActiveProjectId({
+    projectParam: searchParams.get("project"),
+    lastProjectId,
+    projects,
+    projectsLoading,
+    isDemo,
+  });
   const sessionId = searchParams.get("session");
 
   const { sessions, isLoading: sessionsLoading } = useChatSessions(
@@ -37,6 +48,7 @@ export function ChatSidebarContent() {
   const [openingDemo, setOpeningDemo] = useState<string | null>(null);
 
   const navigate = (params: Record<string, string | null>) => {
+    if (params.project) setLastProjectId(params.project);
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v) p.set(k, v);

@@ -42,5 +42,5 @@ export function useSidebarProjects() {
     ];
   }, [isDemo, demoProjects, projects]);
 
-  return { projectEntries, isLoading, isDemo, ensureProject };
+  return { projectEntries, projects, isLoading, isDemo, ensureProject };
 }

@@ -21,6 +21,7 @@ import {
   replaceStreaming,
   removeStreaming,
 } from "./live-messages";
+import { buildChatUrl } from "./chat-url";
 
 type UseAIChatOptions = {
   projectId: string | null;
@@ -45,6 +46,14 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const [ingestionProgress, setIngestionProgress] = useState<StreamChunk & { type: "progress" } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
+  const sessionKey = `${projectId ?? ""}:${sessionId ?? ""}`;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLiveMessages([]);
+    setIngestionProgress(null);
+    forceScrollRef.current = true;
+  }, [sessionKey]);
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
   const streamingId = liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.id ?? null;
@@ -52,21 +61,11 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.content.length ?? 0;
   const isAwaitingResponse = isStreaming && streamingContentLength === 0;
 
-  // Clear stale live messages when session or project changes.
-  useEffect(() => {
-    setLiveMessages([]);
-    setIngestionProgress(null);
-  }, [sessionId, projectId]);
-
   const scrollToBottom = useCallback((force: boolean) => {
     const container = bottomRef.current?.closest("[data-chat-scroll]") as HTMLElement | null;
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: force ? "smooth" : "auto" });
   }, []);
-
-  useEffect(() => {
-    forceScrollRef.current = true;
-  }, [sessionId]);
 
   useEffect(() => {
     const el = bottomRef.current;
@@ -78,7 +77,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       forceScrollRef.current = false;
       scrollToBottom(force);
     }
-  }, [messages.length, streamingContentLength, scrollToBottom]);
+  }, [messages.length, streamingContentLength, sessionKey, scrollToBottom]);
 
   // Project switching: clear all stale chat queries so old sessions don't bleed.
   useEffect(() => {
@@ -101,10 +100,18 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         const created = await createSession.mutateAsync(projectId);
         sid = created.id;
         isNewSession = true;
-        // Read current URL instead of stale searchParams snapshot.
-        const p = new URLSearchParams(window.location.search);
-        p.set("session", sid);
-        router.replace(`/app?${p.toString()}`, { scroll: false });
+      }
+
+      // Read the current URL (not the stale searchParams snapshot) and clear
+      // any one-shot prompt while persisting the active project/session.
+      const nextUrl = buildChatUrl(
+        window.location.pathname,
+        window.location.search,
+        projectId,
+        sid,
+      );
+      if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+        router.replace(nextUrl, { scroll: false });
       }
 
       const userMsg: ChatMessage = {

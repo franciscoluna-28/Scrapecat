@@ -16,6 +16,17 @@ export async function prepareProjectBranch(projectId: string, branch: string) {
   );
 }
 
+export function usePrepareProjectBranch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, branch }: { projectId: string; branch: string }) =>
+      prepareProjectBranch(projectId, branch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
+    },
+  });
+}
+
 export function useChatSessions(projectId?: string) {
   const query = projectId ? { projectId } : undefined;
   const { data, error, isLoading, isFetching } = useQuery({

@@ -1,12 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { useActiveProjectStore } from "@/src/store/active-project";
-import { useChatBranchStore } from "@/src/store/chat-branch";
 import { BookOpen } from "lucide-react";
-import { toast } from "sonner";
 import {
   Empty,
   EmptyHeader,
@@ -14,100 +8,40 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "@/src/components/ui/empty";
-import { useProjects } from "@/src/_features/chat/services/projects-api";
-import { useBranches } from "@/src/_features/git-providers/services/git-providers-api";
-import { prepareProjectBranch } from "@/src/_features/chat/services/chat-api";
-import { queryKeys } from "@/src/shared/services/keys";
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
-import { useDemoProjects } from "@/src/_features/demo/hooks/useDemoProjects";
+import { useChatProject } from "@/src/_features/chat/hooks/useChatProject";
+import { useAutoSendPrompt } from "@/src/_features/chat/hooks/useAutoSendPrompt";
 import { IS_DEMO, DEMO_PROJECTS } from "@/src/shared/constants";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
 
 export function Chat() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const { projects, isLoading: projectsLoading } = useProjects();
-  const { isDemo, ensureProject } = useDemoProjects();
-  const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
-  const { getBranch, setBranch } = useChatBranchStore();
+  const {
+    projectId,
+    sessionId,
+    activeProject,
+    branches,
+    branch,
+    defaultBranch,
+    selectProject,
+    changeBranch,
+  } = useChatProject();
 
-  const projectId = searchParams.get("project");
-  const sessionId = searchParams.get("session");
+  const {
+    messages,
+    messagesLoading,
+    streamingId,
+    isStreaming,
+    isAwaitingResponse,
+    ingestionProgress,
+    input,
+    setInput,
+    sendMessage,
+    bottomRef,
+  } = useAIChat({ projectId, sessionId, branch });
 
-  const activeProjectData = projects.find((p) => p.id === projectId) ?? null;
-  const activeProject = activeProjectData?.repositoryName ?? null;
-
-  const { branches, defaultBranch } = useBranches(
-    activeProjectData?.providerOwner ?? "",
-    activeProjectData?.repositoryName ?? "",
-    activeProjectData?.gitProvider,
-  );
-
-  const branch = projectId ? getBranch(projectId, defaultBranch) : null;
-
-  // Non-demo: auto-select the last-used project (or the first one).
-  useEffect(() => {
-    if (projectId || projectsLoading || isDemo) return;
-    if (projects.length === 0) return;
-    const stored = useActiveProjectStore.getState().lastProjectId;
-    const target = projects.find((p) => p.id === stored)?.id ?? projects[0].id;
-    setLastProjectId(target);
-    router.replace(`/app?project=${target}`);
-  }, [projectId, projectsLoading, projects, isDemo, router, setLastProjectId]);
-
-  useEffect(() => {
-    if (projectId) {
-      setLastProjectId(projectId);
-    }
-  }, [projectId, setLastProjectId]);
-
-  useEffect(() => {
-    if (defaultBranch && projectId) {
-      const stored = getBranch(projectId, null);
-      if (!stored) {
-        setBranch(projectId, defaultBranch);
-      }
-    }
-  }, [defaultBranch, projectId, getBranch, setBranch]);
-
-  const handleDemoProjectClick = async (demo: (typeof DEMO_PROJECTS)[number]) => {
-    const id = await ensureProject(demo);
-    if (id) {
-      setLastProjectId(id);
-      router.push(`/app?project=${id}`);
-    }
-  };
-
-  const handleBranchChange = async (branchName: string) => {
-    if (!projectId) return;
-    await prepareProjectBranch(projectId, branchName);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
-    toast.success(`Ready to chat on ${branchName}`);
-    setBranch(projectId, branchName);
-  };
-
-  const { messages, messagesLoading, streamingId, isStreaming, isAwaitingResponse, ingestionProgress, input, setInput, sendMessage, bottomRef } =
-    useAIChat({ projectId, sessionId, branch });
-
-  // Demo: canned questions navigate here with a `q` param; send it once the
-  // project is ready, then drop the param so it isn't re-run on refresh.
-  const q = searchParams.get("q");
-  const autoSentRef = useRef<string | null>(null);
-  const sendMessageRef = useRef(sendMessage);
-  sendMessageRef.current = sendMessage;
-
-  useEffect(() => {
-    if (!projectId || !q || isStreaming || messagesLoading) return;
-    if (autoSentRef.current === q) return;
-    autoSentRef.current = q;
-    const p = new URLSearchParams(window.location.search);
-    p.delete("q");
-    router.replace(`/app?${p.toString()}`, { scroll: false });
-    void sendMessageRef.current(q);
-  }, [q, projectId, isStreaming, messagesLoading, router, searchParams]);
+  useAutoSendPrompt({ projectId, isStreaming, messagesLoading, sendMessage });
 
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
@@ -126,7 +60,7 @@ export function Chat() {
                 {DEMO_PROJECTS.map((demo) => (
                   <button
                     key={demo.repo}
-                    onClick={() => handleDemoProjectClick(demo)}
+                    onClick={() => selectProject(demo)}
                     className="flex items-center gap-3 p-4 border rounded-lg hover:bg-accent text-left transition-colors"
                   >
                     <span className="font-medium">{demo.label}</span>
@@ -172,7 +106,7 @@ export function Chat() {
                 input={input}
                 onInputChange={setInput}
                 onSubmit={sendMessage}
-                onBranchChange={handleBranchChange}
+                onBranchChange={changeBranch}
                 isStreaming={isStreaming}
                 isAwaitingResponse={isAwaitingResponse}
                 projectName={activeProject}
