@@ -4,29 +4,29 @@
 
 <br>
 
-## 🐈 Scrapecat — RAG Chat Over Git History
+## 🐈 Scrapecat - Git should explain your project
 
-Scrapecat is an engineering intelligence assistant that answers questions about your repository's history. It uses RAG (Retrieval-Augmented Generation) to find the most relevant commits and summarize them at a feature level — no more digging through git logs. Built because a CEO kept asking what engineering was doing **daily** when everything was on Git.
+Scrapecat is an engineering intelligence assistant that answers questions about your repository's history and engineering progress, connect to a repo and understand what your team has been working on.
+
+Built by a former founding engineer to stop generating reports and communicating technical progress by hand. Come on it's 2026, stop guessing what your engineers are doing. 
 
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements
-- **Data Source:** Native GitHub REST via `Octokit`, local git archive for commit ingestion
-- **Intelligence:** OpenRouter API (Google Gemma, DeepSeek, GPT-4o, etc.) or Ollama (local LLMs)
+- **Data Source:** GitHub and GitLab APIs for discovery, native git archive for self-hosted commit ingestion, GitHub REST for demo ingestion
+- **Intelligence:** OpenRouter, OpenCode Go, or Ollama (local LLMs), with protocol-aware provider routing
 - **Package Manager:** pnpm workspaces
 
 ## Core Features
 
 - **RAG Chat:** Ask questions about your code history in natural language. The system retrieves the most relevant commits via vector search (pgvector HNSW index) and summarizes them with an LLM.
 - **Feature-Level Summaries:** Related commits are grouped by feature, bug fix, refactor, or infrastructure — no individual commit listing unless asked.
-- **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to GitHub commits.
+- **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to provider commits.
 - **Project Tree Sidebar:** Connected repositories with nested chat sessions, branch selector, and navigation.
 - **Model Selection:** Pick the chat model per conversation; configure the embedding model in Settings.
 
 ## Future Roadmap
 - **External Integrations:** Connect Slack, Linear, Jira, and Notion so summaries cross-reference commits with tickets, messages, and docs.
-- **Git Adapters:** Pluggable adapters for any git source — GitLab, BitBucket, self-hosted instances, and beyond.
-- **Persona-Driven Synthesis:** Custom tone mapping tailored for CTOs, Founders, or Board Members.
 - **Enterprise-Grade Security:** E2E Encryption, SSO, and Organization-level RBAC.
 
 AI is increasing commit velocity, not reducing it. Scrapecat is the missing layer that translates engineering output into something every department can actually understand.
@@ -46,10 +46,12 @@ Ingestion is batch/archive-based (see [`docs/architecture.md`](./docs/architectu
 ## Demo Mode (public concept demo)
 
 Scrapecat ships a serverless-first **demo profile** used for the public, hosted
-concept demo (targeting Cloudflare Workers). It reads public repos over the
-GitHub REST API — no git binary or disk — serves every read from PostgreSQL, and
-locks visitors to a pre-ingested repository set. It is opt-in via env vars and
-does not change the self-hosted product. See [`docs/demo.md`](./docs/demo.md).
+concept demo. It runs on a Node-compatible serverless host — the current
+deployment guide targets Vercel — and reads public repos over the GitHub REST API
+with no git binary or disk. Every read is served from PostgreSQL, and visitors
+are locked to a pre-ingested repository set. It is opt-in via env vars and does
+not change the self-hosted product. See [`docs/demo.md`](./docs/demo.md) and
+[`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
 
 ## Getting Started
 
