@@ -100,6 +100,8 @@ export const commitChunks = pgTable(
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
     embedding: vector("embedding", { dimensions: 768 }),
+    embeddingProvider: text("embedding_provider"),
+    embeddingModel: text("embedding_model"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
     metadata: jsonb("metadata")

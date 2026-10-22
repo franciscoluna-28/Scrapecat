@@ -95,16 +95,27 @@ describe("embedTexts", () => {
     });
 
     await embedTexts(["x"], {
-      provider: "deepseek",
-      model: "deepseek-v4-flash",
+      provider: "openrouter",
+      model: "openai/text-embedding-3-large",
     });
 
     expect(mockCtor).toHaveBeenCalledWith(
-      expect.objectContaining({ baseURL: "https://api.deepseek.com/v1" }),
+      expect.objectContaining({ baseURL: "https://openrouter.ai/api/v1" }),
     );
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "deepseek-v4-flash" }),
+      expect.objectContaining({ model: "openai/text-embedding-3-large" }),
     );
+  });
+
+  it("rejects a chat-only provider used for embeddings", async () => {
+    await expect(
+      embedTexts(["x"], {
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+      }),
+    ).rejects.toThrow("Unsupported embedding provider");
+
+    expect(mockCtor).not.toHaveBeenCalled();
   });
 
   it("does not call the provider for an empty input", async () => {

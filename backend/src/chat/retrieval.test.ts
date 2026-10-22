@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockEmbedTexts = vi.fn();
+const mockResolveEmbeddingSpace = vi.fn();
 const mockCountChunks = vi.fn();
 const mockSemanticSearch = vi.fn();
 const mockKeywordSearch = vi.fn();
 
 vi.mock("@/projects/embeddings", () => ({
   embedTexts: (...args: unknown[]) => mockEmbedTexts(...args),
+  resolveEmbeddingSpace: (...args: unknown[]) => mockResolveEmbeddingSpace(...args),
 }));
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
@@ -35,9 +37,14 @@ const keywordRow = { ...row, distance: null };
 describe("retrieveCommits", () => {
   beforeEach(() => {
     mockEmbedTexts.mockReset();
+    mockResolveEmbeddingSpace.mockReset();
     mockCountChunks.mockReset();
     mockSemanticSearch.mockReset();
     mockKeywordSearch.mockReset();
+    mockResolveEmbeddingSpace.mockResolvedValue({
+      provider: "openrouter",
+      model: "openai/text-embedding-3-small",
+    });
   });
 
   it("uses semantic search when embeddings exist", async () => {
@@ -49,9 +56,18 @@ describe("retrieveCommits", () => {
 
     expect(mockEmbedTexts).toHaveBeenCalledWith(
       [expect.stringContaining("what changed")],
+      expect.objectContaining({ provider: "openrouter" }),
     );
     expect(mockSemanticSearch).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: "p1", limit: RETRIEVAL_LIMIT }),
+    );
+    expect(mockCountChunks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embeddingSpace: {
+          provider: "openrouter",
+          model: "openai/text-embedding-3-small",
+        },
+      }),
     );
     expect(mockKeywordSearch).not.toHaveBeenCalled();
     expect(result).toEqual([
@@ -76,6 +92,18 @@ describe("retrieveCommits", () => {
     expect(mockKeywordSearch).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: "p1", limit: 10, query: "chat" }),
     );
+    expect(result).toHaveLength(1);
+  });
+
+  it("falls back to keyword search when the embedding space cannot be resolved", async () => {
+    mockResolveEmbeddingSpace.mockRejectedValue(new Error("db down"));
+    mockKeywordSearch.mockResolvedValue([keywordRow]);
+
+    const result = await retrieveCommits({ projectId: "p1", query: "chat" });
+
+    expect(mockCountChunks).not.toHaveBeenCalled();
+    expect(mockEmbedTexts).not.toHaveBeenCalled();
+    expect(mockKeywordSearch).toHaveBeenCalled();
     expect(result).toHaveLength(1);
   });
 

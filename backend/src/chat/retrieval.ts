@@ -1,5 +1,9 @@
 import type { ChatCitation } from "@/db/schema";
-import { embedTexts } from "@/projects/embeddings";
+import {
+  embedTexts,
+  resolveEmbeddingSpace,
+  type EmbeddingSpace,
+} from "@/projects/embeddings";
 import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
 
 export const RETRIEVAL_LIMIT = 20;
@@ -47,19 +51,29 @@ export async function retrieveCommits(opts: {
   endDate?: Date;
 }): Promise<ChatCitation[]> {
   const limit = opts.limit ?? RETRIEVAL_LIMIT;
-  const embeddedCount = await commitChunksStore.countChunksForProject({
-    projectId: opts.projectId,
-    branch: opts.branch,
-    embeddedOnly: true,
-  });
+  let space: EmbeddingSpace | null = null;
+  try {
+    space = await resolveEmbeddingSpace();
+  } catch {
+    space = null;
+  }
+
+  const embeddedCount = space
+    ? await commitChunksStore.countChunksForProject({
+        projectId: opts.projectId,
+        branch: opts.branch,
+        embeddingSpace: space,
+      })
+    : 0;
 
   let rows: commitChunksStore.CommitSearchResult[] | null = null;
-  if (embeddedCount > 0) {
+  if (space && embeddedCount > 0) {
     try {
-      const [embedding] = await embedTexts([queryText(opts)]);
+      const [embedding] = await embedTexts([queryText(opts)], space);
       rows = await commitChunksStore.semanticSearchCommits({
         projectId: opts.projectId,
         embedding,
+        embeddingSpace: space,
         limit,
         branch: opts.branch,
         startDate: opts.startDate,

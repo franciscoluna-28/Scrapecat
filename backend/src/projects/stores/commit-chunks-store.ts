@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { and, asc, cosineDistance, desc, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { db, DbOrTx, Tx } from "@/db/client";
 import { commitChunks, type CommitChunkMetadata } from "@/db/schema";
+import type { EmbeddingSpace } from "@/projects/embeddings";
 
 export type CommitChunkInput = {
   projectId: string;
@@ -80,9 +81,11 @@ function vectorLiteral(embedding: number[]): string {
  */
 export async function updateChunkEmbeddings({
   updates,
+  space,
   tx,
 }: {
   updates: ChunkEmbeddingUpdate[];
+  space: EmbeddingSpace;
   tx?: DbOrTx;
 }) {
   if (updates.length === 0) return;
@@ -94,6 +97,8 @@ export async function updateChunkEmbeddings({
   await client.execute(sql`
     update ${commitChunks} as c
     set embedding = v.embedding::vector,
+        embedding_provider = ${space.provider},
+        embedding_model = ${space.model},
         content_hash = v.content_hash,
         embedding_hash = v.content_hash,
         updated_at = now()
@@ -109,18 +114,25 @@ export async function updateChunkEmbeddings({
 export async function countChunksForProject({
   projectId,
   branch,
-  embeddedOnly,
+  embeddingSpace,
   tx,
 }: {
   projectId: string;
   branch?: string;
-  embeddedOnly?: boolean;
+  embeddingSpace?: EmbeddingSpace;
   tx?: DbOrTx;
 }): Promise<number> {
   const client = tx || db;
   const conditions = [eq(commitChunks.projectId, projectId)];
   if (branch) conditions.push(eq(commitChunks.branch, branch));
-  if (embeddedOnly) conditions.push(isNotNull(commitChunks.embedding));
+  if (embeddingSpace) {
+    conditions.push(
+      isNotNull(commitChunks.embedding),
+      eq(commitChunks.embeddingHash, commitChunks.contentHash),
+      eq(commitChunks.embeddingProvider, embeddingSpace.provider),
+      eq(commitChunks.embeddingModel, embeddingSpace.model),
+    );
+  }
   const [row] = await client
     .select({ count: sql<number>`count(*)::int` })
     .from(commitChunks)
@@ -215,11 +227,13 @@ export type CommitSearchResult = {
 
 /**
  * Vector search over the HNSW index. Orders by cosine distance ascending (most
- * similar first); NULL embeddings are excluded by the HNSW index definition.
+ * similar first). Only current, same-space embeddings are eligible: NULL
+ * embeddings, stale content hashes, and vectors from another model are excluded.
  */
 export async function semanticSearchCommits({
   projectId,
   embedding,
+  embeddingSpace,
   limit,
   branch,
   startDate,
@@ -228,6 +242,7 @@ export async function semanticSearchCommits({
 }: {
   projectId: string;
   embedding: number[];
+  embeddingSpace: EmbeddingSpace;
   limit: number;
   branch?: string;
   startDate?: Date;
@@ -238,6 +253,9 @@ export async function semanticSearchCommits({
   const conditions = [
     eq(commitChunks.projectId, projectId),
     isNotNull(commitChunks.embedding),
+    eq(commitChunks.embeddingHash, commitChunks.contentHash),
+    eq(commitChunks.embeddingProvider, embeddingSpace.provider),
+    eq(commitChunks.embeddingModel, embeddingSpace.model),
   ];
   if (branch) conditions.push(eq(commitChunks.branch, branch));
   if (startDate) conditions.push(gte(commitChunks.committedAt, startDate));

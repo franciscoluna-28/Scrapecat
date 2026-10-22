@@ -2,10 +2,32 @@ import OpenAI from "openai";
 import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
 import { getAISettings } from "@/settings/services";
-import { getProviderConfig } from "@/shared/integrations/providers/registry";
+import {
+  getProviderConfig,
+  isEmbeddingProviderSupported,
+} from "@/shared/integrations/providers/registry";
 import { logger } from "@/shared/logger";
 
 const EMBEDDING_DIMENSIONS = 768;
+
+export type EmbeddingSpace = {
+  provider: string;
+  model: string;
+};
+
+export async function resolveEmbeddingSpace(
+  opts?: { provider?: string; model?: string },
+): Promise<EmbeddingSpace> {
+  if (opts?.provider && opts?.model) {
+    return { provider: opts.provider, model: opts.model };
+  }
+
+  const settings = await getAISettings();
+  return {
+    provider: opts?.provider || settings.embeddingProvider,
+    model: opts?.model || settings.embeddingModel,
+  };
+}
 
 export async function embedTexts(
   texts: string[],
@@ -13,12 +35,10 @@ export async function embedTexts(
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const settings = await getAISettings();
-  const provider = opts?.provider || settings.embeddingProvider;
-  const model = opts?.model || settings.embeddingModel;
+  const { provider, model } = await resolveEmbeddingSpace(opts);
   const config = getProviderConfig(provider);
 
-  if (!config) {
+  if (!isEmbeddingProviderSupported(provider) || !config) {
     throw new Error(`Unsupported embedding provider: ${provider}`);
   }
 
