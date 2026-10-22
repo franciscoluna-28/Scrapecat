@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createServer } from "@/app/create-server";
+import { registerRoutes } from "@/app/register-routes";
 import { buildApp } from "@/build-app";
 
 const ROUTES = [
@@ -43,18 +45,30 @@ describe("buildApp", () => {
     expect(app.hasRoute({ method, url })).toBe(true);
   });
 
-  it("returns JSON for unknown routes", async () => {
+  it("keeps route registration out of the server builder", async () => {
+    const server = await createServer();
+
+    try {
+      expect(
+        server.hasRoute({ method: "GET", url: "/api/v1/health" }),
+      ).toBe(false);
+
+      registerRoutes(server);
+
+      expect(
+        server.hasRoute({ method: "GET", url: "/api/v1/health" }),
+      ).toBe(true);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("maps unknown routes to the shared error contract", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/does-not-exist" });
 
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({
-      statusCode: 404,
-      error: "Not Found",
-      message: "Route GET:/api/v1/does-not-exist not found",
-    });
+    expect(res.json()).toEqual({ error: "Not Found" });
   });
-
-  it.todo("maps unknown routes to the shared { error } contract");
 
   it("maps validation failures to the shared error contract", async () => {
     const res = await app.inject({
