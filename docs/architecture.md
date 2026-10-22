@@ -123,6 +123,15 @@ Precedence: a per-conversation override (chat only) → stored `app_settings` ro
 `defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
 `src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
 
+Chat model ids are resolved through the provider catalog
+(`src/shared/integrations/providers/catalog.ts`), which records each model's
+transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
+`google-generative`). `protocols.ts` is the only module that imports model SDKs;
+`callAI()` hands it the registry config, catalog entry, and key, and it returns
+the AI SDK language model. This is what lets a single provider (OpenCode Go)
+expose models across different endpoints without special-casing in the call
+path.
+
 ## Tech debt
 
 Every shortcut below is intentional and tracked, not accidental.

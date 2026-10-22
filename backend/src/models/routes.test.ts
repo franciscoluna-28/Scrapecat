@@ -16,7 +16,7 @@ describe("GET /api/v1/models", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns models from OpenRouter plus provider fallbacks", async () => {
+  it("returns models from OpenRouter plus the provider catalogs", async () => {
     const mockModels = {
       data: [
         { id: "model-b", name: "Model B", pricing: { prompt: "0", completion: "0" }, description: "Free model" },
@@ -37,13 +37,16 @@ describe("GET /api/v1/models", () => {
     expect(body.models.map((m: any) => m.provider)).toContain("opencode-go");
   });
 
-  it("returns the OpenCode Go chat-completions models", async () => {
+  it("returns models served on every OpenCode Go protocol", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/models?provider=opencode-go" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.models.length).toBeGreaterThan(0);
     expect(body.models.every((m: any) => m.provider === "opencode-go")).toBe(true);
-    expect(body.models.map((m: any) => m.id)).toContain("deepseek-v4.1-flash");
+    const ids = body.models.map((m: any) => m.id);
+    expect(ids).toContain("deepseek-v4.1-flash");
+    expect(ids).toContain("grok-4.7");
+    expect(ids).toContain("claude-haiku-5-5");
   });
 
   it("returns no OpenCode Go embeddings", async () => {

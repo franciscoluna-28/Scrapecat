@@ -40,13 +40,13 @@ Errors: return standard `{ error: ... }` objects with appropriate HTTP status co
 
 CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). No rate limiting built in. No authentication middleware — `GITHUB_TOKEN` is server-side only.
 
-## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/registry.ts`)
+## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
 
 All LLM calls go through `callAI()` from `src/chat/ai.ts` — never instantiate provider SDKs directly.
 
-Provider metadata (SDK type, default model, env key name, verify URL) lives in the registry: `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The only supported SDK types are `openrouter` (uses `@openrouter/sdk`) and `openai-compatible` (uses `openai` package with custom base URL).
+Provider metadata (label, default model/protocol, env key name, verify URL, base URLs, headers) lives in `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The model catalog (`catalog.ts`) maps each model id to its transport protocol: `openai-chat`, `openai-responses`, `anthropic-messages`, or `google-generative`. `protocols.ts` is the only module that imports model SDKs (Vercel AI SDK); `createLanguageModel()` resolves the protocol and base URL for a model. This is how one provider (OpenCode Go) can serve models across several endpoints.
 
-To add a provider: add an entry to `PROVIDER_REGISTRY`, add the env key default to `src/config/env.ts`.
+To add a provider: add an entry to `PROVIDER_REGISTRY` (with `defaultProtocol`, base URL(s), and any headers), add its models to `MODEL_CATALOG`, and add the env key default to `src/config/env.ts`.
 
 API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts the most recent stored credential for a provider. Falls back to env vars if no credential exists. Keys are encrypted at rest with AES-256-GCM (`src/credentials/encryption.ts`).
 
@@ -100,7 +100,7 @@ Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:gener
 
 ## Provider naming (`src/shared/integrations/providers/registry.ts`)
 
-Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only; embeddings stay on OpenRouter/Ollama.
+Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only (it exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages models); embeddings stay on OpenRouter/Ollama.
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
@@ -166,6 +166,7 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 - `src/shared/storage/` — archive warm-cache adapters (`fs`/`s3`/`memory`) + tar helpers
 - `src/shared/queue/` — in-process job queue, handler registry, and the `ingest-branch` job
 - `src/repositories/` — archive clone/hydrate, git reading, ingestion orchestrator
+- `src/shared/integrations/providers/` — provider registry, model catalog (id → protocol), AI SDK model factory
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/shared/integrations/git-provider/gitlab-client.ts` + `gitlab-adapter.ts` — GitLab REST client (auth/retry/pagination), self-hosted host, field mapping
 - `src/credentials/encryption.ts` — AES-256-GCM details

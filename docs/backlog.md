@@ -16,7 +16,7 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P1-1 | **New model providers** | integrations | Registry (`providers/registry.ts`) already abstracts `openai-compatible`, so Anthropic/Gemini/Groq/etc. is a registry entry + env key per `AGENTS.md`. Cheap, user-visible. Do **together** with P1-2. |
+| P1-1 | **New model providers** | integrations | Registry (`providers/registry.ts`) + model catalog (`providers/catalog.ts`) now abstract four AI SDK protocols (`openai-chat`, `openai-responses`, `anthropic-messages`, `google-generative`), so Anthropic/Gemini/Groq/etc. is a registry entry, catalog entries, and an env key per `AGENTS.md`. Cheap, user-visible. Do **together** with P1-2. |
 | P1-2 | **Embedding model-change invalidation** | projects | Staleness gate is *content*-based, not model-based (`embeddings.md:69`). Swapping embedding models silently leaves old vectors in the old space — a correctness landmine the moment P1-1 lands. Gate on model identity too. |
 | P1-3 | **RAG evaluation harness** | quality | No golden-set eval exists, so retrieval quality is unfalsifiable. Build before any retrieval change (P2-2) so improvements are measurable, not vibes. |
 | P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. Gated on P1-3. |
