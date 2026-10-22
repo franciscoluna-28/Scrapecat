@@ -17,7 +17,7 @@ export default defineConfig({
       DB_INTEGRATION: "1",
       DATABASE_URL:
         process.env.DATABASE_URL ?? "postgres://scrapecat:scrapecat@localhost:5432/scrapecat",
-      ENCRYPTION_KEY: "test-only-key-0123456789abcdef0123456789abcdef",
+      ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
       OPENROUTER_API_KEY: "",
       DEEPSEEK_API_KEY: "",
       OPENAI_API_KEY: "",

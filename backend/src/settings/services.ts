@@ -1,5 +1,8 @@
 import { env } from "@/config/env";
-import { isProviderSupported } from "@/shared/integrations/providers/registry";
+import {
+  isEmbeddingProviderSupported,
+  isProviderSupported,
+} from "@/shared/integrations/providers/registry";
 import * as settingsStore from "@/settings/stores/settings-store";
 import type { AISettingsInput } from "@/settings/schemas";
 
@@ -36,7 +39,7 @@ export async function updateAISettings(input: AISettingsInput): Promise<AISettin
   if (!isProviderSupported(input.chatProvider)) {
     throw new Error(`Unsupported provider: ${input.chatProvider}`);
   }
-  if (!isProviderSupported(input.embeddingProvider)) {
+  if (!isEmbeddingProviderSupported(input.embeddingProvider)) {
     throw new Error(`Unsupported embedding provider: ${input.embeddingProvider}`);
   }
 
