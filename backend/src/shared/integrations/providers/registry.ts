@@ -80,6 +80,13 @@ export const PROVIDER_REGISTRY = {
 
 export type ProviderName = keyof typeof PROVIDER_REGISTRY;
 
+export const EMBEDDING_PROVIDER_NAMES = [
+  "openrouter",
+  "ollama",
+] as const satisfies readonly ProviderName[];
+
+export type EmbeddingProviderName = (typeof EMBEDDING_PROVIDER_NAMES)[number];
+
 export const PROVIDER_USER_AGENT = "scrapecat/0.1.0";
 
 export function getProviderConfig(provider: string): ProviderConfig | undefined {
@@ -88,4 +95,10 @@ export function getProviderConfig(provider: string): ProviderConfig | undefined 
 
 export function isProviderSupported(provider: string): provider is ProviderName {
   return provider in PROVIDER_REGISTRY;
+}
+
+export function isEmbeddingProviderSupported(
+  provider: string,
+): provider is EmbeddingProviderName {
+  return (EMBEDDING_PROVIDER_NAMES as readonly string[]).includes(provider);
 }

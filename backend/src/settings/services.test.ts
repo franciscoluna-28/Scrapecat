@@ -92,7 +92,7 @@ describe("AI settings service", () => {
     expect(mockUpsertSettings).not.toHaveBeenCalled();
   });
 
-  it.fails("rejects a chat-only provider as an embedding provider", async () => {
+  it("rejects a chat-only provider as an embedding provider", async () => {
     await expect(
       updateAISettings(makeAISettingsInput({ embeddingProvider: "opencode-go" })),
     ).rejects.toThrow("Unsupported embedding provider");

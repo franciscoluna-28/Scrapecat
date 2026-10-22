@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { envSchema } from "@/config/env";
 import { getCatalogModels } from "@/shared/integrations/providers/catalog";
 import {
+  EMBEDDING_PROVIDER_NAMES,
   PROVIDER_REGISTRY,
   getProviderConfig,
+  isEmbeddingProviderSupported,
   isProviderSupported,
 } from "@/shared/integrations/providers/registry";
 
@@ -42,6 +44,14 @@ describe("AI provider registry", () => {
         expect(PROTOCOLS.has(model.protocol)).toBe(true);
       }
     }
+  });
+
+  it("restricts embeddings to the configured provider set", () => {
+    for (const provider of EMBEDDING_PROVIDER_NAMES) {
+      expect(isEmbeddingProviderSupported(provider)).toBe(true);
+    }
+    expect(isEmbeddingProviderSupported("opencode-go")).toBe(false);
+    expect(isEmbeddingProviderSupported("not-a-provider")).toBe(false);
   });
 
   it("returns undefined for an unknown provider", () => {
