@@ -16,8 +16,7 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P1-1 | **New model providers** | integrations | Registry (`providers/registry.ts`) + model catalog (`providers/catalog.ts`) now abstract four AI SDK protocols (`openai-chat`, `openai-responses`, `anthropic-messages`, `google-generative`), so Anthropic/Gemini/Groq/etc. is a registry entry, catalog entries, and an env key per `AGENTS.md`. Cheap, user-visible. Do **together** with P1-2. |
-| P1-2 | **Embedding model-change invalidation** | projects | Staleness gate is *content*-based, not model-based (`embeddings.md:69`). Swapping embedding models silently leaves old vectors in the old space — a correctness landmine the moment P1-1 lands. Gate on model identity too. |
+| P1-1 | **New model providers** | integrations | Registry (`providers/registry.ts`) + model catalog (`providers/catalog.ts`) now abstract four AI SDK protocols (`openai-chat`, `openai-responses`, `anthropic-messages`, `google-generative`), so Anthropic/Gemini/Groq/etc. is a registry entry, catalog entries, and an env key per `AGENTS.md`. Cheap, user-visible. |
 | P1-3 | **RAG evaluation harness** | quality | No golden-set eval exists, so retrieval quality is unfalsifiable. Build before any retrieval change (P2-2) so improvements are measurable, not vibes. |
 | P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. Gated on P1-3. |
 
@@ -42,8 +41,8 @@ All P0 items are complete — see [Done](#done--completed).
 
 ## Sequencing rationale
 
-Eval harness + reranking → providers + embedding invalidation → next provider
-(GitLab landed; Bitbucket would follow the same adapter pattern).
+Eval harness + reranking → providers → next provider (GitLab landed; Bitbucket
+would follow the same adapter pattern).
 Product differentiators (personas, integrations) and auth stay deferred until
 retrieval quality is measurable and the platform is multi-tenant-ready. See
 `docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
@@ -56,5 +55,6 @@ structural debt.
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
+| P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
 | — | **Embedding resilience** | ingestion | Provider failures no longer fail an ingest: chunks are stored, the failure is logged, and retrieval falls back to keyword search. Every ingest re-checks pending embeddings, so a temporary outage self-heals on the next branch prepare; `pnpm embed:backfill` is the bulk path. |

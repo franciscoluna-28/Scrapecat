@@ -122,6 +122,9 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
 `defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
 `src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
+Each `commit_chunks` row stores its embedding provider/model, and retrieval only
+searches vectors in the current space; changing the embedding model enqueues a
+background reindex.
 
 Chat model ids are resolved through the provider catalog
 (`src/shared/integrations/providers/catalog.ts`), which records each model's
