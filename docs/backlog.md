@@ -34,7 +34,6 @@ All P0 items are complete — see [Done](#done--completed).
 |---|---|---|---|
 | P3-1 | **Transactions on ingest path** | db | Project-upsert and chunk-ingest are separate writes; a mid-way failure leaves chunks persisted (`architecture.md:156`). Safe today (chunks are the cache, and unembedded chunks are retried on the next ingest), fragile once auth/multi-tenant lands. |
 | P3-2 | **Auth layer** | backend | Zero authentication (`architecture.md:147`). Fine for trusted self-hosted; blocks multi-tenant SaaS. Rework, not a patch. |
-| P3-3 | **Persona-driven synthesis** | product | Custom tone mapping for CTOs/Founders/Board (`README.md:29`). |
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:27`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:30`). |
 | P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching; writes are set-based but the read is unbounded. Ingest now re-checks pending embeddings on every run, so a large persistent backlog is read on each re-ingest. Acceptable for current repo sizes; revisit for very large histories. See `architecture.md` → "Unbounded pending embedding reads". |
@@ -43,10 +42,9 @@ All P0 items are complete — see [Done](#done--completed).
 
 Eval harness + reranking → providers → next provider (GitLab landed; Bitbucket
 would follow the same adapter pattern).
-Product differentiators (personas, integrations) and auth stay deferred until
-retrieval quality is measurable and the platform is multi-tenant-ready. See
-`docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
-structural debt.
+External integrations and auth stay deferred until retrieval quality is
+measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
+("Tech debt" / "What needs to happen") for the underlying structural debt.
 
 ## Done — completed
 
@@ -57,4 +55,5 @@ structural debt.
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
 | P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
+| P3-3 | **Persona-driven synthesis** | product | Per-conversation `persona` (`founder` / `cto` / `engineer`) flows from `ChatComposer` through `useAIChat` and the chat API into `buildSystemPrompt`, which maps each persona to audience-specific tone rules. Frontend and backend persona lists are kept in sync. |
 | — | **Embedding resilience** | ingestion | Provider failures no longer fail an ingest: chunks are stored, the failure is logged, and retrieval falls back to keyword search. Every ingest re-checks pending embeddings, so a temporary outage self-heals on the next branch prepare; `pnpm embed:backfill` is the bulk path. |

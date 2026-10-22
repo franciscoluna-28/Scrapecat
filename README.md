@@ -23,6 +23,7 @@ Built by a former founding engineer to stop generating reports and communicating
 - **Feature-Level Summaries:** Related commits are grouped by feature, bug fix, refactor, or infrastructure — no individual commit listing unless asked.
 - **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to provider commits.
 - **Project Tree Sidebar:** Connected repositories with nested chat sessions, branch selector, and navigation.
+- **Audience Personas:** Choose a Founder, CTO, or Engineer tone per conversation; the same history is synthesized for the selected audience.
 - **Model Selection:** Pick the chat model per conversation; configure the embedding model in Settings.
 
 ## Future Roadmap
