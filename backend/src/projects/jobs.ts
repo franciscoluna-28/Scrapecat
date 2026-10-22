@@ -3,6 +3,7 @@ import { ingestCommits, type IngestProgress } from "@/repositories/ingest";
 import { createGitCommitSource } from "@/repositories/git-source";
 import { createApiCommitSource } from "@/repositories/api-source";
 import { wipeJobScratch } from "@/repositories/archive-service";
+import { reindexAllProjects } from "@/projects/embed-chunks";
 import { registerJobHandler } from "@/shared/queue";
 import type { GitProviderId } from "@/shared/integrations/git-provider";
 
@@ -38,4 +39,8 @@ registerJobHandler("ingest-branch", async (payload, report, ctx) => {
     // No-op unless the s3 store is active (disposable job scratch).
     await wipeJobScratch(ctx.jobId);
   }
+});
+
+registerJobHandler("reindex-embeddings", async () => {
+  return reindexAllProjects();
 });
