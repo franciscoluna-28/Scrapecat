@@ -91,6 +91,33 @@ describe("retrieveCommits", () => {
     expect(result).toHaveLength(1);
   });
 
+  it("falls back to keyword search when semantic search returns no rows", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([]);
+    mockKeywordSearch.mockResolvedValue([keywordRow]);
+
+    const result = await retrieveCommits({ projectId: "p1", query: "chat" });
+
+    expect(mockKeywordSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "p1", query: "chat" }),
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it("drops semantic hits outside the cosine distance ceiling", async () => {
+    mockCountChunks.mockResolvedValue(5);
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([
+      { ...row, commitSha: "close", distance: 0.2 },
+      { ...row, commitSha: "far", distance: 0.95 },
+    ]);
+
+    const result = await retrieveCommits({ projectId: "p1", query: "chat" });
+
+    expect(result.map((citation) => citation.commitSha)).toEqual(["close"]);
+  });
+
   it("returns empty when nothing matches", async () => {
     mockCountChunks.mockResolvedValue(0);
     mockKeywordSearch.mockResolvedValue([]);

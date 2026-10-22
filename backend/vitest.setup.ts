@@ -1,4 +1,4 @@
-process.env.ENCRYPTION_KEY ??= "test-only-key-0123456789abcdef0123456789abcdef";
+process.env.ENCRYPTION_KEY ??= "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 process.env.DATABASE_URL ??= "postgres://postgres:postgres@localhost:5432/scrapecat_test";
 process.env.OPENROUTER_API_KEY ??= "";
 process.env.DEEPSEEK_API_KEY ??= "";

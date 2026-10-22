@@ -14,7 +14,7 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     env: {
-      ENCRYPTION_KEY: "test-only-key-0123456789abcdef0123456789abcdef",
+      ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
       DATABASE_URL: "postgres://postgres:postgres@localhost:5432/scrapecat_test",
       OPENROUTER_API_KEY: "",
       DEEPSEEK_API_KEY: "",
