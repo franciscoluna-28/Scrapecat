@@ -16,7 +16,6 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P1-1 | **New model providers** | integrations | Registry (`providers/registry.ts`) + model catalog (`providers/catalog.ts`) now abstract four AI SDK protocols (`openai-chat`, `openai-responses`, `anthropic-messages`, `google-generative`), so Anthropic/Gemini/Groq/etc. is a registry entry, catalog entries, and an env key per `AGENTS.md`. Cheap, user-visible. |
 | P1-3 | **RAG evaluation harness** | quality | No golden-set eval exists, so retrieval quality is unfalsifiable. Build before any retrieval change (P2-2) so improvements are measurable, not vibes. |
 | P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. Gated on P1-3. |
 
@@ -50,6 +49,7 @@ measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 
 | ID | Item | Area | Notes |
 |---|---|---|---|
+| P1-1 | **New model providers** | integrations | Added Groq as the first new provider (OpenAI-compatible, Bearer auth): registry + catalog entry, `GROQ_API_KEY`, `credential_provider` enum value, and frontend provider constant. Settings schema unions and the models aggregation now derive from the registry, so the next provider is a registry entry, catalog entries, an env key, and an enum value. Anthropic/Gemini still need provider-aware credential verification (`x-api-key` / `?key=`). |
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |

@@ -100,7 +100,7 @@ Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:gener
 
 ## Provider naming (`src/shared/integrations/providers/registry.ts`)
 
-Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only (it exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages models); embeddings stay on OpenRouter/Ollama.
+Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `groq`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `groq` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only (it exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages models); embeddings stay on OpenRouter/Ollama.
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
@@ -154,6 +154,7 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `AI_MODEL` | Default model override |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
+| `GROQ_API_KEY` | For the Groq chat provider |
 | `OPENCODE_GO_API_KEY` | For the OpenCode Go chat provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |

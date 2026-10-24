@@ -47,6 +47,14 @@ export const PROVIDER_REGISTRY = {
     envKey: "OPENAI_API_KEY",
     verifyUrl: "https://api.openai.com/v1/models",
   },
+  groq: {
+    label: "Groq",
+    defaultModel: "llama-3.3-70b-versatile",
+    defaultProtocol: "openai-chat",
+    baseUrl: "https://api.groq.com/openai/v1",
+    envKey: "GROQ_API_KEY",
+    verifyUrl: "https://api.groq.com/openai/v1/models",
+  },
   "opencode-go": {
     label: "OpenCode Go",
     defaultModel: "deepseek-v4.1-flash",

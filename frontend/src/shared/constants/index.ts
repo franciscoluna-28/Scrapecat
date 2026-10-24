@@ -6,6 +6,7 @@ export const PROVIDERS = [
   },
   { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-chat" },
   { id: "openai", label: "OpenAI", defaultModel: "gpt-4o" },
+  { id: "groq", label: "Groq", defaultModel: "llama-3.3-70b-versatile" },
   { id: "opencode-go", label: "OpenCode Go", defaultModel: "deepseek-v4.1-flash" },
   { id: "ollama", label: "Ollama (Local)", defaultModel: "llama3.2:1b" },
 ] as const;

@@ -13,6 +13,7 @@ import {
 const AVAILABLE_CREDENTIAL_PROVIDERS = [
   "openai",
   "openrouter",
+  "groq",
   "deepseek",
   "opencode-go",
   "ollama",

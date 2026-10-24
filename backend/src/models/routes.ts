@@ -6,7 +6,11 @@ import {
   getCatalogModels,
   type ModelDescriptor,
 } from "@/shared/integrations/providers/catalog";
-import { isProviderSupported } from "@/shared/integrations/providers/registry";
+import {
+  PROVIDER_REGISTRY,
+  isProviderSupported,
+  type ProviderName,
+} from "@/shared/integrations/providers/registry";
 
 async function fetchOllamaModels(
   modality: "chat" | "embeddings",
@@ -143,11 +147,15 @@ export async function listModels(
     });
   }
 
+  const catalogProviders = (
+    Object.keys(PROVIDER_REGISTRY) as ProviderName[]
+  ).filter((provider) => provider !== "openrouter" && provider !== "ollama");
+
   const all = [
     ...openRouterModels.map((model) => toApiModel(model, "openrouter")),
-    ...getCatalogModels("deepseek").map((model) => toApiModel(model, "deepseek")),
-    ...getCatalogModels("openai").map((model) => toApiModel(model, "openai")),
-    ...getCatalogModels("opencode-go").map((model) => toApiModel(model, "opencode-go")),
+    ...catalogProviders.flatMap((provider) =>
+      getCatalogModels(provider).map((model) => toApiModel(model, provider)),
+    ),
   ];
 
   return reply.send({ models: all });
