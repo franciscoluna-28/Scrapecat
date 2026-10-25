@@ -27,6 +27,16 @@ All P0 items are complete — see [Done](#done--completed).
 | P2-3 | **Orphaned archive cleanup on delete** | storage | Deleting a project cascades in Postgres but orphans its S3 object / fs clone (`AGENTS.md:82`). Regenerable but silently leaks. Add a delete hook. |
 | P2-4 | **Per-instance GitLab hosts** | integrations | `GITLAB_HOST` is a server-wide setting. Multi-tenant/self-hosted-per-project needs the host stored alongside the project/credential (the credentials table is keyed by provider only, so two instances would collide). |
 
+### Engineering hygiene / refactors
+
+| ID | Item | Area | Why / notes |
+|---|---|---|---|
+| P2-5 | **Chat-session ownership guard** | chat | Session load + `anonymousId` check is duplicated in `chat/routes.ts:69-75,97-103`, and `getMessages` (`51-63`) skips it. Add a `preHandler` + `req.chatSession` decorator: one lookup, 404/403 in one place, and read/delete/stream agree on access. |
+| P2-6 | **SSE reply plugin** | chat | `chat/routes.ts:105-148` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
+| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 (`projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, `chat` routes). Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47`), log via the shared pino logger, and let handlers throw. |
+| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:19-20,33-35,54-56`, `gitConnections/routes.ts:31-35,72-76`, and `projects/routes.ts:58-60`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49`. Extract `preHandler` guards applied in `register-routes.ts`. |
+| P2-9 | **Provider-param guard** | backend | `unimplementedProvider` is re-applied in each `gitConnections` handler (`18-25,40,57,80`) and credential providers are validated inside services. Validate `:provider` once via a `preHandler` / TypeBox union. |
+
 ## P3 — Deferred / strategic
 
 | ID | Item | Area | Why / notes |
@@ -44,6 +54,10 @@ would follow the same adapter pattern).
 External integrations and auth stay deferred until retrieval quality is
 measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 ("Tech debt" / "What needs to happen") for the underlying structural debt.
+
+The Fastify refactors (P2-5–P2-9) are independent and can land between product
+items; P2-5 should be first because it also aligns chat read authorization with
+delete/stream.
 
 ## Done — completed
 
