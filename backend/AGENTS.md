@@ -6,8 +6,10 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 
 - Run API: `pnpm dev` (tsx watch on `src/main.ts`, port 4000, Swagger at http://localhost:4000/docs)
 - Vercel build (serverless demo): `pnpm build:vercel` bundles `src/vercel-entry.ts` → `dist/vercel-entry.mjs` via `scripts/build-vercel.mjs` (run automatically as `vercel-build`). The root `server.mjs` is Vercel's Fastify entrypoint (plain JS so Vercel's type-check skips the untyped bundle).
+- Typecheck: `pnpm typecheck` (`tsc --noEmit`)
 - Tests: `pnpm test` (vitest run)
 - Watch tests: `pnpm test:watch`
+- Full local check: `pnpm check` from the project root (typecheck + lint + tests)
 - Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
@@ -38,7 +40,9 @@ Never return API key values from any endpoint — metadata only (key hints).
 
 Errors: return standard `{ error: ... }` objects with appropriate HTTP status codes. No custom exception classes — use inline `reply.status(N).send(...)`.
 
-CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). No rate limiting built in. No authentication middleware — `GITHUB_TOKEN` is server-side only.
+CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). Per-IP rate limiting is registered globally (`RATE_LIMIT_MAX`) with a tighter limit on chat (`CHAT_RATE_LIMIT_MAX`). No authentication middleware — `GITHUB_TOKEN` is server-side only, and the API is intended for trusted networks only.
+
+Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which runs `select 1` against Postgres and returns 503 when the database is unavailable. Docker healthchecks use the readiness route.
 
 ## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
 
@@ -152,6 +156,7 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `GITLAB_TOKEN` | GitLab personal access token (`read_api`, `read_repository`); discovery + archive clone |
 | `GITLAB_HOST` | GitLab instance origin (default `https://gitlab.com`); set for self-hosted |
 | `AI_MODEL` | Default model override |
+| `AI_TIMEOUT_MS` | LLM/embedding request timeout in milliseconds (default `120000`) |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
 | `GROQ_API_KEY` | For the Groq chat provider |

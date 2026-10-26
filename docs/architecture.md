@@ -110,6 +110,19 @@ Serverless cannot run the binary at all — which is why the demo uses the GitHu
 REST API. The clean split: self-hosted ships git; serverless does not and uses
 the API path.
 
+## Operational safety
+
+- **Bounded LLM calls.** `callAI()` applies `AI_TIMEOUT_MS` to every chat request;
+  embedding calls use the same timeout with one retry. SSE handlers abort the
+  upstream call when the client disconnects.
+- **Graceful shutdown.** `SIGTERM`/`SIGINT` close the Fastify server, which drains
+  active ingest jobs (bounded to 10s) before exiting.
+- **Readiness.** `GET /api/v1/health/ready` runs `select 1` against Postgres and
+  returns 503 when it cannot connect; `GET /api/v1/health` stays a liveness probe.
+  Docker images use the readiness route for their healthcheck.
+- **Fail fast on config.** `ENCRYPTION_KEY` is validated as base64-encoded 32
+  bytes at startup instead of failing at the first encrypt/decrypt call.
+
 ## Model resolution
 
 Two roles, each with a provider + model setting stored in `app_settings`:
@@ -167,6 +180,13 @@ multi-tenant/runtime plugin need appears.
 
 The API has zero authentication — fine for trusted self-hosted deployments,
 impossible to open as multi-tenant SaaS without a rework.
+
+### Production Docker images
+
+The tracked root `Dockerfile` predates the pnpm workspace split and is not
+deployable. Production packaging is deferred (backlog P3-7) until proper
+workspace-aware backend and frontend images exist. `docker compose` is
+development-only.
 
 ### Validation & data-integrity gaps
 

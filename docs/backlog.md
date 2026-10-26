@@ -46,11 +46,17 @@ All P0 items are complete — see [Done](#done--completed).
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:27`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:30`). |
 | P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching; writes are set-based but the read is unbounded. Ingest now re-checks pending embeddings on every run, so a large persistent backlog is read on each re-ingest. Acceptable for current repo sizes; revisit for very large histories. See `architecture.md` → "Unbounded pending embedding reads". |
+| P3-7 | **Production Docker images** | deployment | Needs proper workspace-aware images for backend and frontend; the tracked root `Dockerfile` is not deployable. Deferred, not blocking local use. |
 
 ## Sequencing rationale
 
-Eval harness + reranking → providers → next provider (GitLab landed; Bitbucket
-would follow the same adapter pattern).
+**Stability comes before feature work.** CI, bounded provider calls, graceful
+shutdown, readiness, and UI error boundaries are prerequisites for asking anyone
+to run the tool. Production images are deferred to P3-7. Only after stability
+does retrieval quality (P1-3 → P1-4) become the priority.
+
+Eval harness + reranking → providers → next provider (Bitbucket would follow the
+same adapter pattern).
 External integrations and auth stay deferred until retrieval quality is
 measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 ("Tech debt" / "What needs to happen") for the underlying structural debt.
@@ -63,6 +69,12 @@ delete/stream.
 
 | ID | Item | Area | Notes |
 |---|---|---|---|
+| S-1 | **CI pipeline** | tooling | GitHub Actions runs frozen install, typecheck, lint, unit tests, and build; a second job migrates an empty pgvector database and runs the integration suite. Root `check` script mirrors the same gates locally. |
+| S-3 | **Graceful shutdown** | backend | `SIGTERM`/`SIGINT` close the server; the in-process queue drains active ingests with a 10s bound instead of dropping them. |
+| S-4 | **Bounded provider calls** | ai | `AI_TIMEOUT_MS` bounds chat and embedding requests; embeddings retry once; SSE aborts upstream work when the client disconnects. |
+| S-5 | **Readiness probe** | backend | `GET /api/v1/health/ready` checks Postgres and returns 503 on failure; liveness stays on `/health`. |
+| S-6 | **UI error boundaries** | frontend | Root `error.tsx` and `global-error.tsx` show a retry surface instead of a blank screen. |
+| S-7 | **Startup config validation** | backend | `ENCRYPTION_KEY` must be base64-encoded 32 bytes at boot, not at first encrypt. |
 | P1-1 | **New model providers** | integrations | Added Groq as the first new provider (OpenAI-compatible, Bearer auth): registry + catalog entry, `GROQ_API_KEY`, `credential_provider` enum value, and frontend provider constant. Settings schema unions and the models aggregation now derive from the registry, so the next provider is a registry entry, catalog entries, an env key, and an enum value. Anthropic/Gemini still need provider-aware credential verification (`x-api-key` / `?key=`). |
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
