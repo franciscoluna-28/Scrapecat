@@ -89,9 +89,10 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-if (!parsed.data.ENCRYPTION_KEY) {
+const encryptionKey = Buffer.from(parsed.data.ENCRYPTION_KEY, "base64");
+if (encryptionKey.length !== 32) {
   console.error(
-    "ENCRYPTION_KEY is required (use: openssl rand -base64 32)",
+    "ENCRYPTION_KEY must be a base64-encoded 32-byte value (use: openssl rand -base64 32)",
   );
   process.exit(1);
 }
