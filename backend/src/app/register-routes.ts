@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "@/config/env";
-
-import { health } from "@/health/routes";
+import { health, ready } from "@/health/routes";
 import { getMeta } from "@/meta/routes";
 import { listModels } from "@/models/routes";
 import {
@@ -46,7 +45,7 @@ import {
   SendMessageBody,
   DeleteSessionResponse,
 } from "@/chat/schemas";
-import { HealthResponse } from "@/health/schemas";
+import { HealthReadyResponse, HealthResponse } from "@/health/schemas";
 import { MetaResponse } from "@/meta/schemas";
 import { ModelsQuery, ModelsResponse } from "@/models/schemas";
 import {
@@ -102,6 +101,14 @@ function registerSystemRoutes(app: FastifyInstance) {
       response: { 200: HealthResponse },
     },
   }, health);
+
+  app.get("/api/v1/health/ready", {
+    schema: {
+      description: "Readiness check (verifies the database connection)",
+      tags: ["health"],
+      response: { 200: HealthReadyResponse, 503: HealthReadyResponse },
+    },
+  }, ready);
 
   app.get("/api/v1/meta", {
     schema: {
