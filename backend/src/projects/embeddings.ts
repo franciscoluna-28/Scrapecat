@@ -55,7 +55,12 @@ export async function embedTexts(
         ? config.baseUrl
         : "https://openrouter.ai/api/v1";
 
-  const client = new OpenAI({ apiKey: apiKey || "ollama", baseURL });
+  const client = new OpenAI({
+    apiKey: apiKey || "ollama",
+    baseURL,
+    timeout: env.AI_TIMEOUT_MS,
+    maxRetries: 1,
+  });
   const start = performance.now();
 
   const params: OpenAI.EmbeddingCreateParams = { model, input: texts };

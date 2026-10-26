@@ -42,6 +42,7 @@ export interface AIRequest {
   provider?: string;
   sessionId?: string;
   stream?: boolean;
+  abortSignal?: AbortSignal;
   onChunk?: (chunk: string) => void;
 }
 
@@ -101,6 +102,8 @@ export async function callAI(request: AIRequest): Promise<AIResponse> {
     messages: conversation,
     temperature,
     maxOutputTokens: maxTokens,
+    abortSignal: request.abortSignal,
+    timeout: { totalMs: env.AI_TIMEOUT_MS },
     ...(system ? { system } : {}),
   };
 

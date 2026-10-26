@@ -99,10 +99,11 @@ export async function streamChatMessage(opts: {
   model?: string;
   provider?: string;
   persona?: string;
+  signal?: AbortSignal;
   onToken: (chunk: string) => void;
   onProgress?: IngestProgress;
 }): Promise<ChatMessageDTO> {
-  const { sessionId, content, branch, model, provider, persona, onToken, onProgress } = opts;
+  const { sessionId, content, branch, model, provider, persona, signal, onToken, onProgress } = opts;
 
   const session = await chatSessionsStore.getSession({ id: sessionId });
   if (!session) throw new SessionNotFoundError();
@@ -196,6 +197,7 @@ export async function streamChatMessage(opts: {
     sessionId,
     maxTokens: 8192,
     messages,
+    abortSignal: signal,
     onChunk: (chunk) => onToken(chunk),
   });
 

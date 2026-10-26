@@ -8,6 +8,7 @@ export const envSchema = z.object({
     .default("postgres://scrapecat:scrapecat@localhost:5432/scrapecat"),
   OPENROUTER_API_KEY: z.string().default(""),
   AI_MODEL: z.string().default("mimo-v2.6-flash"),
+  AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
   GROQ_API_KEY: z.string().default(""),

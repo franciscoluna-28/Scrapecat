@@ -33,6 +33,7 @@ vi.mock("@/config/env", () => ({
     OPENROUTER_API_KEY: "",
     OLLAMA_BASE_URL: "http://localhost:11434",
     OLLAMA_API_KEY: "",
+    AI_TIMEOUT_MS: 120_000,
   },
 }));
 
@@ -83,6 +84,8 @@ describe("embedTexts", () => {
     expect(mockCtor).toHaveBeenCalledWith({
       apiKey: "sk-test",
       baseURL: "https://openrouter.ai/api/v1",
+      timeout: 120_000,
+      maxRetries: 1,
     });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ model: "openai/text-embedding-3-small" }),

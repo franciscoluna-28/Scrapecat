@@ -124,14 +124,16 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   });
 
   let closed = false;
+  const abort = new AbortController();
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   const close = () => {
     if (closed) return;
     closed = true;
     if (heartbeat) clearInterval(heartbeat);
+    abort.abort();
     res.end();
   };
-  req.raw.on("close", close);
+  res.on("close", close);
 
   const send = (data: unknown) => {
     if (!closed) res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -155,6 +157,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       model,
       provider,
       persona,
+      signal: abort.signal,
       onProgress: (stage, msg, done, total) => {
         send({ type: "progress", stage, message: msg, done, total });
       },
