@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc",
+    "build:docker": "node scripts/build-server.mjs",
     "typecheck": "tsc --noEmit",
     "build:vercel": "node scripts/build-vercel.mjs",
     "vercel-build": "pnpm run build:vercel",
