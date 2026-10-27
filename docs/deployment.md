@@ -9,11 +9,14 @@ from the serverless profile: Vercel deployments continue to use
 | Image | Dockerfile | Runtime |
 |---|---|---|
 | Backend | `backend/Dockerfile` | Node 22 + native `git`, compiled `dist/main.mjs` |
-| Frontend | `frontend/Dockerfile` | Node 22 + `next start`, build-time public env |
+| Frontend | `frontend/Dockerfile` | Node 22 + Next standalone server, build-time public env |
 
 The backend image runs migrations on boot (`RUN_MIGRATIONS=false` to skip), runs
 as the non-root `node` user, and exposes `GET /api/v1/health/ready` as its
-healthcheck. The frontend image runs as the non-root `nextjs` user.
+healthcheck. The frontend image runs the non-root `nextjs` user against Next's
+standalone server. Standalone output is enabled only when
+`NEXT_OUTPUT=standalone`, which the Dockerfile sets; Vercel/serverless builds do
+not set it and are unchanged.
 
 Build them from the repository root:
 

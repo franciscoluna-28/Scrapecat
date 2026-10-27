@@ -183,10 +183,15 @@ impossible to open as multi-tenant SaaS without a rework.
 
 ### Production Docker images
 
-The tracked root `Dockerfile` predates the pnpm workspace split and is not
-deployable. Production packaging is deferred (backlog P3-7) until proper
-workspace-aware backend and frontend images exist. `docker compose` is
-development-only.
+Self-hosted clients build `backend/Dockerfile` and `frontend/Dockerfile` from the
+workspace root; `docker-compose.prod.yml` wires them to Postgres with health-gated
+startup. The backend image bundles `src/main.ts` and the migration runner with
+esbuild, installs production dependencies only, ships the native `git` binary,
+runs as `node`, and applies migrations on boot. The frontend builds Next's
+standalone output (only when `NEXT_OUTPUT=standalone`, set by the Dockerfile) and
+runs `server.js` as `nextjs`; the serverless Vercel path does not set that flag
+and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions:
+[`deployment.md`](deployment.md).
 
 ### Validation & data-integrity gaps
 

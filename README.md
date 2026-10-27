@@ -159,6 +159,22 @@ Three services start:
 docker compose down
 ```
 
+### Production (self-hosted clients)
+
+Workspace-aware production images live next to each app:
+[`backend/Dockerfile`](./backend/Dockerfile) and
+[`frontend/Dockerfile`](./frontend/Dockerfile). Run the full stack with:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The backend image runs migrations on boot, ships native `git`, and healthchecks
+the readiness route. Set `NEXT_PUBLIC_API_URL` to the backend URL as seen by the
+browser. See [`docs/deployment.md`](./docs/deployment.md) for env, volumes,
+migrations, and multi-replica notes. The Vercel/serverless deployment is separate
+and unchanged — see [`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
+
 ## Architecture
 
 ### RAG Pipeline
