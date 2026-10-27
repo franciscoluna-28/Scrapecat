@@ -5,7 +5,7 @@ import { Skeleton } from "@/src/components/ui/skeleton";
 import { XCircle } from "lucide-react";
 import { useCredentials } from "@/src/_features/credentials/services";
 import { PROVIDERS } from "@/src/shared/constants";
-import { CredentialField } from "../CredentialField";
+import { CredentialField } from "./CredentialField";
 
 export function CredentialsManager() {
   const { credentials, isLoading, error } = useCredentials();

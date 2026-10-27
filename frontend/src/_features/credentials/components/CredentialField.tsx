@@ -9,7 +9,7 @@ import {
   useAddCredential,
   useVerifyCredential,
 } from "@/src/_features/credentials/services";
-import { ProviderIcon } from "../ProviderIcon";
+import { ProviderIcon } from "./ProviderIcon";
 
 export function CredentialField({
   provider,
