@@ -2,7 +2,9 @@ import { env } from "@/config/env";
 import {
   isEmbeddingProviderSupported,
   isProviderSupported,
+  getProviderConfig,
 } from "@/shared/integrations/providers/registry";
+import { findProviderForModel } from "@/shared/integrations/providers/catalog";
 import { logger } from "@/shared/logger";
 import { getJobQueue } from "@/shared/queue";
 import * as settingsStore from "@/settings/stores/settings-store";
@@ -62,12 +64,23 @@ export function defaultAISettings(): AISettings {
   };
 }
 
+/**
+ * Older builds persisted a chat model that belongs to a different provider
+ * (e.g. `openrouter` + `mimo-v2.6-flash`, which is OpenCode Go only). Never
+ * send that pair upstream; fall back to the provider's default model.
+ */
+function normalizeStoredChatModel(provider: string, model: string): string {
+  const owner = findProviderForModel(model);
+  if (!owner || owner === provider) return model;
+  return getProviderConfig(provider)?.defaultModel ?? model;
+}
+
 export async function getAISettings(): Promise<AISettings> {
   const row = await settingsStore.getSettings(GLOBAL_SETTINGS_ID);
   if (!row) return defaultAISettings();
   return {
     chatProvider: row.chatProvider,
-    chatModel: row.chatModel,
+    chatModel: normalizeStoredChatModel(row.chatProvider, row.chatModel),
     embeddingProvider: row.embeddingProvider,
     embeddingModel: row.embeddingModel,
   };

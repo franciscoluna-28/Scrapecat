@@ -69,7 +69,7 @@ Scrapecat requires a Personal Access Token (PAT) to fetch repository metadata an
 We use OpenRouter's API for LLM access. The free tier works out of the box.
 
 - 1. Sign up at [OpenRouter](https://openrouter.ai/keys) and create a free API key.
-- 2. Default chat model is set by `AI_MODEL` (default `mimo-v2.6-flash`); override anytime in the Settings UI or per conversation.
+- 2. Default chat model is set by `AI_MODEL` (default `deepseek/deepseek-v4.1-flash`); override anytime in the Settings UI or per conversation.
 
 ### 3. Ollama (Local Alternative)
 

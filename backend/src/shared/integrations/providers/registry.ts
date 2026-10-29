@@ -25,7 +25,7 @@ export type ProviderConfig = {
 export const PROVIDER_REGISTRY = {
   openrouter: {
     label: "OpenRouter",
-    defaultModel: "openai/gpt-5.6-luna",
+    defaultModel: "deepseek/deepseek-v4.1-flash",
     defaultProtocol: "openai-chat",
     envKey: "OPENROUTER_API_KEY",
     verifyUrl: "https://openrouter.ai/api/v1/auth/key",

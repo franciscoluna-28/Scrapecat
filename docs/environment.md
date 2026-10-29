@@ -17,7 +17,7 @@ GITHUB_TOKEN=
 GITLAB_TOKEN=
 # GitLab instance origin; default is https://gitlab.com. One host per backend.
 GITLAB_HOST=https://gitlab.com
-AI_MODEL=mimo-v2.6-flash
+AI_MODEL=deepseek/deepseek-v4.1-flash
 AI_TIMEOUT_MS=120000
 PORT=4000
 HOST=0.0.0.0

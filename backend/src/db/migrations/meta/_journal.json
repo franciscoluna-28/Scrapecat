@@ -183,6 +183,13 @@
       "when": 1792885075750,
       "tag": "0025_groq_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793297104810,
+      "tag": "0026_ambitious_jackal",
+      "breakpoints": true
     }
   ]
 }

@@ -73,6 +73,42 @@ describe("AI settings service", () => {
     });
   });
 
+  it("falls back to the provider default when the stored model belongs to another provider", async () => {
+    mockGetSettings.mockResolvedValue({
+      ...makeAISettings({
+        chatProvider: "openrouter",
+        chatModel: "mimo-v2.6-flash",
+      }),
+      id: GLOBAL_SETTINGS_ID,
+      updatedAt: new Date(),
+    });
+
+    await expect(getAISettings()).resolves.toEqual({
+      chatProvider: "openrouter",
+      chatModel: "deepseek/deepseek-v4.1-flash",
+      embeddingProvider: "openrouter",
+      embeddingModel: "openai/text-embedding-3-small",
+    });
+  });
+
+  it("keeps stored models that are not in the static catalog", async () => {
+    mockGetSettings.mockResolvedValue({
+      ...makeAISettings({
+        chatProvider: "openrouter",
+        chatModel: "vendor/custom-model",
+      }),
+      id: GLOBAL_SETTINGS_ID,
+      updatedAt: new Date(),
+    });
+
+    await expect(getAISettings()).resolves.toEqual({
+      chatProvider: "openrouter",
+      chatModel: "vendor/custom-model",
+      embeddingProvider: "openrouter",
+      embeddingModel: "openai/text-embedding-3-small",
+    });
+  });
+
   it("writes a valid update and reindexes when the embedding model changes", async () => {
     const input = makeAISettingsInput({
       chatProvider: "openai",

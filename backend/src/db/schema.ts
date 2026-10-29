@@ -191,7 +191,7 @@ export const chatMessages = pgTable(
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
   chatProvider: text("chat_provider").default("openrouter").notNull(),
-  chatModel: text("chat_model").default("nvidia/nemotron-3-ultra-550b-a55b:free").notNull(),
+  chatModel: text("chat_model").default("deepseek/deepseek-v4.1-flash").notNull(),
   embeddingProvider: text("embedding_provider").default("openrouter").notNull(),
   embeddingModel: text("embedding_model").default("openai/text-embedding-3-small").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

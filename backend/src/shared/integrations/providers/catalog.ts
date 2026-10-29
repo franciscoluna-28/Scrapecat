@@ -25,6 +25,7 @@ function openCodeGoModel(
 }
 
 const OPENROUTER_CATALOG: ModelDescriptor[] = [
+  openRouterModel("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash"),
   openRouterModel("google/gemma-4-31b-it", "GPT-5.6 Luna"),
   openRouterModel("google/gemma-4-31b-it", "Google: Gemma 4 31B"),
   openRouterModel("nvidia/nemotron-3-ultra-550b-a55b:free", "Nemotron 3 Ultra", true),
@@ -104,6 +105,16 @@ export const MODEL_CATALOG: Record<string, ModelDescriptor[]> = {
 
 export function getCatalogModels(provider: string): ModelDescriptor[] {
   return MODEL_CATALOG[provider] ?? [];
+}
+
+/**
+ * Returns the provider whose catalog owns a model id, or undefined for ids we
+ * do not know about (e.g. models fetched live from OpenRouter).
+ */
+export function findProviderForModel(modelId: string): string | undefined {
+  return Object.entries(MODEL_CATALOG).find(([, models]) =>
+    models.some((model) => model.id === modelId),
+  )?.[0];
 }
 
 export function resolveModel(
