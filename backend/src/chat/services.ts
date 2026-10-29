@@ -5,7 +5,7 @@ import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
 import { ProviderKeyError } from "@/chat/ai";
 import { callAI } from "@/chat/ai";
-import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
+import { chatStore, type ChatMessageRow } from "@/chat/stores/chat-store";
 import { retrieveCommits } from "@/chat/retrieval";
 import { parseQueryWindow, hasTemporalIntent } from "@/chat/date-window";
 import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
@@ -17,7 +17,7 @@ import type { IngestProgress } from "@/repositories/ingest";
 
 const HISTORY_LIMIT = 20;
 
-function toMessageDTO(row: Awaited<ReturnType<typeof chatSessionsStore.addMessage>>): ChatMessageDTO {
+function toMessageDTO(row: ChatMessageRow): ChatMessageDTO {
   return {
     id: row.id,
     role: row.role === "assistant" ? "assistant" : "user",
@@ -33,7 +33,7 @@ export async function createChatSession(projectId: string, anonymousId: string) 
   if (!project) {
     throw new Error("Project not found");
   }
-  const row = await chatSessionsStore.createSession({
+  const row = await chatStore.createSession({
     projectId,
     title: "New chat",
     anonymousId,
@@ -48,7 +48,7 @@ export async function createChatSession(projectId: string, anonymousId: string) 
 }
 
 export async function listChatSessions(projectId?: string, anonymousId?: string) {
-  const rows = await chatSessionsStore.listSessions({ projectId, anonymousId });
+  const rows = await chatStore.listSessions({ projectId, anonymousId });
   return rows.map((r) => ({
     id: r.id,
     projectId: r.projectId,
@@ -59,16 +59,16 @@ export async function listChatSessions(projectId?: string, anonymousId?: string)
 }
 
 export async function getChatMessages(sessionId: string) {
-  const session = await chatSessionsStore.getSession({ id: sessionId });
+  const session = await chatStore.getSession(sessionId);
   if (!session) return null;
-  const rows = await chatSessionsStore.listMessages({ sessionId });
+  const rows = await chatStore.listMessages(sessionId);
   return rows.map(toMessageDTO);
 }
 
 export async function deleteChatSession(id: string) {
-  const session = await chatSessionsStore.getSession({ id });
+  const session = await chatStore.getSession(id);
   if (!session) return false;
-  await chatSessionsStore.deleteSession({ id });
+  await chatStore.deleteSession(id);
   return true;
 }
 
@@ -105,12 +105,12 @@ export async function streamChatMessage(opts: {
 }): Promise<ChatMessageDTO> {
   const { sessionId, content, branch, model, provider, persona, signal, onToken, onProgress } = opts;
 
-  const session = await chatSessionsStore.getSession({ id: sessionId });
+  const session = await chatStore.getSession(sessionId);
   if (!session) throw new SessionNotFoundError();
 
   const project = await projectsStore.getProjectById({ id: session.projectId });
 
-  await chatSessionsStore.addMessage({ sessionId, role: "user", content });
+  await chatStore.addMessage({ sessionId, role: "user", content });
 
   // Fall back to the project's default branch when the client omits one.
   const requestedBranch = branch || project?.defaultBranch || "main";
@@ -165,7 +165,7 @@ export async function streamChatMessage(opts: {
     }
   }
 
-  const history = await chatSessionsStore.listMessages({ sessionId });
+  const history = await chatStore.listMessages(sessionId);
   const prior = history.slice(-HISTORY_LIMIT).map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
@@ -201,14 +201,14 @@ export async function streamChatMessage(opts: {
     onChunk: (chunk) => onToken(chunk),
   });
 
-  const reply = await chatSessionsStore.addMessage({
+  const reply = await chatStore.addMessage({
     sessionId,
     role: "assistant",
     content: result.content,
     branch: effectiveBranch,
     citations,
   });
-  await chatSessionsStore.touchSession({ id: sessionId });
+  await chatStore.touchSession(sessionId);
 
   return toMessageDTO(reply);
 }

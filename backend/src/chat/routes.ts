@@ -14,7 +14,7 @@ import {
   streamChatMessage,
   SessionNotFoundError,
 } from "@/chat/services";
-import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
+import { chatStore } from "@/chat/stores/chat-store";
 import { env } from "@/config/env";
 
 /** Interval between SSE comment heartbeats (see `streamMessage`). */
@@ -66,7 +66,7 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
   const anonymousId = getAnonymousId(req);
   try {
-    const session = await chatSessionsStore.getSession({ id });
+    const session = await chatStore.getSession(id);
     if (!session) {
       return reply.status(404).send({ error: "Chat session not found" });
     }
@@ -94,7 +94,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const { content, branch, model, provider, persona } = req.body as Static<typeof SendMessageBody>;
   const anonymousId = getAnonymousId(req);
 
-  const session = await chatSessionsStore.getSession({ id });
+  const session = await chatStore.getSession(id);
   if (!session) {
     return reply.status(404).send({ error: "Chat session not found" });
   }
