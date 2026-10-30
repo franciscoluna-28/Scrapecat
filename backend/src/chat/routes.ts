@@ -21,7 +21,16 @@ import { env } from "@/config/env";
 const SSE_HEARTBEAT_MS = 15_000;
 
 function getAnonymousId(req: FastifyRequest): string {
-  return (req.headers["x-anonymous-id"] as string) || "anonymous";
+  const header = req.headers["x-anonymous-id"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return (value ?? "").trim().slice(0, 128) || "anonymous";
+}
+
+function canAccessSession(
+  session: { anonymousId: string | null },
+  anonymousId: string,
+): boolean {
+  return !session.anonymousId || session.anonymousId === anonymousId;
 }
 
 export async function createSession(req: FastifyRequest, reply: FastifyReply) {
@@ -52,6 +61,10 @@ export async function getMessages(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as Static<typeof ChatSessionIdParams>;
   const anonymousId = getAnonymousId(req);
   try {
+    const session = await chatStore.getSession(id);
+    if (!session || !canAccessSession(session, anonymousId)) {
+      return reply.status(404).send({ error: "Chat session not found" });
+    }
     const messages = await getChatMessages(id);
     if (!messages) {
       return reply.status(404).send({ error: "Chat session not found" });
@@ -67,11 +80,8 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
   const anonymousId = getAnonymousId(req);
   try {
     const session = await chatStore.getSession(id);
-    if (!session) {
+    if (!session || !canAccessSession(session, anonymousId)) {
       return reply.status(404).send({ error: "Chat session not found" });
-    }
-    if (session.anonymousId && session.anonymousId !== anonymousId) {
-      return reply.status(403).send({ error: "Access denied" });
     }
     const deleted = await deleteChatSession(id);
     if (!deleted) {
@@ -95,11 +105,8 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   const anonymousId = getAnonymousId(req);
 
   const session = await chatStore.getSession(id);
-  if (!session) {
+  if (!session || !canAccessSession(session, anonymousId)) {
     return reply.status(404).send({ error: "Chat session not found" });
-  }
-  if (session.anonymousId && session.anonymousId !== anonymousId) {
-    return reply.status(403).send({ error: "Access denied" });
   }
 
   reply.hijack();

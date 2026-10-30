@@ -145,6 +145,23 @@ describe("chat routes", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("returns 404 for a session owned by another anonymous id", async () => {
+    mockGetSession.mockResolvedValue({
+      id: SESSION_ID,
+      projectId: PROJECT_ID,
+      anonymousId: "owner",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/chat/sessions/${SESSION_ID}/messages`,
+      headers: { "x-anonymous-id": "intruder" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockGetMessages).not.toHaveBeenCalled();
+  });
+
   it("deletes a session", async () => {
     mockDeleteSession.mockResolvedValue(true);
 
