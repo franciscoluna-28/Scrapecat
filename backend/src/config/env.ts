@@ -9,6 +9,10 @@ export const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().default(""),
   AI_MODEL: z.string().default("mimo-v2.6-flash"),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  // Default output-token ceiling for chat completions. Raise it for models
+  // that support longer answers; the AI client applies it when a caller does
+  // not pass `maxTokens`.
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(8192),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
   GROQ_API_KEY: z.string().default(""),

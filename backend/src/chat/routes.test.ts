@@ -12,11 +12,13 @@ vi.mock("@/chat/chat-store", () => ({
 }));
 
 vi.mock("@/chat/services", () => ({
-  createChatSession: (...args: unknown[]) => mockCreateSession(...args),
-  listChatSessions: (...args: unknown[]) => mockListSessions(...args),
-  getChatMessages: (...args: unknown[]) => mockGetMessages(...args),
-  deleteChatSession: (...args: unknown[]) => mockDeleteSession(...args),
-  streamChatMessage: (...args: unknown[]) => mockStreamMessage(...args),
+  chatService: {
+    createSession: (...args: unknown[]) => mockCreateSession(...args),
+    listSessions: (...args: unknown[]) => mockListSessions(...args),
+    getMessages: (...args: unknown[]) => mockGetMessages(...args),
+    deleteSession: (...args: unknown[]) => mockDeleteSession(...args),
+    streamMessage: (...args: unknown[]) => mockStreamMessage(...args),
+  },
   SessionNotFoundError: class extends Error {},
 }));
 

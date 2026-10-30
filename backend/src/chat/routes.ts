@@ -7,11 +7,7 @@ import {
   SendMessageBody,
 } from "@/chat/schemas";
 import {
-  createChatSession,
-  listChatSessions,
-  getChatMessages,
-  deleteChatSession,
-  streamChatMessage,
+  chatService,
   SessionNotFoundError,
 } from "@/chat/services";
 import { chatStore } from "@/chat/chat-store";
@@ -37,7 +33,7 @@ export async function createSession(req: FastifyRequest, reply: FastifyReply) {
   const { projectId } = req.body as Static<typeof CreateSessionBody>;
   const anonymousId = getAnonymousId(req);
   try {
-    const session = await createChatSession(projectId, anonymousId);
+    const session = await chatService.createSession(projectId, anonymousId);
     return reply.status(201).send(session);
   } catch (error) {
     const message = (error as Error)?.message ?? "Failed to create chat session";
@@ -50,7 +46,7 @@ export async function listSessions(req: FastifyRequest, reply: FastifyReply) {
   const { projectId } = req.query as Static<typeof ChatSessionsQuery>;
   const anonymousId = getAnonymousId(req);
   try {
-    const sessions = await listChatSessions(projectId, anonymousId);
+    const sessions = await chatService.listSessions(projectId, anonymousId);
     return reply.send({ sessions });
   } catch {
     return reply.status(500).send({ error: "Failed to list chat sessions" });
@@ -65,7 +61,7 @@ export async function getMessages(req: FastifyRequest, reply: FastifyReply) {
     if (!session || !canAccessSession(session, anonymousId)) {
       return reply.status(404).send({ error: "Chat session not found" });
     }
-    const messages = await getChatMessages(id);
+    const messages = await chatService.getMessages(id);
     if (!messages) {
       return reply.status(404).send({ error: "Chat session not found" });
     }
@@ -83,7 +79,7 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
     if (!session || !canAccessSession(session, anonymousId)) {
       return reply.status(404).send({ error: "Chat session not found" });
     }
-    const deleted = await deleteChatSession(id);
+    const deleted = await chatService.deleteSession(id);
     if (!deleted) {
       return reply.status(404).send({ error: "Chat session not found" });
     }
@@ -157,7 +153,7 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
   res.write("retry: 3000\n\n");
 
   try {
-    const message = await streamChatMessage({
+    const message = await chatService.streamMessage({
       sessionId: id,
       content,
       branch,
