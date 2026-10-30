@@ -10,6 +10,7 @@ type RepositoryUrlInputProps = {
   onConnect: () => void;
   connecting: boolean;
   error: string | null;
+  placeholder?: string;
 };
 
 export function RepositoryUrlInput({
@@ -18,6 +19,7 @@ export function RepositoryUrlInput({
   onConnect,
   connecting,
   error,
+  placeholder = "Paste a GitHub URL or owner/repo",
 }: RepositoryUrlInputProps) {
   return (
     <>
@@ -26,7 +28,7 @@ export function RepositoryUrlInput({
           <Link2 className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Paste a GitHub URL or owner/repo"
+            placeholder={placeholder}
             value={value}
             onChange={(e) => onValueChange(e.target.value)}
             onKeyDown={(e) => {

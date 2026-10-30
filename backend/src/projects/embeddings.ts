@@ -2,10 +2,31 @@ import OpenAI from "openai";
 import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
 import { getAISettings } from "@/settings/services";
-import { getProviderConfig } from "@/shared/integrations/providers/registry";
+import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
+import {
+  getProviderConfig,
+  isEmbeddingProviderSupported,
+} from "@/shared/integrations/providers/registry";
 import { logger } from "@/shared/logger";
 
-const EMBEDDING_DIMENSIONS = 768;
+export type EmbeddingSpace = {
+  provider: string;
+  model: string;
+};
+
+export async function resolveEmbeddingSpace(
+  opts?: { provider?: string; model?: string },
+): Promise<EmbeddingSpace> {
+  if (opts?.provider && opts?.model) {
+    return { provider: opts.provider, model: opts.model };
+  }
+
+  const settings = await getAISettings();
+  return {
+    provider: opts?.provider || settings.embeddingProvider,
+    model: opts?.model || settings.embeddingModel,
+  };
+}
 
 export async function embedTexts(
   texts: string[],
@@ -13,12 +34,10 @@ export async function embedTexts(
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const settings = await getAISettings();
-  const provider = opts?.provider || settings.embeddingProvider;
-  const model = opts?.model || settings.embeddingModel;
+  const { provider, model } = await resolveEmbeddingSpace(opts);
   const config = getProviderConfig(provider);
 
-  if (!config) {
+  if (!isEmbeddingProviderSupported(provider) || !config) {
     throw new Error(`Unsupported embedding provider: ${provider}`);
   }
 
@@ -35,12 +54,20 @@ export async function embedTexts(
         ? config.baseUrl
         : "https://openrouter.ai/api/v1";
 
-  const client = new OpenAI({ apiKey: apiKey || "ollama", baseURL });
+  const client = new OpenAI({
+    apiKey: apiKey || "ollama",
+    baseURL,
+    timeout: env.AI_TIMEOUT_MS,
+    maxRetries: 1,
+  });
   const start = performance.now();
 
   const params: OpenAI.EmbeddingCreateParams = { model, input: texts };
 
-  if (provider !== "ollama") {
+  // Only providers that implement the OpenAI `dimensions` override can be
+  // asked to truncate. Others (Ollama) must use a model that natively emits
+  // the vector(768) width; the response check below still enforces it.
+  if (config.embeddingDimensionsParam) {
     params.dimensions = EMBEDDING_DIMENSIONS;
   }
 
@@ -49,9 +76,9 @@ export async function embedTexts(
   const embeddings = texts.map((_, i) => {
     const emb = byIndex.get(i);
     if (!emb) throw new Error(`Embedding response missing index ${i}`);
-    if (provider !== "ollama" && emb.length !== EMBEDDING_DIMENSIONS) {
+    if (emb.length !== EMBEDDING_DIMENSIONS) {
       throw new Error(
-        `Embedding model returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS}`,
+        `Embedding model "${model}" returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS} (commit_chunks.embedding is vector(${EMBEDDING_DIMENSIONS}))`,
       );
     }
     return emb;

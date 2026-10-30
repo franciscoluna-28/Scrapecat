@@ -4,11 +4,12 @@ import { memo, type ComponentProps } from "react";
 import { Streamdown } from "streamdown";
 import { cn } from "@/src/shared/lib/utils";
 import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 
-const streamdownPlugins = { cjk, code, math, mermaid } as any;
+const streamdownPlugins: NonNullable<
+  ComponentProps<typeof Streamdown>["plugins"]
+> = { cjk, math, mermaid };
 
 const MessageResponseInner = memo(
   ({ className, ...props }: ComponentProps<typeof Streamdown>) => (

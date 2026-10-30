@@ -17,12 +17,12 @@ flowchart TB
     subgraph D["Data"]
         PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
         STORE["Per-domain stores (routes never touch db directly)"]
-        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit (discovery only)"]
+        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit / GitLab REST (discovery only)"]
     end
     FE --> API --> PG
     API --> STORE --> PG
     API --> INFRA
-    INFRA -.->|future| EXT["GitLab · Bitbucket"]
+    INFRA -.->|future| EXT["Bitbucket"]
 ```
 
 ## RAG pipeline
@@ -36,12 +36,12 @@ sequenceDiagram
     participant API as Chat route
     participant Q as Job queue
     participant DB as Postgres
-    participant LLM as callAI()
+    participant LLM as aiClient
 
     C->>API: message + branch
     API->>Q: prepareProjectBranch (ingest if not stored)
     Q->>DB: upsert commit_chunks → embedNewChunks
-    API->>DB: retrieveCommits(query, branch, window)
+    API->>DB: retriever.resolveScope(query, branch, window)
     DB-->>API: ranked citations (vector, keyword fallback)
     API->>LLM: system prompt + retrieved commits + question
     LLM-->>C: streamed tokens (SSE)
@@ -57,9 +57,12 @@ sequenceDiagram
 
 ## Commit ingestion
 
-Batched and archive-based, run as a deduped in-process job. Callers enqueue
-`ingest-branch` and await it; the handler runs inline, and concurrent callers for
-the same project+branch attach to the in-flight run.
+Batched, run as a deduped in-process job. The job selects a `CommitSource` — the
+self-hosted git archive (`createGitCommitSource`) or the demo GitHub API
+(`createApiCommitSource`) — and a shared orchestrator (`ingestCommits`) runs the
+pipeline either way. Callers enqueue `ingest-branch` and await it; the handler
+runs inline, and concurrent callers for the same project+branch attach to the
+in-flight run.
 
 ```mermaid
 flowchart TD
@@ -75,6 +78,10 @@ flowchart TD
     U --> EM["embedNewChunks (batch, non-blocking)"]
 ```
 
+- **Two sources:** `createGitCommitSource` (self-hosted; native git + per-commit
+  diffs + guardrail, 50-row batches) and `createApiCommitSource` (demo; GitHub
+  REST with best-effort file scopes, a single batch, no guardrail) both feed the
+  same `ingestCommits` orchestrator.
 - **Why batch:** the workload needs everything from a rate-limited API; one clone
   collapses it into a single idempotent fetch. GitHub REST is used only for
   **discovery** (repo/branch listing, connection check) and the clone itself.
@@ -103,6 +110,20 @@ Serverless cannot run the binary at all — which is why the demo uses the GitHu
 REST API. The clean split: self-hosted ships git; serverless does not and uses
 the API path.
 
+## Operational safety
+
+- **Bounded LLM calls.** `aiClient` applies `AI_TIMEOUT_MS` to every chat request
+  and caps output at `AI_MAX_OUTPUT_TOKENS` (default `8192`) unless the caller
+  overrides `maxTokens`; embedding calls use the same timeout with one retry. SSE handlers abort the
+  upstream call when the client disconnects.
+- **Graceful shutdown.** `SIGTERM`/`SIGINT` close the Fastify server, which drains
+  active ingest jobs (bounded to 10s) before exiting.
+- **Readiness.** `GET /api/v1/health/ready` runs `select 1` against Postgres and
+  returns 503 when it cannot connect; `GET /api/v1/health` stays a liveness probe.
+  Docker images use the readiness route for their healthcheck.
+- **Fail fast on config.** `ENCRYPTION_KEY` is validated as base64-encoded 32
+  bytes at startup instead of failing at the first encrypt/decrypt call.
+
 ## Model resolution
 
 Two roles, each with a provider + model setting stored in `app_settings`:
@@ -113,8 +134,23 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 | Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
 
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
-`defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
-`src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
+`defaultAISettings()` (env defaults). Chat calls go through
+`resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
+`src/chat/ai.ts`; embeddings through `embedTexts()` in
+`src/projects/embeddings.ts`. Each `commit_chunks` row stores its embedding
+provider/model, and retrieval only searches vectors in the current space;
+changing the embedding model enqueues a background reindex.
+
+Chat model ids are resolved through the provider catalog
+(`src/shared/integrations/providers/catalog.ts`), which records each model's
+transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
+`google-generative`). `protocols.ts` is the only module that imports model SDKs;
+`createAIClient()` hands it the registry config, catalog entry, and key. The
+client factory and `createChatService()` are the DI seams — tests inject fake
+SDK functions or fake turn dependencies instead of mocking the whole call path.
+The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
+(query window + semantic/keyword search), prompt assembly stays pure, and
+`chatService` composes them with `aiClient.stream()`.
 
 ## Tech debt
 
@@ -122,32 +158,74 @@ Every shortcut below is intentional and tracked, not accidental.
 
 ### Git provider coupling
 
-External data flows through `src/shared/integrations/git-provider/` (an Octokit
-adapter behind an interface), but it is imported directly by consuming
-routes/services with no DI — adding GitLab/Bitbucket means touching each call
-site.
+External data flows through `src/shared/integrations/git-provider/`. The
+registry owns each provider's URLs, clone auth, env key, and client factory;
+`getGitProvider(provider, token)` returns the interface, never a concrete
+adapter. Connection routes are provider-generic
+(`/api/v1/git-providers/:provider/connection`) and all token precedence lives in
+`resolveGitToken`. Adding a provider is a registry entry plus an adapter, not a
+call-site sweep — GitLab (`GitlabAdapter` + a thin `fetch` client, self-hosted
+via `GITLAB_HOST`) was exactly that. Full DI is deliberately unused: the
+registry/factory is the seam and is enough for one adapter per provider.
 
 ### Database coupling
 
 The DB client is initialized at module load in `src/db/client.ts`. Access goes
-through per-domain stores; routes never import `db` directly.
+through per-domain stores; routes never import `db` directly. Stores export a
+`createXStore(client?)` factory plus a default singleton, so methods bind the
+client once and tests can inject a fake instead of mocking the module.
 
 ### No dependency injection
 
 Services are imported at the top of files, not injected. Swapping implementations
-means changing import paths everywhere; tests compensate with `vi.mock()`.
+means changing import paths everywhere; tests compensate with `vi.mock()`. This
+is acceptable while each role has one implementation; revisit only when a real
+multi-tenant/runtime plugin need appears.
 
-### No auth layer
+### No end-user auth layer
 
-The API has zero authentication — fine for trusted self-hosted deployments,
-impossible to open as multi-tenant SaaS without a rework.
+Self-hosted is intentionally account-less: the API assumes one trusted operator,
+which fits the open-source model. Request-level authorization still exists where
+it matters — chat sessions are scoped by the client's anonymous ID
+(`x-anonymous-id`), and demo mode (`DEMO_MODE`) forces `DEMO_RESTRICT_KEYS`, repo
+restrictions, and rate limits. What is missing is identity and tenancy: no
+accounts, login sessions, or per-user isolation, so opening the same API as
+multi-tenant SaaS needs a rework.
+
+### Production Docker images
+
+Self-hosted clients build `backend/Dockerfile` and `frontend/Dockerfile` from the
+workspace root; `docker-compose.prod.yml` wires them to Postgres with health-gated
+startup. The backend image bundles `src/main.ts` and the migration runner with
+esbuild, installs production dependencies only, ships the native `git` binary,
+runs as `node`, and applies migrations on boot. The frontend builds Next's
+standalone output (only when `NEXT_OUTPUT=standalone`, set by the Dockerfile) and
+runs `server.js` as `nextjs`; the serverless Vercel path does not set that flag
+and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions:
+[`deployment.md`](deployment.md).
 
 ### Validation & data-integrity gaps
 
-- `startDate`/`endDate` are unvalidated strings; invalid dates surface as 500s.
 - `limit`/`per_page` on discovery endpoints are validated (1–100) and fail fast.
 - No transactions: project upsert and chunk ingest are separate writes. A mid-way
   failure leaves chunks persisted (safe today — chunks are the cache).
+
+### Unbounded pending embedding reads
+
+`embedNewChunks` loads every pending row for a project with
+`listPendingChunks(projectId)` before embedding them in batches. The write side
+is set-based (one `UPDATE ... FROM unnest(...)` per batch), but the read side is
+not bounded.
+
+This is an accepted trade-off at the current scale: pending normally means the
+commits from the current ingest, re-runs find almost nothing, and the demo caps
+commits. It becomes a memory risk with very large repositories or a persistent
+embedding backlog. `EMBEDDING_BATCH_SIZE` bounds the vectors held per batch, not
+the pending row list.
+
+If this becomes measurable, replace the single read with a bounded loop
+(`LIMIT batchSize` until empty) or a keyset/cursor. Do not add a surrounding
+transaction: the pipeline is idempotent and each batch write is atomic.
 
 ### Diff grounding is file-level, not content-level
 
@@ -162,12 +240,14 @@ handles one-time re-embedding.
 
 Decouple in phases, no big-bang rewrites:
 
-1. **Git provider interface** — one adapter interface so routes don't know the
-   source (GitHub/GitLab/Bitbucket).
+1. **Git provider interface** — done: the registry/factory returns the interface,
+   and provider-generic connection routes own auth.
 2. **Data access layer** — per-domain stores (already largely in place); vector
    search infrastructure is ready.
-3. **Dependency injection** — wire providers and stores via Fastify's `decorate`
-   so routes receive dependencies instead of importing them.
+3. **Next provider** — GitLab is done (gitlab.com by default, `GITLAB_HOST` for
+   self-hosted). Demo ingestion remains GitHub-only; a Bitbucket adapter would
+   follow the same registry/adapter pattern.
 
-Each migration: extract interface → implement behind it → run both in parallel →
-flip the default → remove the old one.
+Full DI is not on the roadmap: the factory is the seam, and injecting services
+would add ceremony without a second consumer. Each future migration: implement
+behind the interface → keep the default → remove the old path when unused.

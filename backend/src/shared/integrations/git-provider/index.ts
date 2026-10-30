@@ -1,5 +1,8 @@
-import { env } from "@/config/env";
-import { GithubAdapter } from "@/shared/integrations/git-provider/github-adapter";
+import {
+  getGitProviderConfig,
+  type GitProviderId,
+} from "@/shared/integrations/git-provider/registry";
+import type { GitProvider } from "@/shared/integrations/git-provider/provider";
 
 export type { GitProvider } from "@/shared/integrations/git-provider/provider";
 export type {
@@ -7,23 +10,20 @@ export type {
   RepositoryFilters,
   ConnectionStatus,
 } from "@/shared/integrations/git-provider/types";
+export type { GitProviderId } from "@/shared/integrations/git-provider/registry";
+export { GIT_PROVIDERS, isGitProviderId } from "@/shared/integrations/git-provider/registry";
+export { getGitProviderConfig } from "@/shared/integrations/git-provider/registry";
+export { commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
 
-const providerCache = new Map<string | null, GithubAdapter>();
-
-function createProvider(token: string | null) {
-  const resolved = token || env.GITHUB_TOKEN;
-  if (env.GIT_PROVIDER === "github" || !env.GIT_PROVIDER) {
-    return new GithubAdapter(resolved);
-  }
-  return new GithubAdapter(resolved);
-}
-
-export function getGitProvider(token?: string | null) {
-  const key = token ?? (env.GITHUB_TOKEN || null);
-  let provider = providerCache.get(key);
-  if (!provider) {
-    provider = createProvider(key);
-    providerCache.set(key, provider);
-  }
-  return provider;
+/**
+ * Returns the adapter for a provider (from the project/request) and token.
+ * Callers resolve the token with `resolveGitToken`; there is no implicit env
+ * fallback here, so token precedence lives in exactly one place.
+ * Unimplemented providers fail fast instead of silently using GitHub.
+ */
+export function getGitProvider(
+  provider: GitProviderId,
+  token: string | null = null,
+): GitProvider {
+  return getGitProviderConfig(provider).createAdapter(token);
 }

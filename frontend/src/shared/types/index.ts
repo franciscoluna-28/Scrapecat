@@ -1,6 +1,7 @@
 import type { paths } from "@/src/shared/api/types";
+import type { GitProviderId } from "@/src/shared/constants";
 
-export type GitHubRepository = {
+export type GitProviderRepository = {
   id: string;
   name: string;
   full_name: string;
@@ -12,7 +13,12 @@ export type GitHubRepository = {
   forks_count?: number;
 };
 
-export type GitHubProject =
+/** A repository from one provider, tagged so merged feeds keep their origin. */
+export type GitProviderRepositoryItem = GitProviderRepository & {
+  provider: GitProviderId;
+};
+
+export type GitProviderProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
 
 export type ChatSession =

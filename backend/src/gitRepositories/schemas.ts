@@ -1,11 +1,17 @@
 import { Type } from "@sinclair/typebox";
+import { GitProviderSchema, OptionalGitProviderSchema } from "@/shared/typebox";
 
 export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
   repo: Type.String(),
 });
 
+export const BranchesQuery = Type.Object({
+  provider: OptionalGitProviderSchema,
+});
+
 export const CommitsQuery = Type.Object({
+  provider: OptionalGitProviderSchema,
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 100 })),
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
@@ -25,6 +31,7 @@ export const CommitsResponse = Type.Object({
 });
 
 export const CommitsCountQuery = Type.Object({
+  provider: OptionalGitProviderSchema,
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
   branch: Type.Optional(Type.String()),
@@ -35,6 +42,8 @@ export const CommitsCountResponse = Type.Object({
 });
 
 export const RepositoriesQuery = Type.Object({
+  // No default: omitting `provider` means "every connected provider".
+  provider: Type.Optional(GitProviderSchema),
   type: Type.Optional(Type.String({ default: "all" })),
   sort: Type.Optional(Type.String({ default: "updated" })),
   direction: Type.Optional(Type.String({ default: "desc" })),

@@ -1,11 +1,9 @@
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
-import { ensureArchive } from "@/repositories/archive-service";
-import { listCommitsInRange, type LocalCommit } from "@/repositories/git-reader";
-import { getCommitChangedFiles, type CommitChangedStats } from "@/repositories/git-diff";
-import { classifyCommit, type CommitGuardResult } from "@/repositories/guardrail";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
-import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
+import {
+  commitChunksStore,
+  type CommitChunkInput,
+} from "@/projects/stores/commit-chunks-store";
 import { embedNewChunks } from "@/projects/embed-chunks";
 
 export type IngestResult = {
@@ -21,76 +19,75 @@ export type IngestProgress = (
   total?: number,
 ) => void;
 
-const BATCH_SIZE = 50;
-const WALK_CONCURRENCY = 8;
+/** A commit as seen by a source, before file scope / guardrail are applied. */
+export type SourceCommit = {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  parentSha?: string | null;
+  /** Provider commit URL when the source has one (API); git builds its own. */
+  url?: string;
+};
 
-/**
- * Runs `fn` over `items` with at most `limit` promises in flight. The commit
- * file-scope reads shell out to the native git binary (async, non-blocking),
- * but spawning dozens of processes at once is still wasteful — a modest
- * concurrency bounds process count while keeping the loop responsive.
- */
-async function mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-/**
- * Batch-ingests the commit window for a repo branch into `commit_chunks`.
- *
- * 1. Ensure the local git archive is current (clone or incremental fetch).
- * 2. List commits in `[startDate, endDate]` from disk (native git).
- * 3. Walk each NEW commit's tree vs its parent to get the real file scope
- *    (OID compare only — no blob reads, bounded memory).
- * 4. Guardrail: skip empty/no-op commits, flag uninformative or lying messages.
- * 5. Upsert chunks in small batches (dedupe by SHA) — never hold the whole
- *    window in memory at once.
- * 6. Trigger embedding.
- *
- * No per-item GitHub API calls, no pagination, no watermark — the archive is
- * the source of truth and dedupe is by SHA. `onProgress` reports stages so the
- * caller can persist + stream live status.
- */
-export async function ingestCommits(opts: {
+export type SourceContext = {
   owner: string;
   repo: string;
   branch: string;
   projectId: string;
-  startDate?: Date;
-  endDate?: Date;
-  onProgress?: IngestProgress;
-  jobId?: string;
-}): Promise<IngestResult> {
-  const { owner, repo, branch, projectId, startDate, endDate, onProgress, jobId } = opts;
-  const base = { owner, repo, branch, projectId };
+};
 
-  const archive = await timed("ingest.ensureArchive", base, () =>
-    ensureArchive({ owner, repo, branch, jobId }),
-  );
+/**
+ * A place commits come from. The orchestrator (`ingestCommits`) owns the common
+ * pipeline — dedupe by SHA, batched upsert, embedding, progress, logging — while
+ * each source owns only how commits are listed and turned into chunk rows.
+ *
+ * The source-specific parts are deliberate and preserved:
+ * - `listCommits` also resolves the source's own `tipSha`.
+ * - `toChunkInputs` owns file-scope fetching and (git-only) guardrail.
+ * - `batchSize` controls upsert granularity: 50 for git, unbounded for the API
+ *   path (a single upsert, matching its previous behavior).
+ */
+export interface CommitSource {
+  batchSize: number;
+  listCommits(opts: {
+    since?: Date;
+    until?: Date;
+  }): Promise<{ commits: SourceCommit[]; tipSha: string }>;
+  toChunkInputs(
+    commits: SourceCommit[],
+    ctx: SourceContext,
+  ): Promise<{ inputs: CommitChunkInput[]; skipped: number }>;
+}
 
-  const commits = await timed(
-    "ingest.listCommitsInRange",
-    { ...base, startDate: startDate?.toISOString(), endDate: endDate?.toISOString() },
-    () =>
-      listCommitsInRange({
-        dir: archive.dir,
-        ref: branch,
-        since: startDate,
-        until: endDate,
-      }),
-  );
+/**
+ * Ingests the commit window for a repo branch into `commit_chunks`.
+ *
+ * 1. List commits from the source within `[startDate, endDate]`.
+ * 2. Dedupe by SHA against already-stored chunks — *before* any file-scope work,
+ *    so existing commits are never re-diffed.
+ * 3. Enrich + upsert in `source.batchSize` batches (git: 50; API: one batch).
+ * 4. Trigger embedding when anything was written.
+ *
+ * `onProgress` reports stages so the caller can persist + stream live status.
+ */
+export async function ingestCommits(
+  source: CommitSource,
+  opts: {
+    owner: string;
+    repo: string;
+    branch: string;
+    projectId: string;
+    startDate?: Date;
+    endDate?: Date;
+    requestId?: string;
+    onProgress?: IngestProgress;
+  },
+): Promise<IngestResult> {
+  const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
+  const base = { owner, repo, branch, projectId, ...(opts.requestId ? { reqId: opts.requestId } : {}) };
+
+  const { commits, tipSha } = await source.listCommits({ since: startDate, until: endDate });
   onProgress?.("commits", `Found ${commits.length} commits`, commits.length, commits.length);
 
   const existing = await timed("ingest.getChunksByShas", { ...base, shas: commits.length }, () =>
@@ -111,65 +108,32 @@ export async function ingestCommits(opts: {
     "ingest.prepareChunks complete",
   );
 
+  const batchSize = source.batchSize;
   let chunksWritten = 0;
   let skipped = 0;
-  for (let i = 0; i < newCommits.length; i += BATCH_SIZE) {
-    const batch = newCommits.slice(i, i + BATCH_SIZE);
-    const chunks: CommitChunkInput[] = [];
+
+  for (let i = 0; i < newCommits.length; i += batchSize) {
+    const batch = newCommits.slice(i, i + batchSize);
     const batchStart = performance.now();
 
-    const diffs = await mapLimit(batch, WALK_CONCURRENCY, async (c) => {
-      const stats = await getCommitChangedFiles({
-        dir: archive.dir,
-        parentSha: c.parentSha,
-        commitSha: c.sha,
-      });
-      return { sha: c.sha, stats } as const;
+    const { inputs, skipped: batchSkipped } = await source.toChunkInputs(batch, {
+      owner,
+      repo,
+      branch,
+      projectId,
     });
-    const diffBySha = new Map(diffs.map((d) => [d.sha, d]));
+    skipped += batchSkipped;
 
-    type IngestEntry = {
-      c: LocalCommit;
-      stats: CommitChangedStats;
-      guard: CommitGuardResult;
-    };
-    const entries: IngestEntry[] = [];
-    for (const c of batch) {
-      const d = diffBySha.get(c.sha);
-      if (!d) continue;
-      const guard = classifyCommit({ message: c.message, filesChanged: d.stats.filesChanged });
-      if (guard.status === "skipped") {
-        skipped += 1;
-        continue;
-      }
-      entries.push({ c, stats: d.stats, guard });
+    if (inputs.length > 0) {
+      await commitChunksStore.upsertCommitChunks(inputs);
+      chunksWritten += inputs.length;
     }
 
-    for (const { c, stats, guard } of entries) {
-      chunks.push({
-        projectId,
-        commitSha: c.sha,
-        branch,
-        commitMessage: c.message,
-        author: c.author,
-        metadata: {
-          filesChanged: stats.files.map((f) => f.filepath),
-          commitUrl: `https://github.com/${owner}/${repo}/commit/${c.sha}`,
-          validation: { status: guard.status, notes: guard.notes },
-        },
-        committedAt: new Date(c.date),
-      });
-    }
-
-    if (chunks.length > 0) {
-      await commitChunksStore.upsertCommitChunks({ inputs: chunks });
-      chunksWritten += chunks.length;
-    }
     const processed = Math.min(i + batch.length, newCommits.length);
     logger.info(
       {
         ...base,
-        batchIndex: i / BATCH_SIZE,
+        batchIndex: i / batchSize,
         processed,
         total: newCommits.length,
         chunksWritten,
@@ -187,12 +151,24 @@ export async function ingestCommits(opts: {
   }
 
   let embedded = 0;
-  if (chunksWritten > 0) {
+  const expectsEmbedding = chunksWritten > 0;
+  if (expectsEmbedding) {
     onProgress?.("embedding", "Embedding commit summaries");
-    const result = await timed("ingest.embedNewChunks", base, () =>
-      embedNewChunks(projectId),
-    );
+  }
+  // Always re-check pending embeddings: a previous run may have stored chunks
+  // before the provider was available. `embedNewChunks` no-ops when none are
+  // pending, and a failure must not fail the whole ingest.
+  try {
+    const result = await timed("ingest.embedNewChunks", base, () => embedNewChunks(projectId));
     embedded = result.embedded;
+  } catch (error) {
+    logger.warn(
+      { ...base, err: (error as Error)?.message ?? String(error) },
+      "ingest.embeddingSkipped",
+    );
+    if (expectsEmbedding) {
+      onProgress?.("embedding", "Commits stored; embeddings will run later");
+    }
   }
 
   logger.info(
@@ -202,14 +178,10 @@ export async function ingestCommits(opts: {
       chunksWritten,
       skipped,
       embedded,
-      tipSha: archive.tipSha,
+      tipSha,
     },
     "ingest complete",
   );
 
-  return {
-    commitsFound: commits.length,
-    chunksWritten,
-    tipSha: archive.tipSha,
-  };
+  return { commitsFound: commits.length, chunksWritten, tipSha };
 }

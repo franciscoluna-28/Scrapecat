@@ -3,18 +3,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface ChatBranchState {
   branches: Record<string, string>;
-  getBranch: (projectId: string, defaultBranch: string | null) => string;
   setBranch: (projectId: string, branch: string) => void;
 }
 
 export const useChatBranchStore = create<ChatBranchState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       branches: {},
-      getBranch: (projectId, defaultBranch) => {
-        const stored = get().branches[projectId];
-        return stored ?? defaultBranch ?? '';
-      },
       setBranch: (projectId, branch) =>
         set((state) => ({
           branches: { ...state.branches, [projectId]: branch },

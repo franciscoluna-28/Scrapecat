@@ -2,9 +2,17 @@ import { env } from "@/config/env";
 import { getProviderConfig, isProviderSupported } from "@/shared/integrations/providers/registry";
 import { encrypt, decrypt, maskApiKey } from "@/credentials/encryption";
 import type { CredentialProvider } from "@/db/schema";
-import * as credentialsStore from "@/credentials/stores/credentials-store";
+import {
+  credentialsStore,
+  type CredentialRow,
+} from "@/credentials/stores/credentials-store";
 
-export function toSafeCredential(row: Awaited<ReturnType<typeof credentialsStore.listCredentials>>[number]) {
+/**
+ * Domain-specific presenter: drops the encrypted key before a credential leaves
+ * the service. Lives here (not `shared/utils`) because it knows the credential
+ * shape; it is exported so route tests can assert the safe view.
+ */
+export function toSafeCredential(row: CredentialRow) {
   return {
     id: row.id,
     provider: row.provider,

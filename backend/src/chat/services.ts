@@ -1,213 +1,258 @@
-import { env } from "@/config/env";
 import type { ChatCitation } from "@/db/schema";
-import { resolveApiKey } from "@/credentials/services";
-import { getProviderConfig } from "@/shared/integrations/providers/registry";
-import { getAISettings } from "@/settings/services";
-import { ProviderKeyError } from "@/chat/ai";
-import { callAI } from "@/chat/ai";
-import * as chatSessionsStore from "@/chat/stores/chat-sessions-store";
-import { retrieveCommits } from "@/chat/retrieval";
-import { parseQueryWindow, hasTemporalIntent } from "@/chat/date-window";
-import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
-import { buildSystemPrompt, buildUserMessage } from "@/chat/prompts";
+import {
+  aiClient,
+  resolveChatModel,
+  type AIMessage,
+  type ResolvedChatModel,
+} from "@/chat/ai";
+import {
+  chatStore,
+  type ChatMessageRow,
+  type ChatSessionRow,
+} from "@/chat/chat-store";
+import { retriever } from "@/chat/retrieval";
+import {
+  buildSystemPrompt,
+  buildUserMessage,
+  resolvePersona,
+} from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
-import * as projectsStore from "@/projects/stores/projects-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
 import type { IngestProgress } from "@/repositories/ingest";
 
 const HISTORY_LIMIT = 20;
 
-function toMessageDTO(row: Awaited<ReturnType<typeof chatSessionsStore.addMessage>>): ChatMessageDTO {
-  return {
-    id: row.id,
-    role: row.role === "assistant" ? "assistant" : "user",
-    content: row.content,
-    branch: row.branch ?? null,
-    citations: (row.citations ?? []) as ChatCitation[],
-    createdAt: new Date(row.createdAt).toISOString(),
-  };
-}
-
-export async function createChatSession(projectId: string, anonymousId: string) {
-  const project = await projectsStore.getProjectById({ id: projectId });
-  if (!project) {
-    throw new Error("Project not found");
-  }
-  const row = await chatSessionsStore.createSession({
-    projectId,
-    title: "New chat",
-    anonymousId,
-  });
-  return {
-    id: row.id,
-    projectId: row.projectId,
-    title: row.title,
-    createdAt: new Date(row.createdAt).toISOString(),
-    updatedAt: new Date(row.updatedAt).toISOString(),
-  };
-}
-
-export async function listChatSessions(projectId?: string, anonymousId?: string) {
-  const rows = await chatSessionsStore.listSessions({ projectId, anonymousId });
-  return rows.map((r) => ({
-    id: r.id,
-    projectId: r.projectId,
-    title: r.title,
-    createdAt: new Date(r.createdAt).toISOString(),
-    updatedAt: new Date(r.updatedAt).toISOString(),
-  }));
-}
-
-export async function getChatMessages(sessionId: string) {
-  const session = await chatSessionsStore.getSession({ id: sessionId });
-  if (!session) return null;
-  const rows = await chatSessionsStore.listMessages({ sessionId });
-  return rows.map(toMessageDTO);
-}
-
-export async function deleteChatSession(id: string) {
-  const session = await chatSessionsStore.getSession({ id });
-  if (!session) return false;
-  await chatSessionsStore.deleteSession({ id });
-  return true;
-}
-
-async function resolveProviderAndKey(override?: { provider?: string; model?: string }) {
-  const settings = await getAISettings();
-  const provider = override?.provider || settings.chatProvider;
-  const model = override?.model || settings.chatModel;
-  const providerConfig = getProviderConfig(provider);
-  if (!providerConfig) throw new ProviderKeyError(provider);
-  const storedKey = await resolveApiKey(provider);
-  const apiKey =
-    storedKey ||
-    (env as unknown as Record<string, string>)[providerConfig.envKey] ||
-    "";
-  if (!apiKey) throw new ProviderKeyError(provider);
-  return { provider, model, apiKey };
-}
-
-/**
- * Sends a chat message: persists the user message, retrieves the most relevant
- * commits, streams the assistant reply via `onToken`, then persists the reply
- * with its citations. Returns the final assistant message.
- */
-export async function streamChatMessage(opts: {
+export type ChatStreamOptions = {
   sessionId: string;
   content: string;
   branch?: string | null;
   model?: string;
   provider?: string;
+  persona?: string;
+  signal?: AbortSignal;
   onToken: (chunk: string) => void;
   onProgress?: IngestProgress;
-}): Promise<ChatMessageDTO> {
-  const { sessionId, content, branch, model, provider, onToken, onProgress } = opts;
+};
 
-  const session = await chatSessionsStore.getSession({ id: sessionId });
-  if (!session) throw new SessionNotFoundError();
+type ChatServiceDeps = {
+  store: typeof chatStore;
+  projects: typeof projectsStore;
+  ai: typeof aiClient;
+  resolveModel: typeof resolveChatModel;
+  retriever: typeof retriever;
+  prepareBranch: typeof prepareProjectBranch;
+};
 
-  const project = await projectsStore.getProjectById({ id: session.projectId });
+const defaultDeps: ChatServiceDeps = {
+  store: chatStore,
+  projects: projectsStore,
+  ai: aiClient,
+  resolveModel: resolveChatModel,
+  retriever,
+  prepareBranch: prepareProjectBranch,
+};
 
-  await chatSessionsStore.addMessage({ sessionId, role: "user", content });
+type ProjectRow = Awaited<
+  ReturnType<ChatServiceDeps["projects"]["getProjectById"]>
+>;
 
-  // Fall back to the project's default branch when the client omits one.
-  const requestedBranch = branch || project?.defaultBranch || "main";
+type TurnContext = {
+  session: ChatSessionRow;
+  project: ProjectRow;
+  branch: string;
+  scope: Awaited<ReturnType<ChatServiceDeps["retriever"]["resolveScope"]>>;
+  history: ChatMessageRow[];
+  model: ResolvedChatModel;
+};
 
-  // Ensure the branch is ingested before retrieval. `prepareProjectBranch`
-  // returns the branch actually ingested (demo self-corrects a stale
-  // main/master default), so retrieval uses the same ref.
-  const prepared = await prepareProjectBranch(session.projectId, requestedBranch, onProgress).catch(() => null);
-  const effectiveBranch = prepared?.branch || requestedBranch;
+/**
+ * Chat application service. One object owns the session operations and the
+ * streamed-turn pipeline; dependencies are injected so tests can swap the
+ * store, project lookup, retrieval, model resolution, and AI client.
+ */
+export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
+  const deps = { ...defaultDeps, ...overrides };
 
-  let { startDate: dateWindowStart, endDate: dateWindowEnd, filteredQuery, isRelative } = parseQueryWindow(content);
+  function toMessageDTO(row: ChatMessageRow): ChatMessageDTO {
+    return {
+      id: row.id,
+      role: row.role === "assistant" ? "assistant" : "user",
+      content: row.content,
+      branch: row.branch ?? null,
+      citations: (row.citations ?? []) as ChatCitation[],
+      createdAt: new Date(row.createdAt).toISOString(),
+    };
+  }
 
-  const DAY_MS = 86_400_000;
+  function toSessionDTO(row: ChatSessionRow) {
+    return {
+      id: row.id,
+      projectId: row.projectId,
+      title: row.title,
+      createdAt: new Date(row.createdAt).toISOString(),
+      updatedAt: new Date(row.updatedAt).toISOString(),
+    };
+  }
 
-  // Temporal keywords like "last", "latest", "recent" with no explicit date:
-  // anchor the window at the latest commit so the date-prefixed embedding
-  // aligns and the SQL filter excludes old irrelevant results.
-  if (
-    !dateWindowStart &&
-    !dateWindowEnd &&
-    hasTemporalIntent(content)
+  async function requireSession(sessionId: string) {
+    const session = await deps.store.getSession(sessionId);
+    if (!session) throw new SessionNotFoundError();
+    return session;
+  }
+
+  async function resolveBranch(
+    projectId: string,
+    requested: string,
+    onProgress?: IngestProgress,
   ) {
-    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
-    if (latest) {
-      dateWindowEnd = latest;
-      dateWindowStart = new Date(latest.getTime() - 45 * DAY_MS);
-    }
+    const prepared = await deps
+      .prepareBranch(projectId, requested, onProgress)
+      .catch(() => null);
+    return prepared?.branch || requested;
   }
 
-  let citations = await retrieveCommits({
-    projectId: session.projectId,
-    query: filteredQuery,
-    branch: effectiveBranch,
-    startDate: dateWindowStart,
-    endDate: dateWindowEnd,
-  });
-
-  // Relative windows ("this week", "last 30 days") are anchored to wall-clock
-  // now, but a repo whose newest commit predates that window has nothing to
-  // return. Retry anchored at the latest commit so recency queries still
-  // surface the most recent work instead of reporting an empty range.
-  if (citations.length === 0 && isRelative) {
-    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
-    if (latest) {
-      citations = await retrieveCommits({
-        projectId: session.projectId,
-        query: filteredQuery,
-        branch: effectiveBranch,
-        startDate: new Date(latest.getTime() - 45 * DAY_MS),
-        endDate: latest,
-      });
-    }
+  function priorTurns(history: ChatMessageRow[]): AIMessage[] {
+    return history
+      .slice(-HISTORY_LIMIT)
+      .slice(0, -1)
+      .map((message) => ({
+        role: message.role === "assistant" ? "assistant" : "user",
+        content: message.content,
+      }));
   }
 
-  const history = await chatSessionsStore.listMessages({ sessionId });
-  const prior = history.slice(-HISTORY_LIMIT).map((m) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }));
-  // The last history entry is the user message we just added — it is replaced
-  // below by the context-augmented version.
-  const priorTurns = prior.slice(0, -1);
+  function buildMessages(
+    turn: TurnContext,
+    options: ChatStreamOptions,
+  ): AIMessage[] {
+    const now = new Date();
+    return [
+      {
+        role: "system",
+        content: buildSystemPrompt(
+          turn.project?.repositoryName,
+          now,
+          resolvePersona(options.persona),
+        ),
+      },
+      ...priorTurns(turn.history),
+      {
+        role: "user",
+        content: buildUserMessage(options.content, turn.scope.citations, {
+          branch: turn.branch,
+          startDate: turn.scope.startDate,
+          endDate: turn.scope.endDate,
+          now,
+        }),
+      },
+    ];
+  }
 
-  const { provider: resolvedProvider, model: resolvedModel, apiKey } = await resolveProviderAndKey({ provider, model });
+  async function prepareTurn(
+    options: ChatStreamOptions,
+  ): Promise<TurnContext> {
+    const session = await requireSession(options.sessionId);
+    const project = await deps.projects.getProjectById(session.projectId);
 
-  const messages: { role: "user" | "assistant" | "system"; content: string }[] = [
-    { role: "system", content: buildSystemPrompt(project?.repositoryName) },
-    ...priorTurns,
-    {
+    await deps.store.addMessage({
+      sessionId: options.sessionId,
       role: "user",
-      content: buildUserMessage(content, citations, {
-        branch: effectiveBranch,
-        startDate: dateWindowStart,
-        endDate: dateWindowEnd,
-        now: new Date(),
-      }),
-    },
-  ];
+      content: options.content,
+    });
 
-  const result = await callAI({
-    provider: resolvedProvider,
-    model: resolvedModel,
-    apiKey,
-    maxTokens: 8192,
-    messages,
-    onChunk: (chunk) => onToken(chunk),
-  });
+    const requestedBranch =
+      options.branch || project?.defaultBranch || "main";
+    const branch = await resolveBranch(
+      session.projectId,
+      requestedBranch,
+      options.onProgress,
+    );
 
-  const reply = await chatSessionsStore.addMessage({
-    sessionId,
-    role: "assistant",
-    content: result.content,
-    branch: effectiveBranch,
-    citations,
-  });
-  await chatSessionsStore.touchSession({ id: sessionId });
+    const scope = await deps.retriever.resolveScope({
+      projectId: session.projectId,
+      query: options.content,
+      branch,
+    });
 
-  return toMessageDTO(reply);
+    const history = await deps.store.listMessages(options.sessionId);
+    const model = await deps.resolveModel({
+      provider: options.provider,
+      model: options.model,
+    });
+
+    return { session, project, branch, scope, history, model };
+  }
+
+  async function streamMessage(
+    options: ChatStreamOptions,
+  ): Promise<ChatMessageDTO> {
+    const turn = await prepareTurn(options);
+    const messages = buildMessages(turn, options);
+
+    const result = await deps.ai.stream(
+      {
+        model: turn.model,
+        messages,
+        sessionId: options.sessionId,
+        abortSignal: options.signal,
+      },
+      options.onToken,
+    );
+
+    const reply = await deps.store.addMessage({
+      sessionId: options.sessionId,
+      role: "assistant",
+      content: result.content,
+      branch: turn.branch,
+      citations: turn.scope.citations,
+    });
+    await deps.store.touchSession(options.sessionId);
+
+    return toMessageDTO(reply);
+  }
+
+  async function createSession(projectId: string, anonymousId: string) {
+    const project = await deps.projects.getProjectById(projectId);
+    if (!project) throw new Error("Project not found");
+
+    const row = await deps.store.createSession({
+      projectId,
+      title: "New chat",
+      anonymousId,
+    });
+    return toSessionDTO(row);
+  }
+
+  async function listSessions(projectId?: string, anonymousId?: string) {
+    const rows = await deps.store.listSessions({ projectId, anonymousId });
+    return rows.map(toSessionDTO);
+  }
+
+  async function getMessages(sessionId: string) {
+    const session = await deps.store.getSession(sessionId);
+    if (!session) return null;
+    const rows = await deps.store.listMessages(sessionId);
+    return rows.map(toMessageDTO);
+  }
+
+  async function deleteSession(id: string) {
+    const session = await deps.store.getSession(id);
+    if (!session) return false;
+    await deps.store.deleteSession(id);
+    return true;
+  }
+
+  return {
+    createSession,
+    listSessions,
+    getMessages,
+    deleteSession,
+    streamMessage,
+  };
 }
+
+export const chatService = createChatService();
 
 export class SessionNotFoundError extends Error {
   readonly status = 404;

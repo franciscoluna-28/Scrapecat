@@ -13,6 +13,7 @@ import {
 } from "@/src/components/ai-elements/prompt-input";
 import { BranchSelector } from "./BranchSelector";
 import { ModelSelectorDialog } from "./ModelSelectorDialog";
+import { PersonaSelector } from "./PersonaSelector";
 import { useChatModelStore } from "@/src/store/chat-model";
 import { useAllModels } from "@/src/shared/services/ai-models";
 import { useAISettings } from "@/src/shared/services/ai-settings";
@@ -83,6 +84,7 @@ export function ChatComposer({
           />
         </PromptInputBody>
         <PromptInputFooter>
+          <PersonaSelector />
           {!IS_DEMO && (
             <PromptInputButton
               variant="ghost"

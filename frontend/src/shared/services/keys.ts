@@ -15,6 +15,7 @@ export const queryKeys = {
   repositories: {
     all: ["repositories"] as const,
     list: (filters: {
+      provider?: string;
       type: string;
       sort: string;
       direction: string;
@@ -36,14 +37,16 @@ export const queryKeys = {
   },
   branches: {
     all: ["branches"] as const,
-    list: (owner: string, repo: string) => ["branches", "list", owner, repo] as const,
+    list: (owner: string, repo: string, provider?: string) =>
+      ["branches", "list", owner, repo, provider] as const,
   },
   credentials: {
     all: ["credentials"] as const,
   },
-  github: {
-    all: ["github"] as const,
-    connection: ["github", "connection"] as const,
+  gitConnections: {
+    all: ["git-connections"] as const,
+    connection: (provider: string) =>
+      ["git-connections", "connection", provider] as const,
   },
   chat: {
     all: ["chat"] as const,

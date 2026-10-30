@@ -1,5 +1,6 @@
 import { env } from "@/config/env";
 import { createOctokit } from "@/shared/integrations/git-provider/octokit";
+import { commitUrl } from "@/shared/integrations/git-provider/urls";
 
 export type ApiCommit = {
   sha: string;
@@ -73,7 +74,7 @@ export async function listCommitsFromApi(opts: {
         message,
         author: raw.commit?.author?.name || raw.commit?.author?.email || "unknown",
         date: date.toISOString(),
-        url: raw.html_url ?? `https://github.com/${owner}/${repo}/commit/${raw.sha}`,
+        url: raw.html_url ?? commitUrl("github", owner, repo, raw.sha),
       });
       if (out.length >= max) break;
     }

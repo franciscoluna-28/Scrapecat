@@ -2,37 +2,19 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import type { Static } from "@sinclair/typebox";
 import { ModelsQuery } from "@/models/schemas";
 import { env } from "@/config/env";
+import {
+  getCatalogModels,
+  type ModelDescriptor,
+} from "@/shared/integrations/providers/catalog";
+import {
+  PROVIDER_REGISTRY,
+  isProviderSupported,
+  type ProviderName,
+} from "@/shared/integrations/providers/registry";
 
-const OPENROUTER_FALLBACK = [
-  { id: "google/gemma-4-31b-it", name: "GPT-5.6 Luna", free: false, description: "" },
-  { id: "google/gemma-4-31b-it", name: "Google: Gemma 4 31B", free: false, description: "" },
-  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra", free: true, description: "" },
-  { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nemotron 3 Super", free: true, description: "" },
-  { id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash", free: true, description: "" },
-  { id: "openai/gpt-oss-20b:free", name: "GPT-OSS-20B", free: true, description: "" },
-  { id: "cohere/north-mini-code:free", name: "North Mini Code", free: true, description: "" },
-];
-
-const DEEPSEEK_FALLBACK = [
-  { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", free: false, description: "" },
-  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", free: false, description: "" },
-  { id: "deepseek-chat", name: "DeepSeek Chat", free: false, description: "" },
-  { id: "deepseek-reasoner", name: "DeepSeek Reasoner", free: false, description: "" },
-];
-
-const OPENAI_FALLBACK = [
-  { id: "gpt-4o", name: "GPT-4o", free: false, description: "" },
-  { id: "gpt-4o-mini", name: "GPT-4o Mini", free: false, description: "" },
-  { id: "gpt-4-turbo", name: "GPT-4 Turbo", free: false, description: "" },
-  { id: "o3-mini", name: "o3-mini", free: false, description: "" },
-];
-
-const PROVIDER_FALLBACKS: Record<string, typeof DEEPSEEK_FALLBACK> = {
-  deepseek: DEEPSEEK_FALLBACK,
-  openai: OPENAI_FALLBACK,
-};
-
-async function fetchOllamaModels(modality: "chat" | "embeddings"): Promise<Array<{ id: string; name: string; free: boolean; description: string; provider: string }>> {
+async function fetchOllamaModels(
+  modality: "chat" | "embeddings",
+): Promise<Array<{ id: string; name: string; free: boolean; description: string; provider: string }>> {
   try {
     const res = await fetch(`${env.OLLAMA_BASE_URL}/api/tags`);
     if (!res.ok) return [];
@@ -86,11 +68,58 @@ async function fetchOpenRouterEmbeddingModels() {
   }
 }
 
+async function fetchOpenRouterModels(): Promise<ModelDescriptor[]> {
+  const fallback = getCatalogModels("openrouter");
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    const models: ModelDescriptor[] = (data?.data || [])
+      .filter((m: any) => isFree(m.pricing))
+      .map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        protocol: "openai-chat",
+        free: isFree(m.pricing),
+        description: m.description || "",
+      }));
+    const MVP_DEFAULT = "google/gemma-4-31b-it";
+    if (!models.some((m) => m.id === MVP_DEFAULT)) {
+      models.unshift({
+        id: MVP_DEFAULT,
+        name: "Google: Gemma 4 31B",
+        protocol: "openai-chat",
+        free: false,
+        description: "",
+      });
+    }
+    return models;
+  } catch {
+    return fallback;
+  }
+}
+
+function toApiModel(model: ModelDescriptor, provider: string) {
+  return {
+    id: model.id,
+    name: model.name,
+    free: model.free,
+    description: model.description,
+    provider,
+  };
+}
+
 export async function listModels(
   req: FastifyRequest,
   reply: FastifyReply,
 ) {
   const { provider, modality = "chat" } = req.query as Static<typeof ModelsQuery>;
+
+  if (provider && !isProviderSupported(provider)) {
+    return reply.status(400).send({ error: `Unknown provider: ${provider}` });
+  }
 
   if (provider === "ollama") {
     const models = await fetchOllamaModels(modality);
@@ -98,50 +127,35 @@ export async function listModels(
   }
 
   if (modality === "embeddings") {
+    if (provider && provider !== "openrouter") {
+      return reply.send({ models: [] });
+    }
     const models = await fetchOpenRouterEmbeddingModels();
     return reply.send({ models });
   }
 
   if (provider && provider !== "openrouter") {
-    const list = PROVIDER_FALLBACKS[provider];
-    if (!list) return reply.status(400).send({ error: `Unknown provider: ${provider}` });
-    return reply.send({ models: list.map((m) => ({ ...m, provider })) });
-  }
-
-  let openrouterModels = OPENROUTER_FALLBACK;
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { "Content-Type": "application/json" },
+    return reply.send({
+      models: getCatalogModels(provider).map((model) => toApiModel(model, provider)),
     });
-    if (res.ok) {
-      const data = await res.json();
-      openrouterModels = (data?.data || [])
-        .filter((m: any) => isFree(m.pricing))
-        .map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          free: isFree(m.pricing),
-          description: m.description || "",
-        }));
-    }
-  } catch {}
-
-  const MVP_DEFAULT = "google/gemma-4-31b-it";
-  if (!openrouterModels.some((m) => m.id === MVP_DEFAULT)) {
-    openrouterModels = [
-      { id: MVP_DEFAULT, name: "Google: Gemma 4 31B", free: false, description: "" },
-      ...openrouterModels,
-    ];
   }
 
+  const openRouterModels = await fetchOpenRouterModels();
   if (provider === "openrouter") {
-    return reply.send({ models: openrouterModels.map((m) => ({ ...m, provider: "openrouter" })) });
+    return reply.send({
+      models: openRouterModels.map((model) => toApiModel(model, "openrouter")),
+    });
   }
+
+  const catalogProviders = (
+    Object.keys(PROVIDER_REGISTRY) as ProviderName[]
+  ).filter((provider) => provider !== "openrouter" && provider !== "ollama");
 
   const all = [
-    ...openrouterModels.map((m) => ({ ...m, provider: "openrouter" as const })),
-    ...DEEPSEEK_FALLBACK.map((m) => ({ ...m, provider: "deepseek" as const })),
-    ...OPENAI_FALLBACK.map((m) => ({ ...m, provider: "openai" as const })),
+    ...openRouterModels.map((model) => toApiModel(model, "openrouter")),
+    ...catalogProviders.flatMap((provider) =>
+      getCatalogModels(provider).map((model) => toApiModel(model, provider)),
+    ),
   ];
 
   return reply.send({ models: all });

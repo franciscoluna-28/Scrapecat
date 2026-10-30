@@ -12,7 +12,13 @@ CORS_ORIGIN=http://localhost:3000
 
 # optional
 GITHUB_TOKEN=
+# GitLab (self-hosted path; demo mode stays GitHub-only). `read_api` +
+# `read_repository` scopes. Seeds the connection when no token is stored via UI.
+GITLAB_TOKEN=
+# GitLab instance origin; default is https://gitlab.com. One host per backend.
+GITLAB_HOST=https://gitlab.com
 AI_MODEL=mimo-v2.6-flash
+AI_TIMEOUT_MS=120000
 PORT=4000
 HOST=0.0.0.0
 DATABASE_POOL_MAX=10

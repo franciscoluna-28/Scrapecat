@@ -27,13 +27,13 @@ const ChatMessageResponse = Type.Object({
 });
 
 export const CreateSessionBody = Type.Object({
-  projectId: Type.String(),
+  projectId: Type.String({ format: "uuid" }),
 });
 
 export const CreateSessionResponse = ChatSessionResponse;
 
 export const ChatSessionsQuery = Type.Object({
-  projectId: Type.Optional(Type.String()),
+  projectId: Type.Optional(Type.String({ format: "uuid" })),
 });
 
 export const ChatSessionsListResponse = Type.Object({
@@ -49,10 +49,13 @@ export const ChatMessagesResponse = Type.Object({
 });
 
 export const SendMessageBody = Type.Object({
-  content: Type.String({ minLength: 1 }),
-  branch: Type.Optional(Type.String({ minLength: 1 })),
-  model: Type.Optional(Type.String({ minLength: 1 })),
-  provider: Type.Optional(Type.String({ minLength: 1 })),
+  content: Type.String({ minLength: 1, maxLength: 10000 }),
+  branch: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  provider: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  persona: Type.Optional(
+    Type.Union([Type.Literal("founder"), Type.Literal("cto"), Type.Literal("engineer")]),
+  ),
 });
 
 export const DeleteSessionResponse = Type.Object({

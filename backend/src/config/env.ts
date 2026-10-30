@@ -8,12 +8,22 @@ export const envSchema = z.object({
     .default("postgres://scrapecat:scrapecat@localhost:5432/scrapecat"),
   OPENROUTER_API_KEY: z.string().default(""),
   AI_MODEL: z.string().default("mimo-v2.6-flash"),
+  AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  // Default output-token ceiling for chat completions. Raise it for models
+  // that support longer answers; the AI client applies it when a caller does
+  // not pass `maxTokens`.
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(8192),
   DEEPSEEK_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
+  GROQ_API_KEY: z.string().default(""),
+  OPENCODE_GO_API_KEY: z.string().default(""),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_API_KEY: z.string().default("ollama"),
   GITHUB_TOKEN: z.string().default(""),
-  GIT_PROVIDER: z.enum(["github", "gitlab"]).default("github"),
+  GITLAB_TOKEN: z.string().default(""),
+  // Git host origin for GitLab discovery/clone. Defaults to gitlab.com; set it
+  // to an instance URL (e.g. https://gitlab.example.com) for self-hosted.
+  GITLAB_HOST: z.string().default("https://gitlab.com"),
   ENCRYPTION_KEY: z.string().default(""),
   // Postgres connection pool size. Serverless hosts (Vercel) should use a
   // pooled connection string and set this to 1 to avoid exhausting connections.
@@ -83,9 +93,10 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-if (!parsed.data.ENCRYPTION_KEY) {
+const encryptionKey = Buffer.from(parsed.data.ENCRYPTION_KEY, "base64");
+if (encryptionKey.length !== 32) {
   console.error(
-    "ENCRYPTION_KEY is required (use: openssl rand -base64 32)",
+    "ENCRYPTION_KEY must be a base64-encoded 32-byte value (use: openssl rand -base64 32)",
   );
   process.exit(1);
 }

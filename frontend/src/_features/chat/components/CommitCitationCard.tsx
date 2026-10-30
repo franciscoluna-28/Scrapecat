@@ -1,64 +1,75 @@
 "use client";
 
 import {
-  Commit,
-  CommitHeader,
-  CommitActions,
   CommitAuthor,
   CommitHash,
-  CommitInfo,
   CommitMetadata,
   CommitMessage,
   CommitSeparator,
   CommitTimestamp,
 } from "@/src/components/ai-elements/commit";
-import { Button } from "@/src/components/ui/button";
-import { ExternalLink } from "lucide-react";
 import type { ChatMessage } from "@/src/shared/types";
 
 type Props = {
   citation: ChatMessage["citations"][number];
 };
 
+/**
+ * A cited commit: subject, a one-line description, and
+ * `hash • author • time • files`. The whole card links to the commit.
+ */
 export function CommitCitationCard({ citation }: Props) {
   const shortSha = citation.commitSha.slice(0, 7);
-  const message =
-    citation.commitMessage.length > 100
-      ? citation.commitMessage.slice(0, 100) + "…"
-      : citation.commitMessage;
+  const [subjectLine, ...bodyLines] = citation.commitMessage.split("\n");
+  const subject = subjectLine.trim();
+  const description = bodyLines.join(" ").replace(/\s+/g, " ").trim();
+  const fileCount = citation.filesChanged.length;
 
-  return (
-    <Commit>
-      <CommitHeader>
-        <CommitInfo>
-          <CommitMessage>{message}</CommitMessage>
-          <CommitMetadata>
-            <CommitHash>{shortSha}</CommitHash>
-            {citation.author && (
-              <>
-                <CommitSeparator />
-                <CommitAuthor>{citation.author}</CommitAuthor>
-              </>
-            )}
+  const card = (
+    <div className="flex flex-col gap-1">
+      <CommitMessage className="line-clamp-2" title={subject}>
+        {subject || "(no message)"}
+      </CommitMessage>
+      {description && (
+        <p className="line-clamp-1 text-xs text-muted-foreground">{description}</p>
+      )}
+      <CommitMetadata>
+        <CommitHash>{shortSha}</CommitHash>
+        {citation.author && (
+          <>
             <CommitSeparator />
-            <CommitTimestamp date={new Date(citation.committedAt)} />
-          </CommitMetadata>
-        </CommitInfo>
-        <CommitActions>
-          {citation.commitUrl && (
-            <Button asChild size="icon-sm" variant="ghost">
-              <a
-                href={citation.commitUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Open commit"
-              >
-                <ExternalLink className="size-3.5" />
-              </a>
-            </Button>
-          )}
-        </CommitActions>
-      </CommitHeader>
-    </Commit>
+            <CommitAuthor>{citation.author}</CommitAuthor>
+          </>
+        )}
+        <CommitSeparator />
+        <CommitTimestamp date={new Date(citation.committedAt)} />
+        {fileCount > 0 && (
+          <>
+            <CommitSeparator />
+            <span>
+              {fileCount} {fileCount === 1 ? "file" : "files"}
+            </span>
+          </>
+        )}
+      </CommitMetadata>
+    </div>
   );
+
+  const cardClassName = "block rounded-lg border bg-background p-3";
+
+  if (citation.commitUrl) {
+    return (
+      <a
+        href={citation.commitUrl}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Open commit"
+        className={`${cardClassName} transition-colors hover:bg-muted/50`}
+      >
+        {card}
+      </a>
+    );
+  }
+
+  return <div className={cardClassName}>{card}</div>;
 }

@@ -27,8 +27,8 @@ vi.mock("@/repositories/git", () => ({
   authArgs: () => [],
 }));
 
-vi.mock("@/github/token", () => ({
-  resolveGithubToken: async () => null,
+vi.mock("@/shared/integrations/git-provider/token", () => ({
+  resolveGitToken: async () => null,
 }));
 
 import { ensureArchive } from "@/repositories/archive-service";
@@ -59,7 +59,7 @@ describe("archive-service store wiring", () => {
       return { tipSha: "hydrated-tip" };
     });
 
-    const archive = await ensureArchive({ owner, repo, branch });
+    const archive = await ensureArchive({ gitProvider: "github", owner, repo, branch });
 
     expect(archive.tipSha).toBe("tip-from-git");
     expect(mockHydrate).toHaveBeenCalledTimes(1);
@@ -78,7 +78,7 @@ describe("archive-service store wiring", () => {
 
     mockHydrate.mockResolvedValue(null);
 
-    const archive = await ensureArchive({ owner, repo, branch });
+    const archive = await ensureArchive({ gitProvider: "github", owner, repo, branch });
 
     expect(archive.tipSha).toBe("tip-from-git");
     const cloneCalls = mockRunGit.mock.calls.filter(([o]) => o.args.includes("clone"));

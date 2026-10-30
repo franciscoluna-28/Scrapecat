@@ -59,6 +59,17 @@ export function createMemoryQueue(): JobQueue {
 
     async shutdown() {
       pending.clear();
+      if (active.size === 0) return;
+
+      // Give in-flight ingests a bounded window to finish; a hung job must not
+      // block process exit forever.
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 10_000);
+        Promise.allSettled([...active.values()]).then(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
     },
   };
 }

@@ -12,9 +12,16 @@ import {
 } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { useChatModelStore } from "@/src/store/chat-model";
+import { useChatPersonaStore } from "@/src/store/chat-persona";
 import type { ChatMessage } from "@/src/shared/types";
-
-const STREAMING_PREFIX = "local-assistant";
+import {
+  STREAMING_PREFIX,
+  appendDraft,
+  appendToken,
+  replaceStreaming,
+  removeStreaming,
+} from "./live-messages";
+import { buildChatUrl } from "./chat-url";
 
 type UseAIChatOptions = {
   projectId: string | null;
@@ -27,6 +34,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const queryClient = useQueryClient();
   const createSession = useCreateChatSession();
   const { provider: modelProvider, model: modelId } = useChatModelStore();
+  const { persona } = useChatPersonaStore();
 
   const { messages: storedMessages, isLoading: messagesLoading } = useChatMessages(
     sessionId ?? undefined,
@@ -38,6 +46,14 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
   const [ingestionProgress, setIngestionProgress] = useState<StreamChunk & { type: "progress" } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
+  const sessionKey = `${projectId ?? ""}:${sessionId ?? ""}`;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLiveMessages([]);
+    setIngestionProgress(null);
+    forceScrollRef.current = true;
+  }, [sessionKey]);
 
   const messages = useMemo(() => [...storedMessages, ...liveMessages], [storedMessages, liveMessages]);
   const streamingId = liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.id ?? null;
@@ -45,21 +61,11 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     liveMessages.find((m) => m.id.startsWith(STREAMING_PREFIX))?.content.length ?? 0;
   const isAwaitingResponse = isStreaming && streamingContentLength === 0;
 
-  // Clear stale live messages when session or project changes.
-  useEffect(() => {
-    setLiveMessages([]);
-    setIngestionProgress(null);
-  }, [sessionId, projectId]);
-
   const scrollToBottom = useCallback((force: boolean) => {
     const container = bottomRef.current?.closest("[data-chat-scroll]") as HTMLElement | null;
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: force ? "smooth" : "auto" });
   }, []);
-
-  useEffect(() => {
-    forceScrollRef.current = true;
-  }, [sessionId]);
 
   useEffect(() => {
     const el = bottomRef.current;
@@ -71,7 +77,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       forceScrollRef.current = false;
       scrollToBottom(force);
     }
-  }, [messages.length, streamingContentLength, scrollToBottom]);
+  }, [messages.length, streamingContentLength, sessionKey, scrollToBottom]);
 
   // Project switching: clear all stale chat queries so old sessions don't bleed.
   useEffect(() => {
@@ -94,10 +100,18 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         const created = await createSession.mutateAsync(projectId);
         sid = created.id;
         isNewSession = true;
-        // Read current URL instead of stale searchParams snapshot.
-        const p = new URLSearchParams(window.location.search);
-        p.set("session", sid);
-        router.replace(`/app?${p.toString()}`, { scroll: false });
+      }
+
+      // Read the current URL (not the stale searchParams snapshot) and clear
+      // any one-shot prompt while persisting the active project/session.
+      const nextUrl = buildChatUrl(
+        window.location.pathname,
+        window.location.search,
+        projectId,
+        sid,
+      );
+      if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+        router.replace(nextUrl, { scroll: false });
       }
 
       const userMsg: ChatMessage = {
@@ -116,7 +130,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         citations: [],
         createdAt: new Date().toISOString(),
       };
-      setLiveMessages((m) => [...m, ...(!isNewSession ? [userMsg] : []), draft]);
+      setLiveMessages((m) => appendDraft(m, userMsg, draft, !isNewSession));
       requestAnimationFrame(() => scrollToBottom(true));
 
       await streamChatMessage(sid, trimmed, branch, (chunk) => {
@@ -126,23 +140,13 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
           setIngestionProgress(null);
         }
         if (chunk.type === "token") {
-          setLiveMessages((m) => {
-            const copy = [...m];
-            const idx = copy.findIndex((msg) => msg.id.startsWith(STREAMING_PREFIX));
-            if (idx >= 0) copy[idx] = { ...copy[idx], content: copy[idx].content + chunk.content };
-            return copy;
-          });
+          setLiveMessages((m) => appendToken(m, chunk.content));
         } else if (chunk.type === "done") {
-          setLiveMessages((m) => {
-            const copy = [...m];
-            const idx = copy.findIndex((msg) => msg.id.startsWith(STREAMING_PREFIX));
-            if (idx >= 0) copy[idx] = { ...chunk.message };
-            return copy;
-          });
+          setLiveMessages((m) => replaceStreaming(m, chunk.message));
         } else if (chunk.type === "error") {
           toast.error(chunk.error);
         }
-      }, modelId ?? undefined, modelProvider ?? undefined);
+      }, modelId ?? undefined, modelProvider ?? undefined, persona);
 
       setLiveMessages([]);
       setIngestionProgress(null);
@@ -151,7 +155,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
     } catch {
       setIngestionProgress(null);
-      setLiveMessages((m) => m.filter((msg) => !msg.id.startsWith(STREAMING_PREFIX)));
+      setLiveMessages(removeStreaming);
     } finally {
       setIsStreaming(false);
     }

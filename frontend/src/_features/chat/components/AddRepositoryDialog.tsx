@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/src/components/ui/dialog";
-import { useAddRepository } from "@/src/_features/github/hooks/useAddRepository";
+import { useAddRepository } from "@/src/_features/git-providers/hooks/useAddRepository";
 import { RepositoryUrlInput } from "@/src/_features/chat/components/RepositoryUrlInput";
 import { RepositoryList } from "@/src/_features/chat/components/RepositoryList";
-import { GitHubConnectForm } from "@/src/_features/github/components/GitHubConnectForm";
-import { useGitHubConnection } from "@/src/_features/github/services/github-api";
-import { IS_DEMO } from "@/src/shared/constants";
-import type { GitHubRepository } from "@/src/shared/types";
+import { GitProviderConnectForm } from "@/src/_features/git-providers/components/GitProviderConnectForm";
+import {
+  GIT_PROVIDER_META,
+  IS_DEMO,
+  type GitProviderId,
+} from "@/src/shared/constants";
 
 type Props = {
   onProjectSelected: (projectId: string) => void;
@@ -17,6 +20,8 @@ type Props = {
 };
 
 export function AddRepositoryDialog({ onProjectSelected, children, open: controlledOpen, onOpenChange }: Props) {
+  const [provider, setProvider] = useState<GitProviderId>("github");
+
   const {
     open: internalOpen,
     setOpen: internalSetOpen,
@@ -26,13 +31,16 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
     connecting,
     repositories,
     isFetching,
+    connectedProviders,
     existingProjectIds,
     connectByRepo,
     connectByUrl,
-  } = useAddRepository(onProjectSelected);
+  } = useAddRepository(onProjectSelected, provider);
 
-  const { connection } = useGitHubConnection();
-  const connected = connection?.connected ?? false;
+  // Demo serves public GitHub search without a token, so the list is usable
+  // even though no provider is "connected".
+  const hasRepositories = IS_DEMO || connectedProviders.length > 0;
+  const meta = GIT_PROVIDER_META[provider];
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange ?? internalSetOpen;
@@ -50,15 +58,19 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
           <DialogDescription>
             {IS_DEMO
               ? "Add a public GitHub repository by URL, or pick from popular public repos."
-              : "Pick from your GitHub repos or paste a URL."}
+              : "Pick from your GitHub or GitLab repos or paste a URL."}
           </DialogDescription>
         </DialogHeader>
 
-        {!connected && !IS_DEMO ? (
-          <div className="space-y-4">
-            <GitHubConnectForm />
+        {!hasRepositories ? (
+          <div className="space-y-3">
+            <GitProviderConnectForm
+              provider={provider}
+              onProviderChange={setProvider}
+              compact
+            />
             <p className="text-xs text-muted-foreground">
-              Connect GitHub first to browse and clone repositories.
+              Connect one provider to browse repositories.
             </p>
           </div>
         ) : (
@@ -66,8 +78,12 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
             {/* Demo mode uses the deployer's server-side token (public repos
                 only) — never ask visitors for their own GitHub token. */}
             {!IS_DEMO && (
-              <div className="rounded-md border p-3">
-                <GitHubConnectForm />
+              <div className="rounded-md border p-2">
+                <GitProviderConnectForm
+                  provider={provider}
+                  onProviderChange={setProvider}
+                  compact
+                />
               </div>
             )}
 
@@ -84,6 +100,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
               onConnect={connectByUrl}
               connecting={connecting}
               error={error}
+              placeholder={`Paste a ${meta.label} URL or owner/repo`}
             />
 
             <div className="text-xs text-muted-foreground">
@@ -91,7 +108,7 @@ export function AddRepositoryDialog({ onProjectSelected, children, open: control
             </div>
 
             <RepositoryList
-              repositories={repositories as GitHubRepository[]}
+              repositories={repositories}
               isLoading={isFetching}
               existingProjectIds={existingProjectIds}
               connecting={connecting}

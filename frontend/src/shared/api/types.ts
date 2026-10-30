@@ -101,19 +101,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/verification/status": {
+    "/api/v1/git-providers/{provider}/connection": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Verify GitHub token connection status */
+        /** @description Git provider connection status (stored token / env token / none) */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -125,44 +127,45 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            github?: {
-                                login: string;
-                                rateLimitRemaining: number;
-                            };
-                        } | {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
+                            connected: boolean;
+                            source: "token" | "env" | "none";
+                            login?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
             };
         };
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/github/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Store a GitHub Personal Access Token (connect GitHub account) */
+        /** @description Store a git provider token (connect an account) */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody: {
@@ -199,63 +202,14 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/github/connection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description GitHub connection status (stored token / env token / none) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Default Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            connected: boolean;
-                            source: "token" | "env" | "none";
-                            login?: string;
-                        };
-                    };
-                };
-                /** @description Default Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        /** @description Disconnect GitHub (removes stored token) */
+        /** @description Disconnect a git provider (removes the stored token) */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    provider: "github" | "gitlab";
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -267,6 +221,17 @@ export interface paths {
                     };
                     content: {
                         "application/json": unknown;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
                     };
                 };
                 /** @description Default Response */
@@ -352,10 +317,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List GitHub repositories for the authenticated user */
+        /** @description List repositories from every connected git provider */
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     type?: string;
                     sort?: string;
                     direction?: string;
@@ -420,7 +386,9 @@ export interface paths {
         /** @description List branches for a repository */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    provider?: "github" | "gitlab";
+                };
                 header?: never;
                 path: {
                     owner: string;
@@ -474,6 +442,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     limit?: number;
                     startDate?: string;
                     endDate?: string;
@@ -537,6 +506,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    provider?: "github" | "gitlab";
                     startDate?: string;
                     endDate?: string;
                     branch?: string;
@@ -608,7 +578,7 @@ export interface paths {
                         "application/json": {
                             projects: {
                                 id: string;
-                                gitProvider: string;
+                                gitProvider: "github" | "gitlab";
                                 providerProjectId: string;
                                 providerOwner: string;
                                 repositoryName: string;
@@ -666,7 +636,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            gitProvider: string;
+                            gitProvider: "github" | "gitlab";
                             providerProjectId: string;
                             providerOwner: string;
                             repositoryName: string;
@@ -991,7 +961,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
@@ -1022,7 +992,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                        chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                         chatModel: string;
                         embeddingProvider: "openrouter" | "ollama";
                         embeddingModel: string;
@@ -1037,7 +1007,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
@@ -1310,6 +1280,7 @@ export interface paths {
                         branch?: string;
                         model?: string;
                         provider?: string;
+                        persona?: "founder" | "cto" | "engineer";
                     };
                 };
             };

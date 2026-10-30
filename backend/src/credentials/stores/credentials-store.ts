@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, type DbOrTx } from "@/db/client";
 import { credentials, type CredentialProvider } from "@/db/schema";
 
 export type CredentialInput = {
@@ -8,53 +8,62 @@ export type CredentialInput = {
   keyHint: string;
 };
 
-export async function upsertCredential(input: CredentialInput) {
-  const [row] = await db
-    .insert(credentials)
-    .values(input)
-    .onConflictDoUpdate({
-      target: credentials.provider,
-      set: {
-        encryptedKey: input.encryptedKey,
-        keyHint: input.keyHint,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return row;
+export type CredentialRow = typeof credentials.$inferSelect;
+
+export function createCredentialsStore(client: DbOrTx = db) {
+  return {
+    async upsertCredential(input: CredentialInput): Promise<CredentialRow> {
+      const [row] = await client
+        .insert(credentials)
+        .values(input)
+        .onConflictDoUpdate({
+          target: credentials.provider,
+          set: {
+            encryptedKey: input.encryptedKey,
+            keyHint: input.keyHint,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      return row;
+    },
+
+    async listCredentials(provider?: CredentialProvider): Promise<CredentialRow[]> {
+      const conditions = provider ? eq(credentials.provider, provider) : undefined;
+      return client
+        .select()
+        .from(credentials)
+        .where(conditions)
+        .orderBy(desc(credentials.createdAt));
+    },
+
+    async getCredentialById(id: string): Promise<CredentialRow | null> {
+      const [row] = await client
+        .select()
+        .from(credentials)
+        .where(eq(credentials.id, id))
+        .limit(1);
+      return row ?? null;
+    },
+
+    async deleteCredentialById(id: string): Promise<boolean> {
+      const rows = await client
+        .delete(credentials)
+        .where(eq(credentials.id, id))
+        .returning({ id: credentials.id });
+      return rows.length > 0;
+    },
+
+    async getLatestCredential(provider: CredentialProvider): Promise<CredentialRow | null> {
+      const [row] = await client
+        .select()
+        .from(credentials)
+        .where(eq(credentials.provider, provider))
+        .orderBy(desc(credentials.createdAt))
+        .limit(1);
+      return row ?? null;
+    },
+  };
 }
 
-export async function listCredentials(provider?: CredentialProvider) {
-  const query = db.select().from(credentials);
-  if (provider) {
-    query.where(eq(credentials.provider, provider));
-  }
-  return query.orderBy(desc(credentials.createdAt));
-}
-
-export async function getCredentialById(id: string) {
-  const [row] = await db
-    .select()
-    .from(credentials)
-    .where(eq(credentials.id, id))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function deleteCredentialById(id: string) {
-  const rows = await db
-    .delete(credentials)
-    .where(eq(credentials.id, id))
-    .returning({ id: credentials.id });
-  return rows.length > 0;
-}
-
-export async function getLatestCredential(provider: CredentialProvider) {
-  const [row] = await db
-    .select()
-    .from(credentials)
-    .where(eq(credentials.provider, provider))
-    .orderBy(desc(credentials.createdAt))
-    .limit(1);
-  return row ?? null;
-}
+export const credentialsStore = createCredentialsStore();

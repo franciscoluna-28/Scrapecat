@@ -1,17 +1,13 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/src/shared/api/client";
-import { queryKeys } from "../../../shared/services/keys";
+import { apiClient, unwrap } from "@/src/shared/api/client";
+import { queryKeys } from "@/src/shared/services/keys";
 
 export function useCredentials() {
   const { data, error, isLoading } = useQuery({
     queryKey: queryKeys.credentials.all,
-    queryFn: () =>
-      apiClient.GET("/api/v1/credentials").then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+    queryFn: () => unwrap(apiClient.GET("/api/v1/credentials")),
   });
 
   return {
@@ -26,10 +22,7 @@ export function useAddCredential() {
 
   return useMutation({
     mutationFn: (body: { provider: string; key: string }) =>
-      apiClient.POST("/api/v1/credentials", { body }).then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+      unwrap(apiClient.POST("/api/v1/credentials", { body })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.credentials.all });
     },
@@ -39,9 +32,6 @@ export function useAddCredential() {
 export function useVerifyCredential() {
   return useMutation({
     mutationFn: (body: { provider: string; key: string }) =>
-      apiClient.POST("/api/v1/credentials/verify", { body }).then((r) => {
-        if (r.error) throw r.error;
-        return r.data;
-      }),
+      unwrap(apiClient.POST("/api/v1/credentials/verify", { body })),
   });
 }

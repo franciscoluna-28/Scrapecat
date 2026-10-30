@@ -7,16 +7,18 @@ const mockGetMessages = vi.fn();
 const mockDeleteSession = vi.fn();
 const mockStreamMessage = vi.fn();
 
-vi.mock("@/chat/stores/chat-sessions-store", () => ({
-  getSession: (...args: unknown[]) => mockGetSession(...args),
+vi.mock("@/chat/chat-store", () => ({
+  chatStore: { getSession: (...args: unknown[]) => mockGetSession(...args) },
 }));
 
 vi.mock("@/chat/services", () => ({
-  createChatSession: (...args: unknown[]) => mockCreateSession(...args),
-  listChatSessions: (...args: unknown[]) => mockListSessions(...args),
-  getChatMessages: (...args: unknown[]) => mockGetMessages(...args),
-  deleteChatSession: (...args: unknown[]) => mockDeleteSession(...args),
-  streamChatMessage: (...args: unknown[]) => mockStreamMessage(...args),
+  chatService: {
+    createSession: (...args: unknown[]) => mockCreateSession(...args),
+    listSessions: (...args: unknown[]) => mockListSessions(...args),
+    getMessages: (...args: unknown[]) => mockGetMessages(...args),
+    deleteSession: (...args: unknown[]) => mockDeleteSession(...args),
+    streamMessage: (...args: unknown[]) => mockStreamMessage(...args),
+  },
   SessionNotFoundError: class extends Error {},
 }));
 
@@ -145,6 +147,23 @@ describe("chat routes", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("returns 404 for a session owned by another anonymous id", async () => {
+    mockGetSession.mockResolvedValue({
+      id: SESSION_ID,
+      projectId: PROJECT_ID,
+      anonymousId: "owner",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/chat/sessions/${SESSION_ID}/messages`,
+      headers: { "x-anonymous-id": "intruder" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockGetMessages).not.toHaveBeenCalled();
+  });
+
   it("deletes a session", async () => {
     mockDeleteSession.mockResolvedValue(true);
 
@@ -189,8 +208,9 @@ describe("chat routes", () => {
     expect(res.headers["access-control-allow-origin"]).toBeTruthy();
     const frames = res.body
       .split("\n\n")
-      .filter(Boolean)
+      .filter((f) => f.trim().startsWith("data:"))
       .map((f) => JSON.parse(f.replace(/^data: /, "")));
+    expect(res.body).toContain("retry: 3000");
     expect(frames).toEqual([
       { type: "token", content: "Hello" },
       { type: "token", content: " world" },

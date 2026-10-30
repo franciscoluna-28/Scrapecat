@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt, buildUserMessage, formatCitationForPrompt } from "@/chat/prompts";
+import {
+  buildSystemPrompt,
+  buildUserMessage,
+  formatCitationForPrompt,
+  resolvePersona,
+  DEFAULT_PERSONA,
+} from "@/chat/prompts";
 import type { ChatCitation } from "@/db/schema";
 
 const citation: ChatCitation = {
@@ -16,6 +22,24 @@ describe("chat prompts", () => {
     const prompt = buildSystemPrompt("scrapecat");
     expect(prompt).toContain("scrapecat");
     expect(prompt).toContain("retrieved commits");
+  });
+
+  it("defaults to the founder persona with plain-language tone", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(DEFAULT_PERSONA).toBe("founder");
+    expect(prompt).toContain("not an engineer");
+    expect(prompt).toContain("outcome-oriented headings");
+  });
+
+  it("paraphrases the tone per persona", () => {
+    expect(buildSystemPrompt(null, new Date(), "cto")).toContain("briefing a CTO");
+    expect(buildSystemPrompt(null, new Date(), "engineer")).toContain("briefing an engineer");
+  });
+
+  it("resolvePersona falls back to the default for unknown values", () => {
+    expect(resolvePersona("cto")).toBe("cto");
+    expect(resolvePersona("nonsense")).toBe(DEFAULT_PERSONA);
+    expect(resolvePersona(undefined)).toBe(DEFAULT_PERSONA);
   });
 
   it("anchors the system prompt to the current date", () => {

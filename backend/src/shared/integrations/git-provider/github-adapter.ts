@@ -24,7 +24,7 @@ function toRepository(raw: any): Repository {
 export class GithubAdapter implements GitProvider {
   private octokit: OctokitClient;
 
-  constructor(token: string) {
+  constructor(token: string | null) {
     this.octokit = createOctokit(token);
   }
 
