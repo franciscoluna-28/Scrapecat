@@ -7,7 +7,7 @@ const mockGetMessages = vi.fn();
 const mockDeleteSession = vi.fn();
 const mockStreamMessage = vi.fn();
 
-vi.mock("@/chat/stores/chat-store", () => ({
+vi.mock("@/chat/chat-store", () => ({
   chatStore: { getSession: (...args: unknown[]) => mockGetSession(...args) },
 }));
 

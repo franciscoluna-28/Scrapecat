@@ -3,9 +3,11 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { commitChunks, projects } from "@/db/schema";
-import { listPendingChunks } from "@/projects/embed-chunks";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
-import { upsertProject } from "@/projects/stores/projects-store";
+import {
+  commitChunksStore,
+  type CommitChunkInput,
+} from "@/projects/stores/commit-chunks-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 
 const enabled = process.env.DB_INTEGRATION === "1";
 const SPACE_A = { provider: "openrouter", model: "model-a" };
@@ -23,13 +25,11 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
   });
 
   it("only treats current-model embeddings as pending or searchable", async () => {
-    const { project } = await upsertProject({
-      input: {
-        providerProjectId: randomUUID(),
-        providerOwner: "owner",
-        repositoryName: `repo-${randomUUID()}`,
-        defaultBranch: "main",
-      },
+    const { project } = await projectsStore.upsertProject({
+      providerProjectId: randomUUID(),
+      providerOwner: "owner",
+      repositoryName: `repo-${randomUUID()}`,
+      defaultBranch: "main",
     });
     projectId = project.id;
 
@@ -58,7 +58,7 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
       .from(commitChunks)
       .where(eq(commitChunks.projectId, projectId));
 
-    expect(await listPendingChunks(projectId, SPACE_A)).toHaveLength(2);
+    expect(await commitChunksStore.listPendingChunks(projectId, SPACE_A)).toHaveLength(2);
 
     await commitChunksStore.updateChunkEmbeddings({
       updates: rows.map((row) => ({
@@ -69,8 +69,8 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
       space: SPACE_A,
     });
 
-    expect(await listPendingChunks(projectId, SPACE_A)).toHaveLength(0);
-    expect(await listPendingChunks(projectId, SPACE_B)).toHaveLength(2);
+    expect(await commitChunksStore.listPendingChunks(projectId, SPACE_A)).toHaveLength(0);
+    expect(await commitChunksStore.listPendingChunks(projectId, SPACE_B)).toHaveLength(2);
     expect(
       await commitChunksStore.countChunksForProject({
         projectId,
@@ -96,7 +96,7 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
       },
     ]);
 
-    expect(await listPendingChunks(projectId, SPACE_A)).toHaveLength(1);
+    expect(await commitChunksStore.listPendingChunks(projectId, SPACE_A)).toHaveLength(1);
     expect(
       await commitChunksStore.countChunksForProject({
         projectId,
@@ -106,10 +106,8 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
     expect(await semantic(projectId, SPACE_A)).toHaveLength(1);
   });
 
-  async function upsertChunks(
-    inputs: Parameters<typeof commitChunksStore.upsertCommitChunks>[0]["inputs"],
-  ) {
-    await commitChunksStore.upsertCommitChunks({ inputs });
+  async function upsertChunks(inputs: CommitChunkInput[]) {
+    await commitChunksStore.upsertCommitChunks(inputs);
   }
 
   async function semantic(

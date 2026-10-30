@@ -5,8 +5,10 @@ const mockUpsertCommitChunks = vi.fn();
 const mockEmbedNewChunks = vi.fn();
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
-  getChunksByShas: (...args: unknown[]) => mockGetChunksByShas(...args),
-  upsertCommitChunks: (...args: unknown[]) => mockUpsertCommitChunks(...args),
+  commitChunksStore: {
+    getChunksByShas: (...args: unknown[]) => mockGetChunksByShas(...args),
+    upsertCommitChunks: (...args: unknown[]) => mockUpsertCommitChunks(...args),
+  },
 }));
 
 vi.mock("@/projects/embed-chunks", () => ({
@@ -64,9 +66,9 @@ describe("ingestCommits", () => {
     const result = await ingestCommits(source, call);
 
     expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
-    expect(mockUpsertCommitChunks).toHaveBeenCalledWith({
-      inputs: [input(commit("a"), "proj", "main")],
-    });
+    expect(mockUpsertCommitChunks).toHaveBeenCalledWith([
+      input(commit("a"), "proj", "main"),
+    ]);
     expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
   });
 
@@ -101,7 +103,7 @@ describe("ingestCommits", () => {
 
     expect(source.toChunkInputs).toHaveBeenCalledTimes(2);
     expect(mockUpsertCommitChunks).toHaveBeenCalledTimes(2);
-    const sizes = mockUpsertCommitChunks.mock.calls.map((c) => c[0].inputs.length);
+    const sizes = mockUpsertCommitChunks.mock.calls.map((c) => c[0].length);
     expect(sizes).toEqual([2, 1]);
   });
 

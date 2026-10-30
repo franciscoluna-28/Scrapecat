@@ -5,13 +5,13 @@ import { getProviderConfig } from "@/shared/integrations/providers/registry";
 import { getAISettings } from "@/settings/services";
 import { ProviderKeyError } from "@/chat/ai";
 import { callAI } from "@/chat/ai";
-import { chatStore, type ChatMessageRow } from "@/chat/stores/chat-store";
+import { chatStore, type ChatMessageRow } from "@/chat/chat-store";
 import { retrieveCommits } from "@/chat/retrieval";
 import { parseQueryWindow, hasTemporalIntent } from "@/chat/date-window";
-import { getLatestCommitDate } from "@/projects/stores/commit-chunks-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
 import { buildSystemPrompt, buildUserMessage, resolvePersona } from "@/chat/prompts";
 import type { ChatMessageDTO } from "@/chat/schemas";
-import * as projectsStore from "@/projects/stores/projects-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
 import type { IngestProgress } from "@/repositories/ingest";
 
@@ -29,7 +29,7 @@ function toMessageDTO(row: ChatMessageRow): ChatMessageDTO {
 }
 
 export async function createChatSession(projectId: string, anonymousId: string) {
-  const project = await projectsStore.getProjectById({ id: projectId });
+  const project = await projectsStore.getProjectById(projectId);
   if (!project) {
     throw new Error("Project not found");
   }
@@ -108,7 +108,7 @@ export async function streamChatMessage(opts: {
   const session = await chatStore.getSession(sessionId);
   if (!session) throw new SessionNotFoundError();
 
-  const project = await projectsStore.getProjectById({ id: session.projectId });
+  const project = await projectsStore.getProjectById(session.projectId);
 
   await chatStore.addMessage({ sessionId, role: "user", content });
 
@@ -133,7 +133,7 @@ export async function streamChatMessage(opts: {
     !dateWindowEnd &&
     hasTemporalIntent(content)
   ) {
-    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
+    const latest = await commitChunksStore.getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
     if (latest) {
       dateWindowEnd = latest;
       dateWindowStart = new Date(latest.getTime() - 45 * DAY_MS);
@@ -153,7 +153,7 @@ export async function streamChatMessage(opts: {
   // return. Retry anchored at the latest commit so recency queries still
   // surface the most recent work instead of reporting an empty range.
   if (citations.length === 0 && isRelative) {
-    const latest = await getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
+    const latest = await commitChunksStore.getLatestCommitDate({ projectId: session.projectId, branch: effectiveBranch });
     if (latest) {
       citations = await retrieveCommits({
         projectId: session.projectId,

@@ -14,7 +14,7 @@ import {
   streamChatMessage,
   SessionNotFoundError,
 } from "@/chat/services";
-import { chatStore } from "@/chat/stores/chat-store";
+import { chatStore } from "@/chat/chat-store";
 import { env } from "@/config/env";
 
 /** Interval between SSE comment heartbeats (see `streamMessage`). */

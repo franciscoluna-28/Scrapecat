@@ -5,9 +5,7 @@ import { chatMessages, chatSessions, type ChatCitation } from "@/db/schema";
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 
-export function createChatStore(tx?: DbOrTx) {
-  const client = tx ?? db;
-
+export function createChatStore(client: DbOrTx = db) {
   return {
     async createSession(input: {
       projectId: string;

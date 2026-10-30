@@ -167,7 +167,9 @@ registry/factory is the seam and is enough for one adapter per provider.
 ### Database coupling
 
 The DB client is initialized at module load in `src/db/client.ts`. Access goes
-through per-domain stores; routes never import `db` directly.
+through per-domain stores; routes never import `db` directly. Stores export a
+`createXStore(client?)` factory plus a default singleton, so methods bind the
+client once and tests can inject a fake instead of mocking the module.
 
 ### No dependency injection
 

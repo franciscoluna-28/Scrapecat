@@ -57,6 +57,8 @@ API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts 
 
 Strip extended-thinking output with `cleanResponse()` before using model responses (removes `<thinking>` tags).
 
+Pure helpers live in `src/shared/utils/` (`index.ts` is the public surface). Stores and services own I/O and orchestration; they import generic helpers instead of exporting them. Domain-specific pure helpers (e.g. `toSafeCredential`, `defaultAISettings`) stay in their domain file — they are intentionally not global utilities.
+
 ## Read-path model
 
 The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; the provider REST APIs are also used for discovery.
@@ -75,7 +77,7 @@ Tables defined in `src/db/schema.ts`:
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts`, `src/settings/stores/settings-store.ts`, `src/chat/chat-store.ts` — routes never import `db` directly. Each store exports a `createXStore(client?: DbOrTx)` factory plus a default `xStore` singleton; methods bind the client once and take flattened arguments, so tests can inject a fake client instead of mocking the module.
 
 ## Commit ingestion (`src/repositories/`)
 

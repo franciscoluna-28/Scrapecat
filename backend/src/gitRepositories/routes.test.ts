@@ -19,7 +19,10 @@ vi.mock("@/projects/stores/projects-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/projects/stores/projects-store")>();
   return {
     ...actual,
-    getProjectByOwnerRepo: (...args: unknown[]) => mockGetProjectByOwnerRepo(...args),
+    projectsStore: {
+      ...actual.projectsStore,
+      getProjectByOwnerRepo: (...args: unknown[]) => mockGetProjectByOwnerRepo(...args),
+    },
   };
 });
 
@@ -27,7 +30,10 @@ vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/projects/stores/commit-chunks-store")>();
   return {
     ...actual,
-    listCommitsForProject: (...args: unknown[]) => mockListCommitsForProject(...args),
+    commitChunksStore: {
+      ...actual.commitChunksStore,
+      listCommitsForProject: (...args: unknown[]) => mockListCommitsForProject(...args),
+    },
   };
 });
 

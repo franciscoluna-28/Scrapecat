@@ -10,8 +10,8 @@ import {
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { restrictDemoBranches } from "@/shared/demo-branches";
 import { listCommitsFromApi } from "@/repositories/github-api";
-import * as projectsStore from "@/projects/stores/projects-store";
-import { listCommitsForProject } from "@/projects/stores/commit-chunks-store";
+import { projectsStore } from "@/projects/stores/projects-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
 import type { Static } from "@sinclair/typebox";
 import {
   RepoOwnerParams,
@@ -244,7 +244,7 @@ export async function listCommits(
     if (!project) return reply.send({ commits: [] });
 
     const gitProvider = project.gitProvider;
-    const rows = await listCommitsForProject({
+    const rows = await commitChunksStore.listCommitsForProject({
       projectId: project.id,
       branch: branch || project.defaultBranch,
       startDate: parseDate(startDate),
@@ -307,7 +307,7 @@ export async function countCommits(
     });
     if (!project) return reply.send({ count: 0 });
 
-    const rows = await listCommitsForProject({
+    const rows = await commitChunksStore.listCommitsForProject({
       projectId: project.id,
       branch: branch || project.defaultBranch,
       startDate: parseDate(startDate),

@@ -4,7 +4,10 @@ import {
   resolveEmbeddingSpace,
   type EmbeddingSpace,
 } from "@/projects/embeddings";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
+import {
+  commitChunksStore,
+  type CommitSearchResult,
+} from "@/projects/stores/commit-chunks-store";
 
 export const RETRIEVAL_LIMIT = 20;
 
@@ -31,7 +34,7 @@ function queryText(opts: { query: string; startDate?: Date; endDate?: Date }): s
   return date ? `${fmtDate(date)} ${opts.query}` : opts.query;
 }
 
-function toCitation(row: commitChunksStore.CommitSearchResult): ChatCitation {
+function toCitation(row: CommitSearchResult): ChatCitation {
   return {
     commitSha: row.commitSha,
     commitMessage: row.commitMessage,
@@ -66,7 +69,7 @@ export async function retrieveCommits(opts: {
       })
     : 0;
 
-  let rows: commitChunksStore.CommitSearchResult[] | null = null;
+  let rows: CommitSearchResult[] | null = null;
   if (space && embeddedCount > 0) {
     try {
       const [embedding] = await embedTexts([queryText(opts)], space);

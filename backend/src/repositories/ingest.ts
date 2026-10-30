@@ -1,7 +1,9 @@
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
-import * as commitChunksStore from "@/projects/stores/commit-chunks-store";
-import { type CommitChunkInput } from "@/projects/stores/commit-chunks-store";
+import {
+  commitChunksStore,
+  type CommitChunkInput,
+} from "@/projects/stores/commit-chunks-store";
 import { embedNewChunks } from "@/projects/embed-chunks";
 
 export type IngestResult = {
@@ -123,7 +125,7 @@ export async function ingestCommits(
     skipped += batchSkipped;
 
     if (inputs.length > 0) {
-      await commitChunksStore.upsertCommitChunks({ inputs });
+      await commitChunksStore.upsertCommitChunks(inputs);
       chunksWritten += inputs.length;
     }
 

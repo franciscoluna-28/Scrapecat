@@ -22,7 +22,7 @@ await app.close();
 | `src/db/client.ts` | Postgres via postgres-js (lazy — importing it does not connect, so unit tests need no live DB) |
 | `src/config/env.ts` | Control GITHUB_TOKEN and other config |
 | `global.fetch` | `GET /api/v1/models` calls OpenRouter directly |
-| `src/shared/utils.ts` | **Do not mock** — pure regex functions, fast and deterministic |
+| `src/shared/utils/` | **Do not mock** — pure date/hash/embedding helpers, fast and deterministic |
 
 ## How to write a test
 

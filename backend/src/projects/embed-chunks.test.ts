@@ -6,26 +6,18 @@ const mockEmbedTexts = vi.fn();
 const mockResolveEmbeddingSpace = vi.fn();
 const mockUpdateChunkEmbeddings = vi.fn();
 
-vi.mock("@/db/client", () => ({
-  db: {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => mockPendingRows()),
-      })),
-    })),
-    selectDistinct: vi.fn(() => ({
-      from: vi.fn(() => mockProjects()),
-    })),
-  },
-}));
-
 vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/projects/stores/commit-chunks-store")>();
   return {
     ...actual,
-    updateChunkEmbeddings: (...args: unknown[]) =>
-      mockUpdateChunkEmbeddings(...args),
+    commitChunksStore: {
+      ...actual.commitChunksStore,
+      listPendingChunks: (...args: unknown[]) => mockPendingRows(...args),
+      listProjectIdsWithChunks: (...args: unknown[]) => mockProjects(...args),
+      updateChunkEmbeddings: (...args: unknown[]) =>
+        mockUpdateChunkEmbeddings(...args),
+    },
   };
 });
 
@@ -100,8 +92,8 @@ describe("reindexAllProjects", () => {
   beforeEach(() => {
     mockPendingRows.mockReset().mockResolvedValue([pending]);
     mockProjects.mockReset().mockResolvedValue([
-      { projectId: "project-1" },
-      { projectId: "project-2" },
+      "project-1",
+      "project-2",
     ]);
     mockEmbedTexts.mockReset().mockResolvedValue([[0.1, 0.2]]);
     mockResolveEmbeddingSpace.mockReset().mockResolvedValue(SPACE);

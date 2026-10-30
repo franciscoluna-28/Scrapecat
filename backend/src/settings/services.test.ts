@@ -6,8 +6,10 @@ const mockEnqueue = vi.fn();
 const mockRunAndWait = vi.fn();
 
 vi.mock("@/settings/stores/settings-store", () => ({
-  getSettings: (...args: unknown[]) => mockGetSettings(...args),
-  upsertSettings: (...args: unknown[]) => mockUpsertSettings(...args),
+  settingsStore: {
+    getSettings: (...args: unknown[]) => mockGetSettings(...args),
+    upsertSettings: (...args: unknown[]) => mockUpsertSettings(...args),
+  },
 }));
 
 vi.mock("@/shared/queue", () => ({

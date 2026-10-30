@@ -1,7 +1,7 @@
 import { env } from "@/config/env";
 import type { IngestProgress, IngestResult } from "@/repositories/ingest";
-import { countChunksForProject } from "@/projects/stores/commit-chunks-store";
-import * as projectsStore from "@/projects/stores/projects-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
@@ -26,10 +26,10 @@ import "@/projects/jobs";
  * resolved on failure and used for both ingestion and retrieval.
  */
 export async function prepareProjectBranch(projectId: string, branch: string, onProgress?: IngestProgress) {
-  const project = await projectsStore.getProjectById({ id: projectId });
+  const project = await projectsStore.getProjectById(projectId);
   if (!project) throw new Error("Project not found");
 
-  const existing = await countChunksForProject({ projectId, branch });
+  const existing = await commitChunksStore.countChunksForProject({ projectId, branch });
 
   // Demo only ingests trunk branches (main/master) — or the repo's default.
   // Anything else serves whatever was already stored, without hitting GitHub.

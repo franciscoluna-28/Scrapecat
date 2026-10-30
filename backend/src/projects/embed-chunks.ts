@@ -1,11 +1,5 @@
-import { and, eq, isNull, ne, or } from "drizzle-orm";
-import { db } from "@/db/client";
-import { commitChunks } from "@/db/schema";
-import {
-  contentHashOf,
-  embeddingSource,
-  updateChunkEmbeddings,
-} from "@/projects/stores/commit-chunks-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { contentHashOf, embeddingSource } from "@/shared/utils";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 import {
@@ -14,37 +8,6 @@ import {
   type EmbeddingSpace,
 } from "@/projects/embeddings";
 
-export async function listPendingChunks(
-  projectId: string,
-  space: EmbeddingSpace,
-) {
-  return db
-    .select({
-      id: commitChunks.id,
-      commitMessage: commitChunks.commitMessage,
-      committedAt: commitChunks.committedAt,
-      contentHash: commitChunks.contentHash,
-    })
-    .from(commitChunks)
-    .where(
-      and(
-        eq(commitChunks.projectId, projectId),
-        or(
-          isNull(commitChunks.embeddingHash),
-          ne(commitChunks.embeddingHash, commitChunks.contentHash),
-          isNull(commitChunks.embeddingProvider),
-          ne(commitChunks.embeddingProvider, space.provider),
-          isNull(commitChunks.embeddingModel),
-          ne(commitChunks.embeddingModel, space.model),
-        ),
-      ),
-    );
-}
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 export async function embedNewChunks(
   projectId: string,
   opts?: { batchSize?: number; space?: EmbeddingSpace },
@@ -52,7 +15,7 @@ export async function embedNewChunks(
   if (!env.EMBEDDING_ENABLED) return { embedded: 0 };
 
   const space = opts?.space ?? (await resolveEmbeddingSpace());
-  const pending = await listPendingChunks(projectId, space);
+  const pending = await commitChunksStore.listPendingChunks(projectId, space);
   if (pending.length === 0) return { embedded: 0 };
 
   const batchSize = Math.max(1, opts?.batchSize ?? env.EMBEDDING_BATCH_SIZE);
@@ -62,10 +25,10 @@ export async function embedNewChunks(
   for (let i = 0; i < pending.length; i += batchSize) {
     const batch = pending.slice(i, i + batchSize);
     const batchStart = performance.now();
-    const texts = batch.map((chunk) => `${fmtDate(chunk.committedAt)} ${chunk.commitMessage}`);
+    const texts = batch.map((chunk) => embeddingSource(chunk.committedAt, chunk.commitMessage));
     const vectors = await embedTexts(texts, space);
 
-    await updateChunkEmbeddings({
+    await commitChunksStore.updateChunkEmbeddings({
       updates: batch.map((chunk, index) => ({
         id: chunk.id,
         embedding: vectors[index],
@@ -115,14 +78,12 @@ export async function reindexAllProjects(opts?: {
   batchSize?: number;
 }) {
   const space = opts?.space ?? (await resolveEmbeddingSpace());
-  const projects = await db
-    .selectDistinct({ projectId: commitChunks.projectId })
-    .from(commitChunks);
+  const projectIds = await commitChunksStore.listProjectIdsWithChunks();
 
   let embedded = 0;
-  for (const project of projects) {
+  for (const projectId of projectIds) {
     try {
-      const result = await embedNewChunks(project.projectId, {
+      const result = await embedNewChunks(projectId, {
         space,
         batchSize: opts?.batchSize,
       });
@@ -130,7 +91,7 @@ export async function reindexAllProjects(opts?: {
     } catch (error) {
       logger.warn(
         {
-          projectId: project.projectId,
+          projectId,
           provider: space.provider,
           model: space.model,
           err: (error as Error)?.message ?? String(error),
@@ -144,7 +105,7 @@ export async function reindexAllProjects(opts?: {
     {
       provider: space.provider,
       model: space.model,
-      projects: projects.length,
+      projects: projectIds.length,
       embedded,
     },
     "embedding reindex complete",
@@ -153,7 +114,7 @@ export async function reindexAllProjects(opts?: {
   return {
     provider: space.provider,
     model: space.model,
-    projects: projects.length,
+    projects: projectIds.length,
     embedded,
   };
 }

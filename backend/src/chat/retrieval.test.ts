@@ -12,9 +12,11 @@ vi.mock("@/projects/embeddings", () => ({
 }));
 
 vi.mock("@/projects/stores/commit-chunks-store", () => ({
-  countChunksForProject: (...args: unknown[]) => mockCountChunks(...args),
-  semanticSearchCommits: (...args: unknown[]) => mockSemanticSearch(...args),
-  keywordSearchCommits: (...args: unknown[]) => mockKeywordSearch(...args),
+  commitChunksStore: {
+    countChunksForProject: (...args: unknown[]) => mockCountChunks(...args),
+    semanticSearchCommits: (...args: unknown[]) => mockSemanticSearch(...args),
+    keywordSearchCommits: (...args: unknown[]) => mockKeywordSearch(...args),
+  },
 }));
 
 import { RETRIEVAL_LIMIT, retrieveCommits } from "@/chat/retrieval";

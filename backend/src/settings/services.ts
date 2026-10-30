@@ -5,7 +5,7 @@ import {
 } from "@/shared/integrations/providers/registry";
 import { logger } from "@/shared/logger";
 import { getJobQueue } from "@/shared/queue";
-import * as settingsStore from "@/settings/stores/settings-store";
+import { settingsStore } from "@/settings/stores/settings-store";
 import type { AISettingsInput } from "@/settings/schemas";
 
 export const GLOBAL_SETTINGS_ID = "global";
@@ -53,6 +53,10 @@ export type AISettings = {
   embeddingModel: string;
 };
 
+/**
+ * Domain default used when no settings row exists. Env-derived on purpose, so
+ * it stays in the settings service rather than `shared/utils`.
+ */
 export function defaultAISettings(): AISettings {
   return {
     chatProvider: "openrouter",

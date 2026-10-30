@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { env } from "@/config/env";
-import * as projectsStore from "@/projects/stores/projects-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
 import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
 import { getGitProvider } from "@/shared/integrations/git-provider";
@@ -89,7 +89,9 @@ export async function createProject(req: FastifyRequest, reply: FastifyReply) {
     }
 
     const { project } = await projectsStore.upsertProject({
-      input: { ...body, gitProvider, providerProjectId },
+      ...body,
+      gitProvider,
+      providerProjectId,
     });
     return reply.code(201).send(projectResponse(project));
   } catch (error) {
