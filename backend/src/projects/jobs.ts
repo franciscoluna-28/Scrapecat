@@ -5,6 +5,7 @@ import { createApiCommitSource } from "@/repositories/api-source";
 import { wipeJobScratch } from "@/repositories/archive-service";
 import { reindexAllProjects } from "@/projects/embed-chunks";
 import { registerJobHandler } from "@/shared/queue";
+import { JOB_NAMES } from "@/shared/queue/jobs";
 import type { GitProviderId } from "@/shared/integrations/git-provider";
 
 export type IngestJobPayload = {
@@ -22,7 +23,7 @@ export type IngestJobPayload = {
  * resolve it. The demo/self-hosted split selects the commit source; the shared
  * orchestrator runs the pipeline either way.
  */
-registerJobHandler("ingest-branch", async (payload, report, ctx) => {
+registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report, ctx) => {
   const { gitProvider, owner, repo, branch, projectId, requestId } = payload as IngestJobPayload;
   const onProgress: IngestProgress = (stage, message, done, total) =>
     report({ stage, message, done, total });
@@ -41,6 +42,6 @@ registerJobHandler("ingest-branch", async (payload, report, ctx) => {
   }
 });
 
-registerJobHandler("reindex-embeddings", async () => {
+registerJobHandler(JOB_NAMES.reindexEmbeddings, async () => {
   return reindexAllProjects();
 });

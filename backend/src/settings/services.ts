@@ -5,12 +5,14 @@ import {
 } from "@/shared/integrations/providers/registry";
 import { logger } from "@/shared/logger";
 import { getJobQueue } from "@/shared/queue";
+import {
+  JOB_NAMES,
+  REINDEX_EMBEDDINGS_JOB_ID,
+} from "@/shared/queue/jobs";
 import { settingsStore } from "@/settings/stores/settings-store";
 import type { AISettingsInput } from "@/settings/schemas";
 
 export const GLOBAL_SETTINGS_ID = "global";
-
-const REINDEX_JOB_ID = "reindex-embeddings";
 
 type EmbeddingReindexResult = {
   provider: string;
@@ -19,10 +21,10 @@ type EmbeddingReindexResult = {
 
 async function scheduleEmbeddingReindex() {
   try {
-    const queue = await getJobQueue();
-    await queue.enqueue("reindex-embeddings", REINDEX_JOB_ID, {});
+    const queue = getJobQueue();
+    await queue.enqueue(JOB_NAMES.reindexEmbeddings, REINDEX_EMBEDDINGS_JOB_ID, {});
     void queue
-      .runAndWait<EmbeddingReindexResult>(REINDEX_JOB_ID)
+      .runAndWait<EmbeddingReindexResult>(REINDEX_EMBEDDINGS_JOB_ID)
       .then(async (result) => {
         const current = await getAISettings();
         if (

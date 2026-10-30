@@ -13,13 +13,14 @@ vi.mock("@/settings/stores/settings-store", () => ({
 }));
 
 vi.mock("@/shared/queue", () => ({
-  getJobQueue: vi.fn(async () => ({
+  getJobQueue: vi.fn(() => ({
     enqueue: mockEnqueue,
     runAndWait: mockRunAndWait,
   })),
 }));
 
 import { env } from "@/config/env";
+import { JOB_NAMES, REINDEX_EMBEDDINGS_JOB_ID } from "@/shared/queue/jobs";
 import {
   GLOBAL_SETTINGS_ID,
   defaultAISettings,
@@ -108,11 +109,11 @@ describe("AI settings service", () => {
       ...input,
     });
     expect(mockEnqueue).toHaveBeenCalledWith(
-      "reindex-embeddings",
-      "reindex-embeddings",
+      JOB_NAMES.reindexEmbeddings,
+      REINDEX_EMBEDDINGS_JOB_ID,
       {},
     );
-    expect(mockRunAndWait).toHaveBeenCalledWith("reindex-embeddings");
+    expect(mockRunAndWait).toHaveBeenCalledWith(REINDEX_EMBEDDINGS_JOB_ID);
   });
 
   it("does not reindex when only chat settings change", async () => {

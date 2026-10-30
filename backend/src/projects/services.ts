@@ -7,6 +7,8 @@ import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { getJobQueue } from "@/shared/queue";
+import { JOB_NAMES, ingestBranchJobId } from "@/shared/queue/jobs";
+import { PROJECT_LOG_MESSAGES } from "@/projects/log-events";
 import { requestContext } from "@fastify/request-context";
 import "@/projects/jobs";
 
@@ -57,13 +59,13 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
-  const queue = await getJobQueue();
+  const queue = getJobQueue();
   // The heavy ingest runs as a deduped job; same window for now (full branch),
   // so the id is stable per project+branch and concurrent callers attach.
   const ingest = (ref: string): Promise<IngestResult> => {
-    const jobId = `ingest:${projectId}:${ref}:all`;
+    const jobId = ingestBranchJobId(projectId, ref);
     return queue
-      .enqueue("ingest-branch", jobId, {
+      .enqueue(JOB_NAMES.ingestBranch, jobId, {
         gitProvider: project.gitProvider,
         owner: project.providerOwner,
         repo: project.repositoryName,
@@ -90,7 +92,10 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
           await resolveGitToken(project.gitProvider),
         ).getDefaultBranch(project.providerOwner, project.repositoryName);
         if (actual && actual !== branch && isDemoBranchAllowed(actual, project.defaultBranch)) {
-          logger.warn({ projectId, branch, actual }, "ingest failed; retrying with repo default branch");
+          logger.warn(
+            { projectId, branch, actual },
+            PROJECT_LOG_MESSAGES.ingestRetryDefaultBranch,
+          );
           return { branch: actual, ...(await ingest(actual)) };
         }
       } catch {
@@ -102,7 +107,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     if (existing > 0) {
       logger.warn(
         { projectId, branch, err: (error as Error).message, existing },
-        "ingest failed; serving existing database rows",
+        PROJECT_LOG_MESSAGES.ingestServingStoredRows,
       );
       return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
     }
