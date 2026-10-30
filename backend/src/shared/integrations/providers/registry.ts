@@ -19,6 +19,12 @@ export type ProviderConfig = {
   verifyUrl: string;
   baseUrl?: string;
   protocolBaseUrls?: Partial<Record<Protocol, string>>;
+  /**
+   * Whether the provider's OpenAI-compatible embeddings endpoint accepts the
+   * OpenAI `dimensions` override. When false, the model must natively emit
+   * `EMBEDDING_DIMENSIONS` (see `src/shared/utils/embedding.ts`).
+   */
+  embeddingDimensionsParam?: boolean;
   headers?: (context: { sessionId?: string }) => Record<string, string>;
 };
 
@@ -30,6 +36,7 @@ export const PROVIDER_REGISTRY = {
     envKey: "OPENROUTER_API_KEY",
     verifyUrl: "https://openrouter.ai/api/v1/auth/key",
     baseUrl: "https://openrouter.ai/api/v1",
+    embeddingDimensionsParam: true,
   },
   deepseek: {
     label: "DeepSeek",
@@ -83,6 +90,10 @@ export const PROVIDER_REGISTRY = {
     defaultProtocol: "openai-chat",
     envKey: "OLLAMA_API_KEY",
     verifyUrl: "",
+    // Ollama's OpenAI-compatible endpoint does not implement the OpenAI
+    // `dimensions` override across embedding models. Omit the param and
+    // require the selected model to natively emit 768 dims.
+    embeddingDimensionsParam: false,
   },
 } as const satisfies Record<string, ProviderConfig>;
 

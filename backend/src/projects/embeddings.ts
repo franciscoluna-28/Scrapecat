@@ -2,13 +2,12 @@ import OpenAI from "openai";
 import { env } from "@/config/env";
 import { resolveApiKey } from "@/credentials/services";
 import { getAISettings } from "@/settings/services";
+import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 import {
   getProviderConfig,
   isEmbeddingProviderSupported,
 } from "@/shared/integrations/providers/registry";
 import { logger } from "@/shared/logger";
-
-const EMBEDDING_DIMENSIONS = 768;
 
 export type EmbeddingSpace = {
   provider: string;
@@ -65,7 +64,10 @@ export async function embedTexts(
 
   const params: OpenAI.EmbeddingCreateParams = { model, input: texts };
 
-  if (provider !== "ollama") {
+  // Only providers that implement the OpenAI `dimensions` override can be
+  // asked to truncate. Others (Ollama) must use a model that natively emits
+  // the vector(768) width; the response check below still enforces it.
+  if (config.embeddingDimensionsParam) {
     params.dimensions = EMBEDDING_DIMENSIONS;
   }
 

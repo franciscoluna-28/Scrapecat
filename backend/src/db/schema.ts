@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 
 const AVAILABLE_CREDENTIAL_PROVIDERS = [
   "openai",
@@ -34,7 +35,7 @@ export type GitProvider = (typeof gitProviderEnum)["enumValues"][number];
 
 export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(768)";
+    return `vector(${EMBEDDING_DIMENSIONS})`;
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`; 
@@ -100,7 +101,7 @@ export const commitChunks = pgTable(
     branch: text("branch").notNull().default("main"),
     commitMessage: text("commit_message").notNull(),
     author: text("author"),
-    embedding: vector("embedding", { dimensions: 768 }),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
     embeddingProvider: text("embedding_provider"),
     embeddingModel: text("embedding_model"),
     contentHash: text("content_hash"),

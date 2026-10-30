@@ -39,6 +39,7 @@ vi.mock("@/config/env", () => ({
 
 import { embedTexts } from "@/projects/embeddings";
 import { resolveApiKey } from "@/credentials/services";
+import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 
 describe("embedTexts", () => {
   beforeEach(() => {
@@ -50,8 +51,8 @@ describe("embedTexts", () => {
   it("returns vectors in input order regardless of response order", async () => {
     mockCreate.mockResolvedValue({
       data: [
-        { index: 1, embedding: Array.from({ length: 768 }, (_, i) => i + 1) },
-        { index: 0, embedding: Array.from({ length: 768 }, (_, i) => -(i + 1)) },
+        { index: 1, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => i + 1) },
+        { index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => -(i + 1)) },
       ],
     });
 
@@ -64,19 +65,19 @@ describe("embedTexts", () => {
 
   it("requests the configured embedding dimensions", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"]);
 
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ dimensions: 768 }),
+      expect.objectContaining({ dimensions: EMBEDDING_DIMENSIONS }),
     );
   });
 
   it("uses the configured provider and model", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"]);
@@ -94,7 +95,7 @@ describe("embedTexts", () => {
 
   it("honors an explicit provider and model override", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"], {
@@ -144,7 +145,7 @@ describe("embedTexts", () => {
 
   it("throws when the response is missing an input index", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await expect(embedTexts(["first", "second"])).rejects.toThrow(
@@ -154,7 +155,7 @@ describe("embedTexts", () => {
 
   it("skips dimensions param for ollama provider", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0.5) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0.5) }],
     });
 
     await embedTexts(["x"], { provider: "ollama" });
@@ -170,7 +171,7 @@ describe("embedTexts", () => {
     await expect(
       embedTexts(["x"], { provider: "ollama", model: "nomic-embed-text" }),
     ).rejects.toThrow(
-      'Embedding model "nomic-embed-text" returned 3 dims, expected 768',
+      `Embedding model "nomic-embed-text" returned 3 dims, expected ${EMBEDDING_DIMENSIONS}`,
     );
   });
 });

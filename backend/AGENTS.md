@@ -57,6 +57,8 @@ API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts 
 
 Strip extended-thinking output with `cleanResponse()` before using model responses (removes `<thinking>` tags).
 
+Embeddings are fixed-width: `EMBEDDING_DIMENSIONS` in `src/shared/utils/embedding.ts` is the single source for the `vector(768)` column and the embedding request. OpenRouter accepts the OpenAI `dimensions` override; Ollama does not (`embeddingDimensionsParam` in the provider registry), so its model must natively emit that width. The response is always length-checked.
+
 Pure helpers live in `src/shared/utils/` (`index.ts` is the public surface). Stores and services own I/O and orchestration; they import generic helpers instead of exporting them. Domain-specific pure helpers (e.g. `toSafeCredential`, `defaultAISettings`) stay in their domain file — they are intentionally not global utilities.
 
 ## Read-path model

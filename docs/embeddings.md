@@ -70,13 +70,21 @@ query embedding.
   local Ollama instance; both are on the embedding-provider allowlist.
 - **Model:** the `embeddingModel` setting, defaulting to
   `openai/text-embedding-3-small` (env `EMBEDDING_MODEL` fallback).
-- **Dimensions:** **768** — matches the `vector(768)` column and the HNSW index
-  (`commit_embedding_hnsw_idx`, cosine). `EMBEDDING_DIMENSIONS = 768` in
-  `src/projects/embeddings.ts`.
+- **Dimensions:** **768** — a database constraint shared by the
+  `vector(768)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine).
+  The single source of truth is `EMBEDDING_DIMENSIONS` in
+  `src/shared/utils/embedding.ts`, imported by both `db/schema.ts` and the
+  embedding client.
 - **Allowlist:** only `text-embedding-3-small` and `text-embedding-3-large` are
-  exposed; both are requested at 768 dims.
-- **Guarding:** a wrong-length vector fails the batch loudly instead of writing
-  corrupt data.
+  exposed on OpenRouter; both support the OpenAI `dimensions` override and are
+  requested at 768 dims.
+- **Ollama:** Ollama's OpenAI-compatible endpoint does not implement the OpenAI
+  `dimensions` override, so the parameter is omitted (`embeddingDimensionsParam:
+  false` in the provider registry). The selected Ollama model must natively emit
+  768 dims (e.g. `nomic-embed-text`); the response is still length-checked.
+- **Guarding:** every response is validated against `EMBEDDING_DIMENSIONS`
+  (including Ollama), so a wrong-width vector fails the batch loudly instead of
+  hitting the `vector(768)` column.
 - **Model changes** make every existing row pending for the new space. The old
   vectors are retained until replaced, but retrieval ignores them; changing the
   model triggers a background reindex across all projects.
