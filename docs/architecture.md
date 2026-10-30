@@ -36,12 +36,12 @@ sequenceDiagram
     participant API as Chat route
     participant Q as Job queue
     participant DB as Postgres
-    participant LLM as callAI()
+    participant LLM as aiClient
 
     C->>API: message + branch
     API->>Q: prepareProjectBranch (ingest if not stored)
     Q->>DB: upsert commit_chunks → embedNewChunks
-    API->>DB: retrieveCommits(query, branch, window)
+    API->>DB: retriever.resolveScope(query, branch, window)
     DB-->>API: ranked citations (vector, keyword fallback)
     API->>LLM: system prompt + retrieved commits + question
     LLM-->>C: streamed tokens (SSE)
@@ -112,8 +112,9 @@ the API path.
 
 ## Operational safety
 
-- **Bounded LLM calls.** `callAI()` applies `AI_TIMEOUT_MS` to every chat request;
-  embedding calls use the same timeout with one retry. SSE handlers abort the
+- **Bounded LLM calls.** `aiClient` applies `AI_TIMEOUT_MS` to every chat request
+  and caps output at `AI_MAX_OUTPUT_TOKENS` (default `8192`) unless the caller
+  overrides `maxTokens`; embedding calls use the same timeout with one retry. SSE handlers abort the
   upstream call when the client disconnects.
 - **Graceful shutdown.** `SIGTERM`/`SIGINT` close the Fastify server, which drains
   active ingest jobs (bounded to 10s) before exiting.
@@ -133,20 +134,23 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 | Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
 
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
-`defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
-`src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
-Each `commit_chunks` row stores its embedding provider/model, and retrieval only
-searches vectors in the current space; changing the embedding model enqueues a
-background reindex.
+`defaultAISettings()` (env defaults). Chat calls go through
+`resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
+`src/chat/ai.ts`; embeddings through `embedTexts()` in
+`src/projects/embeddings.ts`. Each `commit_chunks` row stores its embedding
+provider/model, and retrieval only searches vectors in the current space;
+changing the embedding model enqueues a background reindex.
 
 Chat model ids are resolved through the provider catalog
 (`src/shared/integrations/providers/catalog.ts`), which records each model's
 transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
 `google-generative`). `protocols.ts` is the only module that imports model SDKs;
-`callAI()` hands it the registry config, catalog entry, and key, and it returns
-the AI SDK language model. This is what lets a single provider (OpenCode Go)
-expose models across different endpoints without special-casing in the call
-path.
+`createAIClient()` hands it the registry config, catalog entry, and key. The
+client factory and `createChatService()` are the DI seams — tests inject fake
+SDK functions or fake turn dependencies instead of mocking the whole call path.
+The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
+(query window + semantic/keyword search), prompt assembly stays pure, and
+`chatService` composes them with `aiClient.stream()`.
 
 ## Tech debt
 

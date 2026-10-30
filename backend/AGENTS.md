@@ -47,7 +47,7 @@ Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which
 
 ## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
 
-All LLM calls go through `callAI()` from `src/chat/ai.ts` — never instantiate provider SDKs directly.
+All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/chat/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/chat/retrieval.ts`) → prompt assembly (pure functions) → `aiClient.stream()`; `createChatService()` orchestrates them and exposes the `chatService` object. Dependencies are injectable.
 
 Provider metadata (label, default model/protocol, env key name, verify URL, base URLs, headers) lives in `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The model catalog (`catalog.ts`) maps each model id to its transport protocol: `openai-chat`, `openai-responses`, `anthropic-messages`, or `google-generative`. `protocols.ts` is the only module that imports model SDKs (Vercel AI SDK); `createLanguageModel()` resolves the protocol and base URL for a model. This is how one provider (OpenCode Go) can serve models across several endpoints.
 
@@ -55,7 +55,7 @@ To add a provider: add an entry to `PROVIDER_REGISTRY` (with `defaultProtocol`, 
 
 API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts the most recent stored credential for a provider. Falls back to env vars if no credential exists. Keys are encrypted at rest with AES-256-GCM (`src/credentials/encryption.ts`).
 
-Strip extended-thinking output with `cleanResponse()` before using model responses (removes `<thinking>` tags).
+Chat sessions are scoped by the `x-anonymous-id` header: reading, streaming, or deleting a session owned by another id returns 404 so session existence is not leaked. Input is bounded by the TypeBox schemas (uuid project/session ids, 10k message cap).
 
 Embeddings are fixed-width: `EMBEDDING_DIMENSIONS` in `src/shared/utils/embedding.ts` is the single source for the `vector(768)` column and the embedding request. OpenRouter accepts the OpenAI `dimensions` override; Ollama does not (`embeddingDimensionsParam` in the provider registry), so its model must natively emit that width. The response is always length-checked.
 
@@ -83,7 +83,7 @@ All DB access goes through per-domain store modules — `src/projects/stores/pro
 
 ## Commit ingestion (`src/repositories/`)
 
-Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/projects/log-events.ts`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
 
 - **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
@@ -162,6 +162,7 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `GITLAB_HOST` | GitLab instance origin (default `https://gitlab.com`); set for self-hosted |
 | `AI_MODEL` | Default model override |
 | `AI_TIMEOUT_MS` | LLM/embedding request timeout in milliseconds (default `120000`) |
+| `AI_MAX_OUTPUT_TOKENS` | Default chat output-token ceiling (default `8192`); applied by `aiClient` when a caller omits `maxTokens` |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
 | `GROQ_API_KEY` | For the Groq chat provider |
