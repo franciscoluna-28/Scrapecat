@@ -182,10 +182,15 @@ means changing import paths everywhere; tests compensate with `vi.mock()`. This
 is acceptable while each role has one implementation; revisit only when a real
 multi-tenant/runtime plugin need appears.
 
-### No auth layer
+### No end-user auth layer
 
-The API has zero authentication — fine for trusted self-hosted deployments,
-impossible to open as multi-tenant SaaS without a rework.
+Self-hosted is intentionally account-less: the API assumes one trusted operator,
+which fits the open-source model. Request-level authorization still exists where
+it matters — chat sessions are scoped by the client's anonymous ID
+(`x-anonymous-id`), and demo mode (`DEMO_MODE`) forces `DEMO_RESTRICT_KEYS`, repo
+restrictions, and rate limits. What is missing is identity and tenancy: no
+accounts, login sessions, or per-user isolation, so opening the same API as
+multi-tenant SaaS needs a rework.
 
 ### Production Docker images
 

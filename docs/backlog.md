@@ -42,10 +42,24 @@ All P0 items are complete — see [Done](#done--completed).
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
 | P3-1 | **Transactions on ingest path** | db | Project-upsert and chunk-ingest are separate writes; a mid-way failure leaves chunks persisted (`architecture.md:156`). Safe today (chunks are the cache, and unembedded chunks are retried on the next ingest), fragile once auth/multi-tenant lands. |
-| P3-2 | **Auth layer** | backend | Zero authentication (`architecture.md:147`). Fine for trusted self-hosted; blocks multi-tenant SaaS. Rework, not a patch. |
+| P3-2 | **Multi-tenant auth layer** | backend | No end-user accounts by design for the open-source self-hosted model (one trusted operator). Request-level authorization already exists: chat sessions are scoped by `x-anonymous-id`, and demo mode restricts keys, repo writes, and rate limits. What's missing is identity/tenancy — accounts, per-user isolation, SSO — which blocks hosted multi-tenant SaaS. Rework, not a patch. |
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:27`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:30`). |
 | P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching; writes are set-based but the read is unbounded. Ingest now re-checks pending embeddings on every run, so a large persistent backlog is read on each re-ingest. Acceptable for current repo sizes; revisit for very large histories. See `architecture.md` → "Unbounded pending embedding reads". |
+| P3-8 | **Durable job queue** | backend | Ingestion runs on the in-process memory queue. Graceful shutdown drains active jobs (S-3), but a crash or redeploy drops queued work; the next on-demand ingest re-runs it. Reintroduce a durable queue (Postgres-backed or Redis) when autonomous/scheduled ingest (P2-2) makes lost work visible. |
+
+## Production scale
+
+Known limits that only bite past a single trusted deployment:
+
+| Gap | Why it blocks scale | Item |
+|---|---|---|
+| **No multi-tenant identity** | Intentional for open-source self-hosted; chat sessions and demo writes are already authorization-scoped, but there is no account/tenant isolation | P3-2 |
+| **In-process queue only** | A crash or redeploy drops queued ingests, and workers cannot scale horizontally | P3-8 |
+| **One GitLab host per backend** | A single `GITLAB_HOST` cannot serve multiple self-hosted instances | P2-4 |
+| **No project-delete / archive cleanup** | Storage grows unbounded as projects are added and removed | P2-3 |
+| **Unbounded pending-embedding reads** | Memory scales with the whole backlog, not the batch size | P3-6 |
+| **No ingest transactions** | Partial writes become unsafe once ingests run concurrently across tenants | P3-1 |
 
 ## Sequencing rationale
 
