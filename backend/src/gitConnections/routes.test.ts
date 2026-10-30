@@ -14,17 +14,16 @@ vi.mock("@/shared/integrations/git-provider", () => ({
   }),
 }));
 
-const mockStore = {
-  upsertCredential: vi.fn(),
-  getLatestCredential: vi.fn(),
-  deleteCredentialById: vi.fn(),
-};
+const { mockStore } = vi.hoisted(() => ({
+  mockStore: {
+    upsertCredential: vi.fn(),
+    getLatestCredential: vi.fn(),
+    deleteCredentialById: vi.fn(),
+  },
+}));
 
 vi.mock("@/credentials/stores/credentials-store", () => ({
-  upsertCredential: (...args: unknown[]) => mockStore.upsertCredential(...args),
-  getLatestCredential: (...args: unknown[]) => mockStore.getLatestCredential(...args),
-  deleteCredentialById: (...args: unknown[]) =>
-    mockStore.deleteCredentialById(...args),
+  credentialsStore: mockStore,
 }));
 
 vi.mock("@/credentials/encryption", () => ({

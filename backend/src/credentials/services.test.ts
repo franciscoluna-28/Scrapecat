@@ -7,11 +7,13 @@ const mockGetCredentialById = vi.fn();
 const mockDeleteCredentialById = vi.fn();
 
 vi.mock("@/credentials/stores/credentials-store", () => ({
-  upsertCredential: (...args: unknown[]) => mockUpsertCredential(...args),
-  getLatestCredential: (...args: unknown[]) => mockGetLatestCredential(...args),
-  listCredentials: (...args: unknown[]) => mockListCredentials(...args),
-  getCredentialById: (...args: unknown[]) => mockGetCredentialById(...args),
-  deleteCredentialById: (...args: unknown[]) => mockDeleteCredentialById(...args),
+  credentialsStore: {
+    upsertCredential: (...args: unknown[]) => mockUpsertCredential(...args),
+    getLatestCredential: (...args: unknown[]) => mockGetLatestCredential(...args),
+    listCredentials: (...args: unknown[]) => mockListCredentials(...args),
+    getCredentialById: (...args: unknown[]) => mockGetCredentialById(...args),
+    deleteCredentialById: (...args: unknown[]) => mockDeleteCredentialById(...args),
+  },
 }));
 
 import { env } from "@/config/env";

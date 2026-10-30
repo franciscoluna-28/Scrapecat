@@ -36,12 +36,12 @@ sequenceDiagram
     participant API as Chat route
     participant Q as Job queue
     participant DB as Postgres
-    participant LLM as callAI()
+    participant LLM as aiClient
 
     C->>API: message + branch
     API->>Q: prepareProjectBranch (ingest if not stored)
     Q->>DB: upsert commit_chunks → embedNewChunks
-    API->>DB: retrieveCommits(query, branch, window)
+    API->>DB: retriever.resolveScope(query, branch, window)
     DB-->>API: ranked citations (vector, keyword fallback)
     API->>LLM: system prompt + retrieved commits + question
     LLM-->>C: streamed tokens (SSE)
@@ -110,6 +110,20 @@ Serverless cannot run the binary at all — which is why the demo uses the GitHu
 REST API. The clean split: self-hosted ships git; serverless does not and uses
 the API path.
 
+## Operational safety
+
+- **Bounded LLM calls.** `aiClient` applies `AI_TIMEOUT_MS` to every chat request
+  and caps output at `AI_MAX_OUTPUT_TOKENS` (default `8192`) unless the caller
+  overrides `maxTokens`; embedding calls use the same timeout with one retry. SSE handlers abort the
+  upstream call when the client disconnects.
+- **Graceful shutdown.** `SIGTERM`/`SIGINT` close the Fastify server, which drains
+  active ingest jobs (bounded to 10s) before exiting.
+- **Readiness.** `GET /api/v1/health/ready` runs `select 1` against Postgres and
+  returns 503 when it cannot connect; `GET /api/v1/health` stays a liveness probe.
+  Docker images use the readiness route for their healthcheck.
+- **Fail fast on config.** `ENCRYPTION_KEY` is validated as base64-encoded 32
+  bytes at startup instead of failing at the first encrypt/decrypt call.
+
 ## Model resolution
 
 Two roles, each with a provider + model setting stored in `app_settings`:
@@ -120,17 +134,23 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 | Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
 
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
-`defaultAISettings()` (env defaults). All LLM calls go through `callAI()` in
-`src/chat/ai.ts`; embeddings through `embedTexts()` in `src/projects/embeddings.ts`.
+`defaultAISettings()` (env defaults). Chat calls go through
+`resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
+`src/chat/ai.ts`; embeddings through `embedTexts()` in
+`src/projects/embeddings.ts`. Each `commit_chunks` row stores its embedding
+provider/model, and retrieval only searches vectors in the current space;
+changing the embedding model enqueues a background reindex.
 
 Chat model ids are resolved through the provider catalog
 (`src/shared/integrations/providers/catalog.ts`), which records each model's
 transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
 `google-generative`). `protocols.ts` is the only module that imports model SDKs;
-`callAI()` hands it the registry config, catalog entry, and key, and it returns
-the AI SDK language model. This is what lets a single provider (OpenCode Go)
-expose models across different endpoints without special-casing in the call
-path.
+`createAIClient()` hands it the registry config, catalog entry, and key. The
+client factory and `createChatService()` are the DI seams — tests inject fake
+SDK functions or fake turn dependencies instead of mocking the whole call path.
+The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
+(query window + semantic/keyword search), prompt assembly stays pure, and
+`chatService` composes them with `aiClient.stream()`.
 
 ## Tech debt
 
@@ -151,7 +171,9 @@ registry/factory is the seam and is enough for one adapter per provider.
 ### Database coupling
 
 The DB client is initialized at module load in `src/db/client.ts`. Access goes
-through per-domain stores; routes never import `db` directly.
+through per-domain stores; routes never import `db` directly. Stores export a
+`createXStore(client?)` factory plus a default singleton, so methods bind the
+client once and tests can inject a fake instead of mocking the module.
 
 ### No dependency injection
 
@@ -160,10 +182,27 @@ means changing import paths everywhere; tests compensate with `vi.mock()`. This
 is acceptable while each role has one implementation; revisit only when a real
 multi-tenant/runtime plugin need appears.
 
-### No auth layer
+### No end-user auth layer
 
-The API has zero authentication — fine for trusted self-hosted deployments,
-impossible to open as multi-tenant SaaS without a rework.
+Self-hosted is intentionally account-less: the API assumes one trusted operator,
+which fits the open-source model. Request-level authorization still exists where
+it matters — chat sessions are scoped by the client's anonymous ID
+(`x-anonymous-id`), and demo mode (`DEMO_MODE`) forces `DEMO_RESTRICT_KEYS`, repo
+restrictions, and rate limits. What is missing is identity and tenancy: no
+accounts, login sessions, or per-user isolation, so opening the same API as
+multi-tenant SaaS needs a rework.
+
+### Production Docker images
+
+Self-hosted clients build `backend/Dockerfile` and `frontend/Dockerfile` from the
+workspace root; `docker-compose.prod.yml` wires them to Postgres with health-gated
+startup. The backend image bundles `src/main.ts` and the migration runner with
+esbuild, installs production dependencies only, ships the native `git` binary,
+runs as `node`, and applies migrations on boot. The frontend builds Next's
+standalone output (only when `NEXT_OUTPUT=standalone`, set by the Dockerfile) and
+runs `server.js` as `nextjs`; the serverless Vercel path does not set that flag
+and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions:
+[`deployment.md`](deployment.md).
 
 ### Validation & data-integrity gaps
 

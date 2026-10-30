@@ -6,8 +6,11 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 
 - Run API: `pnpm dev` (tsx watch on `src/main.ts`, port 4000, Swagger at http://localhost:4000/docs)
 - Vercel build (serverless demo): `pnpm build:vercel` bundles `src/vercel-entry.ts` → `dist/vercel-entry.mjs` via `scripts/build-vercel.mjs` (run automatically as `vercel-build`). The root `server.mjs` is Vercel's Fastify entrypoint (plain JS so Vercel's type-check skips the untyped bundle).
+- Typecheck: `pnpm typecheck` (`tsc --noEmit`)
 - Tests: `pnpm test` (vitest run)
 - Watch tests: `pnpm test:watch`
+- Full local check: `pnpm check` from the project root (typecheck + lint + tests)
+- Docker build bundle: `pnpm build:docker` (`main.mjs` + `migrate.mjs`); the normal `build` stays `tsc` for CI/Vercel
 - Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
@@ -38,11 +41,13 @@ Never return API key values from any endpoint — metadata only (key hints).
 
 Errors: return standard `{ error: ... }` objects with appropriate HTTP status codes. No custom exception classes — use inline `reply.status(N).send(...)`.
 
-CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). No rate limiting built in. No authentication middleware — `GITHUB_TOKEN` is server-side only.
+CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). Per-IP rate limiting is registered globally (`RATE_LIMIT_MAX`) with a tighter limit on chat (`CHAT_RATE_LIMIT_MAX`). No authentication middleware — `GITHUB_TOKEN` is server-side only, and the API is intended for trusted networks only.
+
+Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which runs `select 1` against Postgres and returns 503 when the database is unavailable. Docker healthchecks use the readiness route.
 
 ## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
 
-All LLM calls go through `callAI()` from `src/chat/ai.ts` — never instantiate provider SDKs directly.
+All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/chat/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/chat/retrieval.ts`) → prompt assembly (pure functions) → `aiClient.stream()`; `createChatService()` orchestrates them and exposes the `chatService` object. Dependencies are injectable.
 
 Provider metadata (label, default model/protocol, env key name, verify URL, base URLs, headers) lives in `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The model catalog (`catalog.ts`) maps each model id to its transport protocol: `openai-chat`, `openai-responses`, `anthropic-messages`, or `google-generative`. `protocols.ts` is the only module that imports model SDKs (Vercel AI SDK); `createLanguageModel()` resolves the protocol and base URL for a model. This is how one provider (OpenCode Go) can serve models across several endpoints.
 
@@ -50,7 +55,11 @@ To add a provider: add an entry to `PROVIDER_REGISTRY` (with `defaultProtocol`, 
 
 API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts the most recent stored credential for a provider. Falls back to env vars if no credential exists. Keys are encrypted at rest with AES-256-GCM (`src/credentials/encryption.ts`).
 
-Strip extended-thinking output with `cleanResponse()` before using model responses (removes `<thinking>` tags).
+Chat sessions are scoped by the `x-anonymous-id` header: reading, streaming, or deleting a session owned by another id returns 404 so session existence is not leaked. Input is bounded by the TypeBox schemas (uuid project/session ids, 10k message cap).
+
+Embeddings are fixed-width: `EMBEDDING_DIMENSIONS` in `src/shared/utils/embedding.ts` is the single source for the `vector(768)` column and the embedding request. OpenRouter accepts the OpenAI `dimensions` override; Ollama does not (`embeddingDimensionsParam` in the provider registry), so its model must natively emit that width. The response is always length-checked.
+
+Pure helpers live in `src/shared/utils/` (`index.ts` is the public surface). Stores and services own I/O and orchestration; they import generic helpers instead of exporting them. Domain-specific pure helpers (e.g. `toSafeCredential`, `defaultAISettings`) stay in their domain file — they are intentionally not global utilities.
 
 ## Read-path model
 
@@ -66,23 +75,23 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
 - **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
-- **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `content_hash`/`embedding_hash` (staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding
+- **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `embedding_provider`/`embedding_model` (vector-space identity), `content_hash`/`embedding_hash` (content staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding. A row is current only when its provider/model match the active settings and `embedding_hash = content_hash`.
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts` — routes never import `db` directly.
+All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts`, `src/settings/stores/settings-store.ts`, `src/chat/chat-store.ts` — routes never import `db` directly. Each store exports a `createXStore(client?: DbOrTx)` factory plus a default `xStore` singleton; methods bind the client once and take flattened arguments, so tests can inject a fake client instead of mocking the module.
 
 ## Commit ingestion (`src/repositories/`)
 
-Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/projects/log-events.ts`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
 
 - **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
 - **Archive store** (`src/shared/storage/`): `ArchiveStore` is a warm cache for the branch clone — `fs` (default: local disk already is the archive), `s3` (one `tar.gz` object per branch written with a single atomic `PutObject`, with disposable job-scoped local scratch), `memory` (tests). `ensureArchive` (`archive-service.ts`) hydrates before cloning, clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`), then dehydrates only when the tip changed. GitHub remains the source of truth. **Known gap:** deleting a project cascades in Postgres but orphans its archive (S3 object / fs clone); the cache is regenerable, so cleanup is manual.
-- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the image (`backend/Dockerfile.dev`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
+- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the images (`backend/Dockerfile.dev`, `backend/Dockerfile`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
-- **Ingest orchestrator** (`ingest.ts`): `ingestCommits(source, opts)` owns the shared pipeline — dedupe by SHA (before any file-scope work; `commit_message` is the embedding source) → batched upsert of `commit_chunks` → `embedNewChunks`. A `CommitSource` supplies `listCommits`, `toChunkInputs`, and `batchSize`; the source also resolves its own `tipSha`.
+- **Ingest orchestrator** (`ingest.ts`): `ingestCommits(source, opts)` owns the shared pipeline — dedupe by SHA (before any file-scope work; `commit_message` is the embedding source) → batched upsert of `commit_chunks` → `embedNewChunks`. A `CommitSource` supplies `listCommits`, `toChunkInputs`, and `batchSize`; the source also resolves its own `tipSha`. Changing `embeddingProvider`/`embeddingModel` enqueues `reindex-embeddings`, which re-embeds pending rows across projects.
 - **Git source** (`git-source.ts`): `createGitCommitSource` — ensure archive → list window commits → per-commit file scope (`git diff-tree`, concurrency 8) → guardrail; upserts in batches of 50. `commitUrl` is `https://github.com/{owner}/{repo}/commit/{sha}`.
 - **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `shared/integrations/git-provider/octokit.ts`.
 - **API source** (`api-source.ts`): `createApiCommitSource` feeds the same orchestrator using the API reads. File scopes are best-effort and the whole window upserts in a single batch; guardrail does **not** run here, so demo chunks carry no `metadata.validation`. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `src/gitConnections/services.ts`.
@@ -100,7 +109,7 @@ Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:gener
 
 ## Provider naming (`src/shared/integrations/providers/registry.ts`)
 
-Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only (it exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages models); embeddings stay on OpenRouter/Ollama.
+Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `groq`, `opencode-go`) in both the `PROVIDER_REGISTRY` and the `credential_provider` pgEnum (`openai` | `openrouter` | `groq` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`). No aliasing layer. OpenCode Go is chat-only (it exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages models); embeddings stay on OpenRouter/Ollama.
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
@@ -152,8 +161,11 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `GITLAB_TOKEN` | GitLab personal access token (`read_api`, `read_repository`); discovery + archive clone |
 | `GITLAB_HOST` | GitLab instance origin (default `https://gitlab.com`); set for self-hosted |
 | `AI_MODEL` | Default model override |
+| `AI_TIMEOUT_MS` | LLM/embedding request timeout in milliseconds (default `120000`) |
+| `AI_MAX_OUTPUT_TOKENS` | Default chat output-token ceiling (default `8192`); applied by `aiClient` when a caller omits `maxTokens` |
 | `DEEPSEEK_API_KEY` | For DeepSeek provider |
 | `OPENAI_API_KEY` | For OpenAI provider |
+| `GROQ_API_KEY` | For the Groq chat provider |
 | `OPENCODE_GO_API_KEY` | For the OpenCode Go chat provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |

@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { env } from "@/config/env";
-import * as projectsStore from "@/projects/stores/projects-store";
-import { prepareProjectBranch } from "@/projects/services";
+import { projectsStore } from "@/projects/stores/projects-store";
+import { listProjects as listProjectsService, prepareProjectBranch } from "@/projects/services";
 import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/projects/schemas";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
@@ -31,23 +31,7 @@ function projectResponse(project: {
 
 export async function listProjects(_req: FastifyRequest, reply: FastifyReply) {
   try {
-    const projects = await projectsStore.listProjects();
-    const indexedBranches = await Promise.all(
-      projects.map((project) => projectsStore.listIndexedBranches(project.id)),
-    );
-    return reply.send({
-      projects: projects.map((p, index) => ({
-        id: p.id,
-        gitProvider: p.gitProvider,
-        providerProjectId: p.providerProjectId,
-        providerOwner: p.providerOwner,
-        repositoryName: p.repositoryName,
-        defaultBranch: p.defaultBranch,
-        indexedBranches: indexedBranches[index],
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      })),
-    });
+    return reply.send({ projects: await listProjectsService() });
   } catch (error) {
     console.error("Error listing projects:", error);
     return reply.status(500).send({ error: "Failed to list projects" });
@@ -89,7 +73,9 @@ export async function createProject(req: FastifyRequest, reply: FastifyReply) {
     }
 
     const { project } = await projectsStore.upsertProject({
-      input: { ...body, gitProvider, providerProjectId },
+      ...body,
+      gitProvider,
+      providerProjectId,
     });
     return reply.code(201).send(projectResponse(project));
   } catch (error) {

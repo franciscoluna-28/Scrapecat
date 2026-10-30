@@ -95,7 +95,7 @@ export function AISettingsCard({
             <p className="text-xs text-muted-foreground mt-2">
               {embeddingProvider === "ollama"
                 ? `Local model · ${EMBEDDING_DIMENSIONS} dimensions · runs on your machine`
-                : `OpenRouter · ${EMBEDDING_DIMENSIONS}-dimension models. Changing it applies to newly synced commits; existing embeddings keep their model.`}
+                : `OpenRouter · ${EMBEDDING_DIMENSIONS}-dimension models. Changing it reindexes existing embeddings in the background.`}
             </p>
           </div>
         </div>

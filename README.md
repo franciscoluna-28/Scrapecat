@@ -4,6 +4,8 @@
 
 <br>
 
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/franciscoluna-28/badge.svg)](https://hub.xerj.org/contributors/franciscoluna-28)
+
 ## 🐈 Scrapecat - Git should explain your project
 
 Scrapecat is an engineering intelligence assistant that answers questions about your repository's history and engineering progress, connect to a repo and understand what your team has been working on.
@@ -23,6 +25,7 @@ Built by a former founding engineer to stop generating reports and communicating
 - **Feature-Level Summaries:** Related commits are grouped by feature, bug fix, refactor, or infrastructure — no individual commit listing unless asked.
 - **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to provider commits.
 - **Project Tree Sidebar:** Connected repositories with nested chat sessions, branch selector, and navigation.
+- **Audience Personas:** Choose a Founder, CTO, or Engineer tone per conversation; the same history is synthesized for the selected audience.
 - **Model Selection:** Pick the chat model per conversation; configure the embedding model in Settings.
 
 ## Future Roadmap
@@ -157,6 +160,22 @@ Three services start:
 ```bash
 docker compose down
 ```
+
+### Production (self-hosted clients)
+
+Workspace-aware production images live next to each app:
+[`backend/Dockerfile`](./backend/Dockerfile) and
+[`frontend/Dockerfile`](./frontend/Dockerfile). Run the full stack with:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The backend image runs migrations on boot, ships native `git`, and healthchecks
+the readiness route. Set `NEXT_PUBLIC_API_URL` to the backend URL as seen by the
+browser. See [`docs/deployment.md`](./docs/deployment.md) for env, volumes,
+migrations, and multi-replica notes. The Vercel/serverless deployment is separate
+and unchanged — see [`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
 
 ## Architecture
 

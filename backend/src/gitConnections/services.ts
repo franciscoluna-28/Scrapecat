@@ -1,10 +1,6 @@
 import { env } from "@/config/env";
 import { encrypt, maskApiKey } from "@/credentials/encryption";
-import {
-  deleteCredentialById,
-  getLatestCredential,
-  upsertCredential,
-} from "@/credentials/stores/credentials-store";
+import { credentialsStore } from "@/credentials/stores/credentials-store";
 import {
   getGitProvider,
   type GitProviderId,
@@ -30,7 +26,7 @@ export async function connectGitProvider(
 ): Promise<GitConnection> {
   const status = await getGitProvider(provider, token).verifyConnection();
 
-  await upsertCredential({
+  await credentialsStore.upsertCredential({
     provider,
     encryptedKey: encrypt(token),
     keyHint: maskApiKey(token),
@@ -49,7 +45,7 @@ export async function getGitProviderConnection(
   const token = await resolveGitToken(provider);
   if (!token) return { connected: false, source: "none" };
 
-  const stored = await getLatestCredential(provider);
+  const stored = await credentialsStore.getLatestCredential(provider);
   const source: GitConnectionSource = stored ? "token" : "env";
 
   if (env.isDemoMode) return { connected: true, source };
@@ -68,7 +64,7 @@ export async function getGitProviderConnection(
 export async function disconnectGitProvider(
   provider: GitProviderId,
 ): Promise<boolean> {
-  const stored = await getLatestCredential(provider);
+  const stored = await credentialsStore.getLatestCredential(provider);
   if (!stored) return false;
-  return deleteCredentialById(stored.id);
+  return credentialsStore.deleteCredentialById(stored.id);
 }

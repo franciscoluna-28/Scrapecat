@@ -1,6 +1,6 @@
 import { env } from "@/config/env";
 import { decrypt } from "@/credentials/encryption";
-import { getLatestCredential } from "@/credentials/stores/credentials-store";
+import { credentialsStore } from "@/credentials/stores/credentials-store";
 import {
   getGitProviderConfig,
   type GitProviderId,
@@ -14,7 +14,7 @@ import {
  */
 export async function resolveGitToken(provider: GitProviderId): Promise<string | null> {
   const config = getGitProviderConfig(provider);
-  const stored = await getLatestCredential(provider);
+  const stored = await credentialsStore.getLatestCredential(provider);
   if (stored) {
     return decrypt(stored.encryptedKey);
   }

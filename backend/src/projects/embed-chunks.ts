@@ -1,43 +1,21 @@
-import { and, eq, isNull, ne, or } from "drizzle-orm";
-import { db } from "@/db/client";
-import { commitChunks } from "@/db/schema";
-import {
-  contentHashOf,
-  embeddingSource,
-  updateChunkEmbeddings,
-} from "@/projects/stores/commit-chunks-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { contentHashOf, embeddingSource } from "@/shared/utils";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
-import { embedTexts } from "@/projects/embeddings";
+import {
+  embedTexts,
+  resolveEmbeddingSpace,
+  type EmbeddingSpace,
+} from "@/projects/embeddings";
 
-export async function listPendingChunks(projectId: string) {
-  return db
-    .select({
-      id: commitChunks.id,
-      commitMessage: commitChunks.commitMessage,
-      committedAt: commitChunks.committedAt,
-      contentHash: commitChunks.contentHash,
-    })
-    .from(commitChunks)
-    .where(
-      and(
-        eq(commitChunks.projectId, projectId),
-        or(
-          isNull(commitChunks.embeddingHash),
-          ne(commitChunks.embeddingHash, commitChunks.contentHash),
-        ),
-      ),
-    );
-}
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-export async function embedNewChunks(projectId: string, opts?: { batchSize?: number }) {
+export async function embedNewChunks(
+  projectId: string,
+  opts?: { batchSize?: number; space?: EmbeddingSpace },
+) {
   if (!env.EMBEDDING_ENABLED) return { embedded: 0 };
 
-  const pending = await listPendingChunks(projectId);
+  const space = opts?.space ?? (await resolveEmbeddingSpace());
+  const pending = await commitChunksStore.listPendingChunks(projectId, space);
   if (pending.length === 0) return { embedded: 0 };
 
   const batchSize = Math.max(1, opts?.batchSize ?? env.EMBEDDING_BATCH_SIZE);
@@ -47,10 +25,10 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   for (let i = 0; i < pending.length; i += batchSize) {
     const batch = pending.slice(i, i + batchSize);
     const batchStart = performance.now();
-    const texts = batch.map((chunk) => `${fmtDate(chunk.committedAt)} ${chunk.commitMessage}`);
-    const vectors = await embedTexts(texts);
+    const texts = batch.map((chunk) => embeddingSource(chunk.committedAt, chunk.commitMessage));
+    const vectors = await embedTexts(texts, space);
 
-    await updateChunkEmbeddings({
+    await commitChunksStore.updateChunkEmbeddings({
       updates: batch.map((chunk, index) => ({
         id: chunk.id,
         embedding: vectors[index],
@@ -58,12 +36,15 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
           chunk.contentHash ??
           contentHashOf(embeddingSource(chunk.committedAt, chunk.commitMessage)),
       })),
+      space,
     });
 
     embedded += batch.length;
     logger.info(
       {
         projectId,
+        provider: space.provider,
+        model: space.model,
         batchIndex: i / batchSize,
         batchSize: batch.length,
         durationMs: Math.round(performance.now() - batchStart),
@@ -75,6 +56,8 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   logger.info(
     {
       projectId,
+      provider: space.provider,
+      model: space.model,
       pending: pending.length,
       embedded,
       durationMs: Math.round(performance.now() - start),
@@ -83,4 +66,55 @@ export async function embedNewChunks(projectId: string, opts?: { batchSize?: num
   );
 
   return { embedded };
+}
+
+/**
+ * Re-embeds stale rows across every project. Used after an embedding-model
+ * change; the space is resolved once so a mid-run settings change cannot mix
+ * vectors from different models.
+ */
+export async function reindexAllProjects(opts?: {
+  space?: EmbeddingSpace;
+  batchSize?: number;
+}) {
+  const space = opts?.space ?? (await resolveEmbeddingSpace());
+  const projectIds = await commitChunksStore.listProjectIdsWithChunks();
+
+  let embedded = 0;
+  for (const projectId of projectIds) {
+    try {
+      const result = await embedNewChunks(projectId, {
+        space,
+        batchSize: opts?.batchSize,
+      });
+      embedded += result.embedded;
+    } catch (error) {
+      logger.warn(
+        {
+          projectId,
+          provider: space.provider,
+          model: space.model,
+          err: (error as Error)?.message ?? String(error),
+        },
+        "embedding reindex failed for project",
+      );
+    }
+  }
+
+  logger.info(
+    {
+      provider: space.provider,
+      model: space.model,
+      projects: projectIds.length,
+      embedded,
+    },
+    "embedding reindex complete",
+  );
+
+  return {
+    provider: space.provider,
+    model: space.model,
+    projects: projectIds.length,
+    embedded,
+  };
 }

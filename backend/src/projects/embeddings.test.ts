@@ -33,11 +33,13 @@ vi.mock("@/config/env", () => ({
     OPENROUTER_API_KEY: "",
     OLLAMA_BASE_URL: "http://localhost:11434",
     OLLAMA_API_KEY: "",
+    AI_TIMEOUT_MS: 120_000,
   },
 }));
 
 import { embedTexts } from "@/projects/embeddings";
 import { resolveApiKey } from "@/credentials/services";
+import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 
 describe("embedTexts", () => {
   beforeEach(() => {
@@ -49,8 +51,8 @@ describe("embedTexts", () => {
   it("returns vectors in input order regardless of response order", async () => {
     mockCreate.mockResolvedValue({
       data: [
-        { index: 1, embedding: Array.from({ length: 768 }, (_, i) => i + 1) },
-        { index: 0, embedding: Array.from({ length: 768 }, (_, i) => -(i + 1)) },
+        { index: 1, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => i + 1) },
+        { index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => -(i + 1)) },
       ],
     });
 
@@ -63,19 +65,19 @@ describe("embedTexts", () => {
 
   it("requests the configured embedding dimensions", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"]);
 
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ dimensions: 768 }),
+      expect.objectContaining({ dimensions: EMBEDDING_DIMENSIONS }),
     );
   });
 
   it("uses the configured provider and model", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"]);
@@ -83,6 +85,8 @@ describe("embedTexts", () => {
     expect(mockCtor).toHaveBeenCalledWith({
       apiKey: "sk-test",
       baseURL: "https://openrouter.ai/api/v1",
+      timeout: 120_000,
+      maxRetries: 1,
     });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ model: "openai/text-embedding-3-small" }),
@@ -91,20 +95,31 @@ describe("embedTexts", () => {
 
   it("honors an explicit provider and model override", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await embedTexts(["x"], {
-      provider: "deepseek",
-      model: "deepseek-v4-flash",
+      provider: "openrouter",
+      model: "openai/text-embedding-3-large",
     });
 
     expect(mockCtor).toHaveBeenCalledWith(
-      expect.objectContaining({ baseURL: "https://api.deepseek.com/v1" }),
+      expect.objectContaining({ baseURL: "https://openrouter.ai/api/v1" }),
     );
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "deepseek-v4-flash" }),
+      expect.objectContaining({ model: "openai/text-embedding-3-large" }),
     );
+  });
+
+  it("rejects a chat-only provider used for embeddings", async () => {
+    await expect(
+      embedTexts(["x"], {
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+      }),
+    ).rejects.toThrow("Unsupported embedding provider");
+
+    expect(mockCtor).not.toHaveBeenCalled();
   });
 
   it("does not call the provider for an empty input", async () => {
@@ -130,7 +145,7 @@ describe("embedTexts", () => {
 
   it("throws when the response is missing an input index", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
     });
 
     await expect(embedTexts(["first", "second"])).rejects.toThrow(
@@ -140,13 +155,23 @@ describe("embedTexts", () => {
 
   it("skips dimensions param for ollama provider", async () => {
     mockCreate.mockResolvedValue({
-      data: [{ index: 0, embedding: Array.from({ length: 768 }, () => 0.5) }],
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0.5) }],
     });
 
     await embedTexts(["x"], { provider: "ollama" });
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.not.objectContaining({ dimensions: expect.anything() }),
+    );
+  });
+
+  it("rejects an ollama vector that does not match the column width", async () => {
+    mockCreate.mockResolvedValue({ data: [{ index: 0, embedding: [1, 2, 3] }] });
+
+    await expect(
+      embedTexts(["x"], { provider: "ollama", model: "nomic-embed-text" }),
+    ).rejects.toThrow(
+      `Embedding model "nomic-embed-text" returned 3 dims, expected ${EMBEDDING_DIMENSIONS}`,
     );
   });
 });

@@ -961,7 +961,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;
@@ -992,7 +992,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
+                        chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                         chatModel: string;
                         embeddingProvider: "openrouter" | "ollama";
                         embeddingModel: string;
@@ -1007,7 +1007,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            chatProvider: "openrouter" | "deepseek" | "openai" | "opencode-go" | "ollama";
+                            chatProvider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                             chatModel: string;
                             embeddingProvider: "openrouter" | "ollama";
                             embeddingModel: string;

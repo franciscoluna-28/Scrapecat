@@ -1,14 +1,31 @@
 import { env } from "@/config/env";
 import type { IngestProgress, IngestResult } from "@/repositories/ingest";
-import { countChunksForProject } from "@/projects/stores/commit-chunks-store";
-import * as projectsStore from "@/projects/stores/projects-store";
+import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { projectsStore } from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { getJobQueue } from "@/shared/queue";
+import { JOB_NAMES, ingestBranchJobId } from "@/shared/queue/jobs";
+import { PROJECT_LOG_MESSAGES } from "@/projects/log-events";
 import { requestContext } from "@fastify/request-context";
 import "@/projects/jobs";
+
+export async function listProjects() {
+  const rows = await projectsStore.listProjectsWithIndexedBranches();
+  return rows.map((project) => ({
+    id: project.id,
+    gitProvider: project.gitProvider,
+    providerProjectId: project.providerProjectId,
+    providerOwner: project.providerOwner,
+    repositoryName: project.repositoryName,
+    defaultBranch: project.defaultBranch,
+    indexedBranches: project.indexedBranches,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+  }));
+}
 
 /**
  * Ingests a project branch, but is database-first: the database is the source
@@ -26,10 +43,10 @@ import "@/projects/jobs";
  * resolved on failure and used for both ingestion and retrieval.
  */
 export async function prepareProjectBranch(projectId: string, branch: string, onProgress?: IngestProgress) {
-  const project = await projectsStore.getProjectById({ id: projectId });
+  const project = await projectsStore.getProjectById(projectId);
   if (!project) throw new Error("Project not found");
 
-  const existing = await countChunksForProject({ projectId, branch });
+  const existing = await commitChunksStore.countChunksForProject({ projectId, branch });
 
   // Demo only ingests trunk branches (main/master) — or the repo's default.
   // Anything else serves whatever was already stored, without hitting GitHub.
@@ -42,13 +59,13 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
-  const queue = await getJobQueue();
+  const queue = getJobQueue();
   // The heavy ingest runs as a deduped job; same window for now (full branch),
   // so the id is stable per project+branch and concurrent callers attach.
   const ingest = (ref: string): Promise<IngestResult> => {
-    const jobId = `ingest:${projectId}:${ref}:all`;
+    const jobId = ingestBranchJobId(projectId, ref);
     return queue
-      .enqueue("ingest-branch", jobId, {
+      .enqueue(JOB_NAMES.ingestBranch, jobId, {
         gitProvider: project.gitProvider,
         owner: project.providerOwner,
         repo: project.repositoryName,
@@ -75,7 +92,10 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
           await resolveGitToken(project.gitProvider),
         ).getDefaultBranch(project.providerOwner, project.repositoryName);
         if (actual && actual !== branch && isDemoBranchAllowed(actual, project.defaultBranch)) {
-          logger.warn({ projectId, branch, actual }, "ingest failed; retrying with repo default branch");
+          logger.warn(
+            { projectId, branch, actual },
+            PROJECT_LOG_MESSAGES.ingestRetryDefaultBranch,
+          );
           return { branch: actual, ...(await ingest(actual)) };
         }
       } catch {
@@ -87,7 +107,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     if (existing > 0) {
       logger.warn(
         { projectId, branch, err: (error as Error).message, existing },
-        "ingest failed; serving existing database rows",
+        PROJECT_LOG_MESSAGES.ingestServingStoredRows,
       );
       return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
     }

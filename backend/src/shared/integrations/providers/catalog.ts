@@ -48,6 +48,14 @@ const OPENAI_CATALOG: ModelDescriptor[] = [
   { id: "o3-mini", name: "o3-mini", protocol: "openai-chat", free: false, description: "" },
 ];
 
+const GROQ_CATALOG: ModelDescriptor[] = [
+  { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", protocol: "openai-chat", free: false, description: "" },
+  { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", protocol: "openai-chat", free: false, description: "" },
+  { id: "qwen/qwen3-32b", name: "Qwen3 32B", protocol: "openai-chat", free: false, description: "" },
+  { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 Distill Llama 70B", protocol: "openai-chat", free: false, description: "" },
+  { id: "gemma2-9b-it", name: "Gemma 2 9B", protocol: "openai-chat", free: false, description: "" },
+];
+
 // Only the models documented on OpenCode Go's /chat/completions, /responses,
 // /anthropic, and /google endpoints. Gemini Argon and Muse Spark are excluded
 // because they train on prompts.
@@ -89,6 +97,7 @@ export const MODEL_CATALOG: Record<string, ModelDescriptor[]> = {
   openrouter: OPENROUTER_CATALOG,
   deepseek: DEEPSEEK_CATALOG,
   openai: OPENAI_CATALOG,
+  groq: GROQ_CATALOG,
   "opencode-go": OPENCODE_GO_CATALOG,
   ollama: [],
 };

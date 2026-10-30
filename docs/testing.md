@@ -22,7 +22,7 @@ await app.close();
 | `src/db/client.ts` | Postgres via postgres-js (lazy — importing it does not connect, so unit tests need no live DB) |
 | `src/config/env.ts` | Control GITHUB_TOKEN and other config |
 | `global.fetch` | `GET /api/v1/models` calls OpenRouter directly |
-| `src/shared/utils.ts` | **Do not mock** — pure regex functions, fast and deterministic |
+| `src/shared/utils/` | **Do not mock** — pure date/hash/embedding helpers, fast and deterministic |
 
 ## How to write a test
 
@@ -71,10 +71,11 @@ See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/r
 
 ## Integration tests
 
-Opt-in integration tests live next to the code and are skipped unless their flag is set — e.g. `src/shared/storage/s3-archive-store.integration.test.ts` runs against MinIO / real S3 when `S3_INTEGRATION=1`. Run them under the integration config:
+Opt-in integration tests live next to the code and are skipped unless their flag is set — e.g. `src/shared/storage/s3-archive-store.integration.test.ts` runs against MinIO / real S3 when `S3_INTEGRATION=1`. Database-backed tests such as `src/projects/stores/commit-chunks-store.integration.test.ts` run when `DB_INTEGRATION=1` (the integration config sets it by default).
 
 ```bash
 S3_INTEGRATION=1 pnpm test:integration   # requires MinIO/S3 (e.g. docker compose up -d minio minio-init)
+pnpm test:integration                    # requires the configured Postgres DATABASE_URL
 ```
 
 ## Conventions

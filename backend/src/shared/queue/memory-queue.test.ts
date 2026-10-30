@@ -73,4 +73,29 @@ describe("memory queue", () => {
     const queue = createMemoryQueue();
     await expect(queue.runAndWait("missing")).rejects.toThrow(/not enqueued/);
   });
+
+  it("waits for active jobs on shutdown", async () => {
+    let release!: () => void;
+    registerJobHandler("blocked", async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return "done";
+    });
+    const queue = createMemoryQueue();
+
+    await queue.enqueue("blocked", "j5", {});
+    const running = queue.runAndWait("j5");
+    let shutdownSettled = false;
+    const shutdown = queue.shutdown().then(() => {
+      shutdownSettled = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(shutdownSettled).toBe(false);
+
+    release();
+    await Promise.all([running, shutdown]);
+    expect(shutdownSettled).toBe(true);
+  });
 });

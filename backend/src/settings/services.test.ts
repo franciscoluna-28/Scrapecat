@@ -2,13 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetSettings = vi.fn();
 const mockUpsertSettings = vi.fn();
+const mockEnqueue = vi.fn();
+const mockRunAndWait = vi.fn();
 
 vi.mock("@/settings/stores/settings-store", () => ({
-  getSettings: (...args: unknown[]) => mockGetSettings(...args),
-  upsertSettings: (...args: unknown[]) => mockUpsertSettings(...args),
+  settingsStore: {
+    getSettings: (...args: unknown[]) => mockGetSettings(...args),
+    upsertSettings: (...args: unknown[]) => mockUpsertSettings(...args),
+  },
+}));
+
+vi.mock("@/shared/queue", () => ({
+  getJobQueue: vi.fn(() => ({
+    enqueue: mockEnqueue,
+    runAndWait: mockRunAndWait,
+  })),
 }));
 
 import { env } from "@/config/env";
+import { JOB_NAMES, REINDEX_EMBEDDINGS_JOB_ID } from "@/shared/queue/jobs";
 import {
   GLOBAL_SETTINGS_ID,
   defaultAISettings,
@@ -21,6 +33,13 @@ describe("AI settings service", () => {
   beforeEach(() => {
     mockGetSettings.mockReset().mockResolvedValue(null);
     mockUpsertSettings.mockReset().mockResolvedValue(undefined);
+    mockEnqueue.mockReset().mockResolvedValue(undefined);
+    mockRunAndWait.mockReset().mockResolvedValue({
+      provider: "openrouter",
+      model: "openai/text-embedding-3-small",
+      projects: 0,
+      embedded: 0,
+    });
   });
 
   it("falls back to the environment defaults when no row exists", async () => {
@@ -57,16 +76,31 @@ describe("AI settings service", () => {
     });
   });
 
-  it("writes a valid update under the global settings id", async () => {
+  it("writes a valid update and reindexes when the embedding model changes", async () => {
     const input = makeAISettingsInput({
       chatProvider: "openai",
       chatModel: "gpt-4o",
       embeddingModel: "openai/text-embedding-3-large",
     });
-    mockGetSettings.mockResolvedValue({
+    const previous = makeAISettings();
+    const updatedRow = {
       ...input,
       id: GLOBAL_SETTINGS_ID,
       updatedAt: new Date(),
+    };
+    mockGetSettings
+      .mockResolvedValueOnce({
+        ...previous,
+        id: GLOBAL_SETTINGS_ID,
+        updatedAt: new Date(),
+      })
+      .mockResolvedValueOnce(updatedRow)
+      .mockResolvedValue(updatedRow);
+    mockRunAndWait.mockResolvedValue({
+      provider: input.embeddingProvider,
+      model: input.embeddingModel,
+      projects: 0,
+      embedded: 0,
     });
 
     await expect(updateAISettings(input)).resolves.toEqual(input);
@@ -74,6 +108,35 @@ describe("AI settings service", () => {
       id: GLOBAL_SETTINGS_ID,
       ...input,
     });
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      JOB_NAMES.reindexEmbeddings,
+      REINDEX_EMBEDDINGS_JOB_ID,
+      {},
+    );
+    expect(mockRunAndWait).toHaveBeenCalledWith(REINDEX_EMBEDDINGS_JOB_ID);
+  });
+
+  it("does not reindex when only chat settings change", async () => {
+    const input = makeAISettingsInput({
+      chatProvider: "openai",
+      chatModel: "gpt-4o",
+    });
+    const previous = makeAISettings();
+    mockGetSettings
+      .mockResolvedValueOnce({
+        ...previous,
+        id: GLOBAL_SETTINGS_ID,
+        updatedAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        ...input,
+        id: GLOBAL_SETTINGS_ID,
+        updatedAt: new Date(),
+      });
+
+    await expect(updateAISettings(input)).resolves.toEqual(input);
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockRunAndWait).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown chat provider before writing", async () => {
