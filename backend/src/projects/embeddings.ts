@@ -74,9 +74,9 @@ export async function embedTexts(
   const embeddings = texts.map((_, i) => {
     const emb = byIndex.get(i);
     if (!emb) throw new Error(`Embedding response missing index ${i}`);
-    if (provider !== "ollama" && emb.length !== EMBEDDING_DIMENSIONS) {
+    if (emb.length !== EMBEDDING_DIMENSIONS) {
       throw new Error(
-        `Embedding model returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS}`,
+        `Embedding model "${model}" returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS} (commit_chunks.embedding is vector(${EMBEDDING_DIMENSIONS}))`,
       );
     }
     return emb;

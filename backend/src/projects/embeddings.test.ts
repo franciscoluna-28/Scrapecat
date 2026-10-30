@@ -163,4 +163,14 @@ describe("embedTexts", () => {
       expect.not.objectContaining({ dimensions: expect.anything() }),
     );
   });
+
+  it("rejects an ollama vector that does not match the column width", async () => {
+    mockCreate.mockResolvedValue({ data: [{ index: 0, embedding: [1, 2, 3] }] });
+
+    await expect(
+      embedTexts(["x"], { provider: "ollama", model: "nomic-embed-text" }),
+    ).rejects.toThrow(
+      'Embedding model "nomic-embed-text" returned 3 dims, expected 768',
+    );
+  });
 });
