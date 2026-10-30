@@ -4,6 +4,8 @@
 
 <br>
 
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/franciscoluna-28/badge.svg)](https://hub.xerj.org/contributors/franciscoluna-28)
+
 ## 🐈 Scrapecat - Git should explain your project
 
 Scrapecat is an engineering intelligence assistant that answers questions about your repository's history and engineering progress, connect to a repo and understand what your team has been working on.
