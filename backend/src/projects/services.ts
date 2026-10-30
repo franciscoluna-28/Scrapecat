@@ -10,6 +10,21 @@ import { getJobQueue } from "@/shared/queue";
 import { requestContext } from "@fastify/request-context";
 import "@/projects/jobs";
 
+export async function listProjects() {
+  const rows = await projectsStore.listProjectsWithIndexedBranches();
+  return rows.map((project) => ({
+    id: project.id,
+    gitProvider: project.gitProvider,
+    providerProjectId: project.providerProjectId,
+    providerOwner: project.providerOwner,
+    repositoryName: project.repositoryName,
+    defaultBranch: project.defaultBranch,
+    indexedBranches: project.indexedBranches,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+  }));
+}
+
 /**
  * Ingests a project branch, but is database-first: the database is the source
  * of truth for retrieval, and GitHub is only consulted to fill gaps.

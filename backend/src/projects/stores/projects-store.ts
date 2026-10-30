@@ -43,6 +43,35 @@ export function createProjectsStore(client: DbOrTx = db) {
       return client.select().from(projects).orderBy(projects.repositoryName);
     },
 
+    /**
+     * Projects with their indexed branches in one query. The left join +
+     * `array_agg` avoids the N+1 that per-project branch lookups cause.
+     */
+    async listProjectsWithIndexedBranches() {
+      const indexedBranches = sql<string[]>`coalesce(
+        array_agg(distinct ${commitChunks.branch} order by ${commitChunks.branch})
+          filter (where ${commitChunks.branch} is not null),
+        '{}'::text[]
+      )`;
+
+      return client
+        .select({
+          id: projects.id,
+          gitProvider: projects.gitProvider,
+          providerProjectId: projects.providerProjectId,
+          providerOwner: projects.providerOwner,
+          repositoryName: projects.repositoryName,
+          defaultBranch: projects.defaultBranch,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+          indexedBranches,
+        })
+        .from(projects)
+        .leftJoin(commitChunks, eq(commitChunks.projectId, projects.id))
+        .groupBy(projects.id)
+        .orderBy(projects.repositoryName);
+    },
+
     async listIndexedBranches(projectId: string) {
       const rows = await client
         .selectDistinct({ branch: commitChunks.branch })
