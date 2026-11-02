@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   useChatSessions,
@@ -15,6 +16,7 @@ import { useSidebarProjects } from "@/src/_features/chat/hooks/useSidebarProject
 import { resolveActiveProjectId } from "@/src/_features/chat/hooks/useChatProject";
 import { useActiveProjectStore } from "@/src/store/active-project";
 import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
+import { errorMessage } from "@/src/shared/api/client";
 import type { DemoProjectEntry } from "@/src/_features/demo/hooks/useDemoProjects";
 
 export function ChatSidebarContent() {
@@ -62,7 +64,11 @@ export function ChatSidebarContent() {
   };
 
   const handleDeleteSession = async (sid: string) => {
-    await deleteSession.mutateAsync(sid);
+    try {
+      await deleteSession.mutateAsync(sid);
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to delete chat"));
+    }
   };
 
   const handleDemoClick = async (demo: DemoProjectEntry) => {

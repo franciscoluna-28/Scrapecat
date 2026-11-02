@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useActiveProjectStore } from "@/src/store/active-project";
 import { useChatBranchStore } from "@/src/store/chat-branch";
+import { errorMessage } from "@/src/shared/api/client";
 import { useBranches } from "@/src/_features/git-providers/services/git-providers-api";
 import { useDemoProjects } from "@/src/_features/demo/hooks/useDemoProjects";
 import { DEMO_PROJECTS } from "@/src/shared/constants";
@@ -88,9 +89,13 @@ export function useChatProject() {
   const changeBranch = useCallback(
     async (branchName: string) => {
       if (!projectId) return;
-      await prepareBranch({ projectId, branch: branchName });
-      toast.success(`Ready to chat on ${branchName}`);
-      setBranch(projectId, branchName);
+      try {
+        await prepareBranch({ projectId, branch: branchName });
+        toast.success(`Ready to chat on ${branchName}`);
+        setBranch(projectId, branchName);
+      } catch (error) {
+        toast.error(errorMessage(error, "Failed to prepare branch"));
+      }
     },
     [prepareBranch, projectId, setBranch],
   );

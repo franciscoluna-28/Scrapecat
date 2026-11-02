@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiClient } from "@/src/shared/api/client";
+import { apiClient, errorMessage, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import { parseRepoUrl } from "@/src/shared/utils/repo-url";
 import {
@@ -85,27 +85,27 @@ export function useAddRepository(
 
     setConnecting(true);
     try {
-      const res = await apiClient.POST("/api/v1/projects", {
-        body: {
-          gitProvider: provider,
-          providerProjectId,
-          providerOwner,
-          repositoryName,
-          defaultBranch,
-        },
-      });
-      if (res.error || !res.data) {
-        toast.error("Failed to connect repository");
-        return;
-      }
+      const project = await unwrap(
+        apiClient.POST("/api/v1/projects", {
+          body: {
+            gitProvider: provider,
+            providerProjectId,
+            providerOwner,
+            repositoryName,
+            defaultBranch,
+          },
+        }),
+      );
 
       await queryClient.invalidateQueries({
         queryKey: queryKeys.projects.list,
       });
 
-      onProjectSelected(res.data.id);
+      onProjectSelected(project.id);
       setOpen(false);
       toast.success(`Connected to ${label}`);
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to connect repository"));
     } finally {
       setConnecting(false);
     }

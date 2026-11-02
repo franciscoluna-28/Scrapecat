@@ -10,6 +10,7 @@ import {
   type AISettings,
 } from "@/src/shared/services/ai-settings";
 import { useModels } from "@/src/shared/services/ai-models";
+import { errorMessage } from "@/src/shared/api/client";
 import { AISettingsCard } from "@/src/_features/settings/components/AISettingsCard";
 import { DEFAULT_EMBEDDING_PROVIDER } from "@/src/shared/constants";
 
@@ -71,8 +72,8 @@ export function AISettingsManager() {
         embeddingModel,
       });
       toast.success("Embedding settings saved");
-    } catch {
-      toast.error("Failed to save settings");
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to save settings"));
     }
   };
 
@@ -91,7 +92,9 @@ export function AISettingsManager() {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <p className="text-sm text-red-600">Failed to load settings</p>
+          <p className="text-sm text-red-600">
+            {errorMessage(error, "Failed to load settings")}
+          </p>
         </CardContent>
       </Card>
     );
