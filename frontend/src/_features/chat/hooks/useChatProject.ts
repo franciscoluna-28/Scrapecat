@@ -8,7 +8,7 @@ import { useChatBranchStore } from "@/src/store/chat-branch";
 import { errorMessage } from "@/src/shared/api/client";
 import { useBranches } from "@/src/_features/git-providers/services/git-providers-api";
 import { useDemoProjects } from "@/src/_features/demo/hooks/useDemoProjects";
-import { DEMO_PROJECTS } from "@/src/shared/constants";
+import { DEMO_PROJECTS, IS_DEMO } from "@/src/shared/constants";
 import { useProjects } from "../services/projects-api";
 import { usePrepareProjectBranch } from "../services/chat-api";
 
@@ -39,25 +39,37 @@ export function resolveActiveProjectId({
   return projects.find((p) => p.id === lastProjectId)?.id ?? projects[0]?.id ?? null;
 }
 
-export function useChatProject() {
-  const router = useRouter();
+/**
+ * Single source for the active project/session. The URL wins; the last-used
+ * project is only a fallback for `/app` without a `project` param.
+ */
+export function useActiveProject() {
   const searchParams = useSearchParams();
   const { projects, isLoading: projectsLoading } = useProjects();
-  const { isDemo, ensureProject } = useDemoProjects();
   const lastProjectId = useActiveProjectStore((s) => s.lastProjectId);
+
+  return {
+    projectId: resolveActiveProjectId({
+      projectParam: searchParams.get("project"),
+      lastProjectId,
+      projects,
+      projectsLoading,
+      isDemo: IS_DEMO,
+    }),
+    sessionId: searchParams.get("session"),
+    projects,
+    projectsLoading,
+  };
+}
+
+export function useChatProject() {
+  const router = useRouter();
+  const { projectId, sessionId, projects } = useActiveProject();
+  const { ensureProject } = useDemoProjects();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
   const branchesByProject = useChatBranchStore((s) => s.branches);
   const setBranch = useChatBranchStore((s) => s.setBranch);
   const { mutateAsync: prepareBranch } = usePrepareProjectBranch();
-
-  const sessionId = searchParams.get("session");
-  const projectId = resolveActiveProjectId({
-    projectParam: searchParams.get("project"),
-    lastProjectId,
-    projects,
-    projectsLoading,
-    isDemo,
-  });
 
   const activeProjectData = projects.find((p) => p.id === projectId) ?? null;
   const activeProject = activeProjectData?.repositoryName ?? null;

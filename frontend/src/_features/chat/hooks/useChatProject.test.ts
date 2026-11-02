@@ -149,6 +149,15 @@ describe("resolveActiveProjectId", () => {
 });
 
 describe("useChatProject", () => {
+  it("uses the URL project and session as the source of truth", () => {
+    useActiveProjectStore.setState({ lastProjectId: "p1" });
+    mocks.searchParams = new URLSearchParams("project=p2&session=s1");
+    const { result } = renderHook(() => useChatProject());
+
+    expect(result.current.projectId).toBe("p2");
+    expect(result.current.sessionId).toBe("s1");
+  });
+
   it("derives the active project and branch without a navigation effect", () => {
     useActiveProjectStore.setState({ lastProjectId: "p2" });
     const { result } = renderHook(() => useChatProject());

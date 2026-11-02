@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiClient, errorMessage, unwrap } from "@/src/shared/api/client";
-import { queryKeys } from "@/src/shared/services/keys";
-import { useProjects } from "@/src/_features/chat/services/projects-api";
+import { errorMessage } from "@/src/shared/api/client";
+import { useCreateProject, useProjects } from "@/src/_features/chat/services/projects-api";
 import {
   IS_DEMO,
   DEMO_PROJECTS,
@@ -21,7 +19,7 @@ export type DemoProjectEntry = DemoProject & { projectId: string | null };
  * create it on demand via the same endpoint the "connect repository" flow uses.
  */
 export function useDemoProjects() {
-  const queryClient = useQueryClient();
+  const { mutateAsync: createProject } = useCreateProject();
   const { projects } = useProjects();
 
   const findProject = useCallback(
@@ -54,28 +52,21 @@ export function useDemoProjects() {
       if (existing) return existing.id;
 
       try {
-        const project = await unwrap(
-          apiClient.POST("/api/v1/projects", {
-            body: {
-              gitProvider: "github",
-              providerProjectId: demo.id,
-              providerOwner: demo.owner,
-              repositoryName: demo.repo,
-              defaultBranch: demo.defaultBranch,
-            },
-          }),
-        );
-
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.projects.list,
+        const project = await createProject({
+          gitProvider: "github",
+          providerProjectId: demo.id,
+          providerOwner: demo.owner,
+          repositoryName: demo.repo,
+          defaultBranch: demo.defaultBranch,
         });
+
         return project.id;
       } catch (error) {
         toast.error(errorMessage(error, "Failed to open demo project"));
         return null;
       }
     },
-    [findProject, queryClient],
+    [createProject, findProject],
   );
 
   return { isDemo: IS_DEMO, demoProjects, defaultProject, ensureProject };

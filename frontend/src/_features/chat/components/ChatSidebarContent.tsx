@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
@@ -13,7 +13,7 @@ import { SidebarNewChatMenu } from "@/src/_features/chat/components/SidebarNewCh
 import { SidebarProjectList } from "@/src/_features/chat/components/SidebarProjectList";
 import { SidebarNavigation } from "@/src/_features/chat/components/SidebarNavigation";
 import { useSidebarProjects } from "@/src/_features/chat/hooks/useSidebarProjects";
-import { resolveActiveProjectId } from "@/src/_features/chat/hooks/useChatProject";
+import { useActiveProject } from "@/src/_features/chat/hooks/useChatProject";
 import { useActiveProjectStore } from "@/src/store/active-project";
 import { IS_DEMO, ALLOW_ADD_REPOS } from "@/src/shared/constants";
 import { errorMessage } from "@/src/shared/api/client";
@@ -21,25 +21,9 @@ import type { DemoProjectEntry } from "@/src/_features/demo/hooks/useDemoProject
 
 export function ChatSidebarContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const {
-    projectEntries,
-    projects,
-    isLoading: projectsLoading,
-    isDemo,
-    ensureProject,
-  } = useSidebarProjects();
-  const lastProjectId = useActiveProjectStore((s) => s.lastProjectId);
+  const { projectEntries, isDemo, ensureProject } = useSidebarProjects();
+  const { projectId, sessionId, projectsLoading } = useActiveProject();
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
-
-  const projectId = resolveActiveProjectId({
-    projectParam: searchParams.get("project"),
-    lastProjectId,
-    projects,
-    projectsLoading,
-    isDemo,
-  });
-  const sessionId = searchParams.get("session");
 
   const { sessions, isLoading: sessionsLoading } = useChatSessions(
     projectId ?? undefined,

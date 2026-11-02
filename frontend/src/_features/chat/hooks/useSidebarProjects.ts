@@ -19,7 +19,7 @@ export type SidebarProjectEntry = {
  * synced projects, keeping stable keys and dropping duplicates.
  */
 export function useSidebarProjects() {
-  const { projects, isLoading } = useProjects();
+  const { projects } = useProjects();
   const { isDemo, demoProjects, ensureProject } = useDemoProjects();
 
   const projectEntries = useMemo<SidebarProjectEntry[]>(() => {
@@ -42,5 +42,5 @@ export function useSidebarProjects() {
     ];
   }, [isDemo, demoProjects, projects]);
 
-  return { projectEntries, projects, isLoading, isDemo, ensureProject };
+  return { projectEntries, isDemo, ensureProject };
 }

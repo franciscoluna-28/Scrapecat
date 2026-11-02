@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiClient, errorMessage, unwrap } from "@/src/shared/api/client";
-import { queryKeys } from "@/src/shared/services/keys";
+import { errorMessage } from "@/src/shared/api/client";
 import { parseRepoUrl } from "@/src/shared/utils/repo-url";
 import {
   useGitConnections,
@@ -16,7 +14,7 @@ import {
   IS_DEMO,
   type GitProviderId,
 } from "@/src/shared/constants";
-import { useProjects } from "@/src/_features/chat/services/projects-api";
+import { useCreateProject, useProjects } from "@/src/_features/chat/services/projects-api";
 import type { GitProviderRepositoryItem } from "@/src/shared/types";
 
 type ConnectParams = {
@@ -32,7 +30,7 @@ export function useAddRepository(
   onProjectSelected: (projectId: string) => void,
   selectedProvider: GitProviderId = "github",
 ) {
-  const queryClient = useQueryClient();
+  const { mutateAsync: createProject } = useCreateProject();
   const { connectedProviders } = useGitConnections();
 
   // Demo serves public GitHub search anonymously, so GitHub stays available
@@ -85,20 +83,12 @@ export function useAddRepository(
 
     setConnecting(true);
     try {
-      const project = await unwrap(
-        apiClient.POST("/api/v1/projects", {
-          body: {
-            gitProvider: provider,
-            providerProjectId,
-            providerOwner,
-            repositoryName,
-            defaultBranch,
-          },
-        }),
-      );
-
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.list,
+      const project = await createProject({
+        gitProvider: provider,
+        providerProjectId,
+        providerOwner,
+        repositoryName,
+        defaultBranch,
       });
 
       onProjectSelected(project.id);
