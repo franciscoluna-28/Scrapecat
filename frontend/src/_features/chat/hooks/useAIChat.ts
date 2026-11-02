@@ -10,6 +10,7 @@ import {
   useCreateChatSession,
 } from "@/src/_features/chat/services/chat-api";
 import { queryKeys } from "@/src/shared/services/keys";
+import { errorMessage } from "@/src/shared/api/client";
 import { useChatModelStore } from "@/src/store/chat-model";
 import { useChatPersonaStore } from "@/src/store/chat-persona";
 import { useScrollContainer } from "@/src/components/global/ScrollContainer";
@@ -187,7 +188,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(projectId) });
     } catch (error) {
       dispatch({ type: "error", sessionKey: `${projectId}:${sid ?? ""}` });
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
+      toast.error(errorMessage(error, "Failed to send message"));
     } finally {
       setIsStreaming(false);
     }

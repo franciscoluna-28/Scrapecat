@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   apiClient,
   API_URL,
+  ApiError,
+  apiErrorFromResponse,
   authHeaders,
-  errorMessageFromResponse,
   unwrap,
 } from "@/src/shared/api/client";
 import type { paths } from "@/src/shared/api/types";
@@ -107,13 +108,10 @@ export type StreamChunk =
 export type ProgressChunk = Extract<StreamChunk, { type: "progress" }>;
 
 /** Raised for both transport failures and in-stream `error` frames. */
-export class ChatStreamError extends Error {
-  readonly requestId?: string;
-
+export class ChatStreamError extends ApiError {
   constructor(message: string, requestId?: string) {
-    super(message);
+    super(message, { requestId });
     this.name = "ChatStreamError";
-    this.requestId = requestId;
   }
 }
 
@@ -160,7 +158,7 @@ export async function streamChatMessage({
   });
 
   if (!res.ok) {
-    throw new ChatStreamError(await errorMessageFromResponse(res));
+    throw await apiErrorFromResponse(res);
   }
   if (!res.body) {
     throw new ChatStreamError("Chat stream unavailable");

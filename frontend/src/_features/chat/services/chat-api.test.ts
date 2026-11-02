@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage } from "@/src/shared/types";
+import { ApiError } from "@/src/shared/api/client";
 import {
   ChatStreamError,
   consumeChatStream,
@@ -171,7 +172,7 @@ describe("streamChatMessage", () => {
     expect(JSON.parse(String(init.body))).toEqual({ content: "hi" });
   });
 
-  it("normalizes non-OK responses into ChatStreamError", async () => {
+  it("normalizes non-OK responses into an ApiError", async () => {
     fetchMock.mockResolvedValue(jsonResponse(400, { error: "Bad request" }));
 
     const error = await streamChatMessage({
@@ -180,8 +181,8 @@ describe("streamChatMessage", () => {
       onChunk: () => {},
     }).catch((err: unknown) => err);
 
-    expect(error).toBeInstanceOf(ChatStreamError);
-    expect(error).toMatchObject({ message: "Bad request" });
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ message: "Bad request", status: 400 });
   });
 
   it("falls back to the status when the error body is not JSON", async () => {
