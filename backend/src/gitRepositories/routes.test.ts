@@ -47,6 +47,22 @@ vi.mock("@/shared/integrations/git-provider/token", () => ({
 
 import { buildApp } from "@/build-app";
 
+function repository(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "1",
+    name: "repo1",
+    full_name: "user1/repo1",
+    owner: { login: "user1" },
+    private: false,
+    description: null,
+    default_branch: "main",
+    updated_at: "2024-01-01T00:00:00Z",
+    stargazers_count: 0,
+    forks_count: 0,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockResolveGitToken.mockResolvedValue(null);
 });
@@ -68,12 +84,12 @@ describe("GET /api/v1/repositories", () => {
   });
 
   it("returns repositories list tagged with their provider", async () => {
-    const repos: any = [{ name: "repo1", owner: "user1", fullName: "user1/repo1" }];
+    const repos = [repository()];
     mockProvider.searchPublicRepositories.mockResolvedValue(repos);
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(repos.map((repo: any) => ({ ...repo, provider: "github" })));
+    expect(res.json()).toEqual(repos.map((repo) => ({ ...repo, provider: "github" })));
   });
 
   it("passes query parameters", async () => {
@@ -88,7 +104,7 @@ describe("GET /api/v1/repositories", () => {
   });
 
   it("tags an explicitly requested provider", async () => {
-    const repos = [{ name: "repo1", updated_at: "2024-01-01T00:00:00Z" }];
+    const repos = [repository()];
     mockProvider.searchPublicRepositories.mockResolvedValue(repos);
 
     const res = await app.inject({
@@ -104,9 +120,7 @@ describe("GET /api/v1/repositories", () => {
     mockResolveGitToken.mockImplementation(async (provider: string) =>
       provider === "github" || provider === "gitlab" ? `${provider}-token` : null,
     );
-    mockProvider.listRepositories.mockResolvedValue([
-      { name: "repo1", updated_at: "2024-01-01T00:00:00Z" },
-    ]);
+    mockProvider.listRepositories.mockResolvedValue([repository()]);
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
 

@@ -1,5 +1,8 @@
 import { Type } from "@sinclair/typebox";
-import { GitProviderSchema, OptionalGitProviderSchema } from "@/shared/typebox";
+import {
+  GitProviderSchema,
+  OptionalGitProviderSchema,
+} from "@/shared/typebox";
 
 export const RepoOwnerParams = Type.Object({
   owner: Type.String(),
@@ -50,9 +53,21 @@ export const RepositoriesQuery = Type.Object({
   per_page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 10 })),
 });
 
-export const RepositoriesResponse = Type.Array(
-  Type.Record(Type.String(), Type.Any()),
-);
+export const RepositoryResponse = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  full_name: Type.String(),
+  owner: Type.Object({ login: Type.String() }),
+  private: Type.Boolean(),
+  description: Type.Union([Type.String(), Type.Null()]),
+  default_branch: Type.Optional(Type.String()),
+  updated_at: Type.String(),
+  stargazers_count: Type.Optional(Type.Number()),
+  forks_count: Type.Optional(Type.Number()),
+  provider: GitProviderSchema,
+});
+
+export const RepositoriesResponse = Type.Array(RepositoryResponse);
 
 export const BranchesResponse = Type.Object({
   branches: Type.Array(Type.String()),
