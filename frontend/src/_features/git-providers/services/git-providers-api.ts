@@ -6,7 +6,12 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiClient, unwrap } from "@/src/shared/api/client";
+import { toast } from "sonner";
+import {
+  apiClient,
+  errorMessage,
+  unwrap,
+} from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
 import {
   AVAILABLE_PROVIDERS,
@@ -78,27 +83,21 @@ export function useGitConnections() {
 export function useConnectGitProvider(provider: GitProviderId = "github") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (token: string) => {
-      const res = await apiClient.POST(
-        "/api/v1/git-providers/{provider}/connection",
-        {
+    mutationFn: (token: string) =>
+      unwrap(
+        apiClient.POST("/api/v1/git-providers/{provider}/connection", {
           params: { path: { provider } },
           body: { token },
-        },
-      );
-      if (res.error || !res.data) {
-        throw new Error(
-          (res.error as { error?: string })?.error ??
-            "Failed to connect git provider",
-        );
-      }
-      return res.data;
-    },
+        }),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.gitConnections.all,
       });
-      queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, "Failed to connect git provider"));
     },
   });
 }
@@ -106,18 +105,20 @@ export function useConnectGitProvider(provider: GitProviderId = "github") {
 export function useDisconnectGitProvider(provider: GitProviderId = "github") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const res = await apiClient.DELETE(
-        "/api/v1/git-providers/{provider}/connection",
-        { params: { path: { provider } } },
-      );
-      if (res.error) throw new Error("Failed to disconnect git provider");
-    },
+    mutationFn: () =>
+      unwrap(
+        apiClient.DELETE("/api/v1/git-providers/{provider}/connection", {
+          params: { path: { provider } },
+        }),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.gitConnections.all,
       });
-      queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, "Failed to disconnect git provider"));
     },
   });
 }
@@ -130,15 +131,14 @@ export type RepoCommit = {
   url?: string;
 };
 
-async function fetchRepositories(
+function fetchRepositories(
   filters: RepositoryQuery,
 ): Promise<GitProviderRepositoryItem[]> {
-  const repositories = await unwrap(
+  return unwrap(
     apiClient.GET("/api/v1/repositories", {
       params: { query: filters },
     }),
   );
-  return repositories as GitProviderRepositoryItem[];
 }
 
 /**

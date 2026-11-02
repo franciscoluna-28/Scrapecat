@@ -1,22 +1,8 @@
 import type { paths } from "@/src/shared/api/types";
-import type { GitProviderId } from "@/src/shared/constants";
 
-export type GitProviderRepository = {
-  id: string;
-  name: string;
-  full_name: string;
-  private: boolean;
-  updated_at: string;
-  owner: { login: string };
-  default_branch?: string;
-  stargazers_count?: number;
-  forks_count?: number;
-};
-
-/** A repository from one provider, tagged so merged feeds keep their origin. */
-export type GitProviderRepositoryItem = GitProviderRepository & {
-  provider: GitProviderId;
-};
+/** A repository from one provider, as returned by `GET /api/v1/repositories`. */
+export type GitProviderRepositoryItem =
+  paths["/api/v1/repositories"]["get"]["responses"]["200"]["content"]["application/json"][number];
 
 export type GitProviderProject =
   paths["/api/v1/projects"]["get"]["responses"]["200"]["content"]["application/json"]["projects"][number];
