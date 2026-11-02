@@ -154,7 +154,9 @@ The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
 
 ## Tech debt
 
-Every shortcut below is intentional and tracked, not accidental.
+Every shortcut below is intentional and tracked, not accidental. Frontend-only
+debt is tracked separately in
+[`frontend-tech-debt.md`](./frontend-tech-debt.md).
 
 ### Git provider coupling
 

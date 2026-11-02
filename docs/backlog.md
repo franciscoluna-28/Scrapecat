@@ -37,6 +37,10 @@ All P0 items are complete — see [Done](#done--completed).
 | P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:19-20,33-35,54-56`, `gitConnections/routes.ts:31-35,72-76`, and `projects/routes.ts:58-60`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49`. Extract `preHandler` guards applied in `register-routes.ts`. |
 | P2-9 | **Provider-param guard** | backend | `unimplementedProvider` is re-applied in each `gitConnections` handler (`18-25,40,57,80`) and credential providers are validated inside services. Validate `:provider` once via a `preHandler` / TypeBox union. |
 
+Frontend-specific debt (chat streaming/state, API error boundary, project
+identity duplication, vendored UI, config drift, RSC boundary, test gaps) is
+tracked in [`frontend-tech-debt.md`](./frontend-tech-debt.md).
+
 ## P3 — Deferred / strategic
 
 | ID | Item | Area | Why / notes |
