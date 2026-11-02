@@ -1,10 +1,17 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, API_URL, unwrap } from "@/src/shared/api/client";
+import {
+  apiClient,
+  API_URL,
+  authHeaders,
+  errorMessageFromResponse,
+  unwrap,
+} from "@/src/shared/api/client";
+import type { paths } from "@/src/shared/api/types";
 import { queryKeys } from "@/src/shared/services/keys";
-import { getAnonymousId } from "@/src/shared/lib/anonymous-id";
 import { parseSseBuffer, parseSseFrame } from "@/src/shared/lib/sse";
+import type { Persona } from "@/src/shared/constants";
 import type { ChatMessage } from "@/src/shared/types";
 
 export async function prepareProjectBranch(projectId: string, branch: string) {
@@ -97,64 +104,106 @@ export type StreamChunk =
   | { type: "error"; error: string; requestId?: string }
   | { type: "progress"; stage: string; message: string; done?: number; total?: number };
 
+export type ProgressChunk = Extract<StreamChunk, { type: "progress" }>;
+
+/** Raised for both transport failures and in-stream `error` frames. */
+export class ChatStreamError extends Error {
+  readonly requestId?: string;
+
+  constructor(message: string, requestId?: string) {
+    super(message);
+    this.name = "ChatStreamError";
+    this.requestId = requestId;
+  }
+}
+
+type SendMessageBody = NonNullable<
+  paths["/api/v1/chat/sessions/{id}/messages"]["post"]
+>["requestBody"]["content"]["application/json"];
+
+export type SendChatMessageInput = {
+  sessionId: string;
+  content: string;
+  branch?: string | null;
+  model?: string;
+  provider?: string;
+  persona?: Persona;
+  onChunk: (chunk: StreamChunk) => void;
+};
+
 /**
- * Streams an assistant reply over SSE via fetch. Calls `onChunk` for each frame;
- * resolves with the final assistant message.
+ * Streams an assistant reply over SSE. Calls `onChunk` for each token/progress
+ * frame and resolves with the final assistant message. Transport and in-stream
+ * failures reject with a `ChatStreamError`.
  */
-export async function streamChatMessage(
-  sessionId: string,
-  content: string,
-  branch: string | null,
-  onChunk: (chunk: StreamChunk) => void,
-  model?: string,
-  provider?: string,
-  persona?: string,
-): Promise<ChatMessage> {
+export async function streamChatMessage({
+  sessionId,
+  content,
+  branch,
+  model,
+  provider,
+  persona,
+  onChunk,
+}: SendChatMessageInput): Promise<ChatMessage> {
+  const body: SendMessageBody = {
+    content,
+    ...(branch ? { branch } : {}),
+    ...(model ? { model } : {}),
+    ...(provider ? { provider } : {}),
+    ...(persona ? { persona } : {}),
+  };
+
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-anonymous-id": getAnonymousId(),
-    },
-    body: JSON.stringify({
-      content,
-      ...(branch ? { branch } : {}),
-      ...(model ? { model } : {}),
-      ...(provider ? { provider } : {}),
-      ...(persona ? { persona } : {}),
-    }),
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
   });
 
-  if (!res.ok || !res.body) {
-    throw new Error(`Chat request failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ChatStreamError(await errorMessageFromResponse(res));
+  }
+  if (!res.body) {
+    throw new ChatStreamError("Chat stream unavailable");
   }
 
-  const reader = res.body.getReader();
+  return consumeChatStream(res.body, onChunk);
+}
+
+/** Parses an SSE body, emitting chunks until the `done` frame is received. */
+export async function consumeChatStream(
+  body: ReadableStream<Uint8Array>,
+  onChunk: (chunk: StreamChunk) => void,
+): Promise<ChatMessage> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let doneMessage: ChatMessage | null = null;
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const { frames, rest } = parseSseBuffer(buffer);
-    buffer = rest;
+      const { frames, rest } = parseSseBuffer(buffer);
+      buffer = rest;
 
-    for (const frame of frames) {
-      const chunk = parseSseFrame(frame) as StreamChunk | null;
-      if (!chunk) continue;
-      if (chunk.type === "done") doneMessage = chunk.message;
-      onChunk(chunk);
-      if (chunk.type === "error") {
-        return Promise.reject(new Error(chunk.error));
+      for (const frame of frames) {
+        const chunk = parseSseFrame(frame) as StreamChunk | null;
+        if (!chunk) continue;
+        if (chunk.type === "error") {
+          throw new ChatStreamError(chunk.error, chunk.requestId);
+        }
+        if (chunk.type === "done") doneMessage = chunk.message;
+        onChunk(chunk);
       }
     }
+  } finally {
+    reader.releaseLock();
   }
 
   if (!doneMessage) {
-    throw new Error("Stream ended without a completed reply");
+    throw new ChatStreamError("Stream ended without a completed reply");
   }
   return doneMessage;
 }

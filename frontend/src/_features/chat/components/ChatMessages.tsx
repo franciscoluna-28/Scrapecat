@@ -1,6 +1,5 @@
 "use client";
 
-import type { Ref } from "react";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { Progress } from "@/src/components/ui/progress";
 import { Spinner } from "@/src/components/ui/spinner";
@@ -25,7 +24,6 @@ type ChatMessagesProps = {
   sessionId: string | null;
   projectName: string | null;
   ingestionProgress: IngestionProgress | null;
-  bottomRef: Ref<HTMLDivElement>;
 };
 
 const stageIcon: Record<string, React.ReactNode> = {
@@ -43,7 +41,6 @@ export function ChatMessages({
   sessionId,
   projectName,
   ingestionProgress,
-  bottomRef,
 }: ChatMessagesProps) {
   if (isLoading && sessionId && messages.length === 0) {
     return (
@@ -98,7 +95,6 @@ export function ChatMessages({
               )}
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

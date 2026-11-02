@@ -38,7 +38,6 @@ export function Chat() {
     input,
     setInput,
     sendMessage,
-    bottomRef,
   } = useAIChat({ projectId, sessionId, branch });
 
   useAutoSendPrompt({ projectId, isStreaming, messagesLoading, sendMessage });
@@ -95,7 +94,6 @@ export function Chat() {
             sessionId={sessionId}
             projectName={activeProject}
             ingestionProgress={ingestionProgress}
-            bottomRef={bottomRef}
           />
           <div className="sticky bottom-0 z-10 bg-background px-4 pt-2 pb-3">
             <div className="max-w-[800px] mx-auto w-full">
