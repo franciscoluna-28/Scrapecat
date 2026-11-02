@@ -16,6 +16,7 @@ import { TooltipProvider } from "@/src/components/ui/tooltip";
 import Image from "next/image";
 import LogoImage from "@/public/logo.png";
 import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
+import { ScrollContainerProvider } from "@/src/components/global/ScrollContainer";
 import { BRAND } from "@/src/shared/constants";
 
 function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
@@ -48,9 +49,7 @@ function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/50">
             <SidebarTrigger className="-ml-1" />
           </header>
-          <div data-chat-scroll className="flex-1 min-h-0 overflow-y-auto">
-            {children}
-          </div>
+          <ScrollContainerProvider>{children}</ScrollContainerProvider>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
