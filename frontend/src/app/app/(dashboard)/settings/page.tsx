@@ -1,5 +1,3 @@
-"use client";
-
 import { SectionLayout } from "@/src/components/global/SectionLayout";
 import { DemoModeNotice } from "@/src/components/global/DemoModeNotice";
 import { GitProviderConnectionCard } from "@/src/_features/git-providers/components/GitProviderConnectionCard";
