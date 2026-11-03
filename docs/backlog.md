@@ -10,7 +10,21 @@ not just value — see rationale per item.
 
 ## P0 — Foundation / unblockers
 
-All P0 items are complete — see [Done](#done--completed).
+| ID | Item | Area | Why / notes |
+|---|---|---|---|
+| P0-4 | **Idempotency keys for critical mutations** | backend | Retries, double submits, and SSE reconnects can duplicate chat turns, projects, and credentials. Highest backend priority. P0-1–P0-3 are complete — see [Done](#done--completed). |
+
+### P0-4 implementation notes
+
+- Contract: optional `Idempotency-Key` header on mutating requests; replay the stored response with `Idempotent-Replayed: true`.
+- Storage: `idempotency_keys` table keyed by `(scope, actor, key)` with `request_hash`, `status` (`in_progress`/`completed`), `response_status`, `response_body`, `locked_until`, `expires_at`, plus an `expires_at` index. DB-backed so serverless and multi-instance deployments share state.
+- Semantics: completed + matching hash → replay; same key + different hash → `422`; in-flight with a live lock → `409 + Retry-After`; expired lock → take over. Complete on 2xx; delete the claim on 4xx/5xx.
+- TTL/lock: `IDEMPOTENCY_TTL_HOURS=24`, `IDEMPOTENCY_LOCK_SECONDS=60`; purge expired rows opportunistically and at startup.
+- Scope: `POST /chat/sessions`, `POST /chat/sessions/:id/messages`, `POST /projects`, `POST /credentials`, `POST /git-providers/:provider/connection`. Skip `POST /projects/:id/branches/prepare` (job id already dedupes), `PUT /settings/ai` (naturally idempotent), `POST /credentials/verify` (stateless), and DELETEs.
+- SSE: claim before `reply.hijack()`; cache the final `ChatMessageDTO` and replay it as a single `done` frame; delete the claim when the stream fails.
+- Crash safety: add a nullable idempotency key on `chat_messages` user rows with a partial unique index on `(session_id, idempotency_key)` so a process death between the user-message insert and claim completion cannot duplicate the turn.
+- Tests: route-level replay/conflict/in-flight coverage, an SSE replay test, and an integration test for the unique claim.
+- Frontend follow-up: generate keys per logical action for chat send, chat session create, project create, credential add, and git connect; send the header through `apiClient` and the raw SSE fetch.
 
 ## P1 — Highest-value product work
 

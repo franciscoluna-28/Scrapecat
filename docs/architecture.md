@@ -238,6 +238,15 @@ message by design (this is commit/PR review, not code review). Revisit only if
 message-based retrieval proves insufficient — the `embed:backfill` script already
 handles one-time re-embedding.
 
+### No request-level idempotency
+
+Mutating routes currently treat retries as new operations. `POST
+/api/v1/chat/sessions/:id/messages` is the sharp edge: a retry writes another
+user/assistant turn and calls the model again. Session, project, and credential
+creation have the same retry hazard. The highest-priority backend item is P0-4
+in [`backlog.md`](./backlog.md), which defines the header contract, DB-backed
+replay table, in-flight locking, SSE replay, and chat-message crash safety.
+
 ## What needs to happen
 
 Decouple in phases, no big-bang rewrites:
