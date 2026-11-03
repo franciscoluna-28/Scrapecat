@@ -49,7 +49,7 @@ not just value — see rationale per item.
 | P2-6 | **SSE reply plugin** | chat | `chat/routes.ts:108-153` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
 | P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, and `chat` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
 | P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:20,33,54`, `gitConnections/routes.ts:31,72`, and `projects/routes.ts:42`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49,109,168,212,284`. Extract `preHandler` guards applied in `register-routes.ts`. |
-| P2-9 | **Provider-param guard** | backend | `unimplementedProvider` is re-applied in each `gitConnections` handler (`18-25,40,57,80`) and credential providers are validated inside services. Validate `:provider` once via a `preHandler` / TypeBox union. |
+| P2-9 | **Credential provider body validation** | backend | `AddCredentialBody` / `VerifyCredentialBody` still accept any string and reject unsupported providers inside `credentials/services.ts:39-43`. Derive a `CredentialProviderSchema` from `PROVIDER_REGISTRY` and validate at the route boundary; keep the service check as defense in depth. Git `:provider` validation is done (P2-9a). |
 
 Frontend-specific debt (chat streaming/state, API error boundary, project
 identity duplication, vendored UI, config drift, RSC boundary, test gaps) is
@@ -95,9 +95,10 @@ measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 
 The Fastify refactors (P2-5–P2-9) are independent and can land between product
 items. P2-6 is a good first follow-up: it is self-contained and reusable for
-future streaming endpoints. P2-7 is the broadest cleanup, P2-8 and P2-9 are
-narrow guard extractions, and P2-5 is now only a dedupe refactor because its
-authorization half (P2-5a) already landed.
+future streaming endpoints. P2-7 is the broadest cleanup, P2-8 and the
+remaining credential-body part of P2-9 are narrow guard extractions, and P2-5 is
+now only a dedupe refactor because its authorization half (P2-5a) already
+landed.
 
 ## Done — completed
 
@@ -116,6 +117,7 @@ authorization half (P2-5a) already landed.
 | P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
 | P2-5a | **Chat-session ownership enforcement** | chat | Read, stream, and delete now return 404 for a session owned by another anonymous id; the header is trimmed/capped and input is bounded. Landed in `cf3c6fd`. |
+| P2-9a | **Git provider param validation** | backend | `GitProviderParams` already enforces the `GitProviderSchema` union (`github`/`gitlab`), so the redundant `unimplementedProvider` guard was removed from the connection handlers. |
 | P3-3 | **Persona-driven synthesis** | product | Per-conversation `persona` (`founder` / `cto` / `engineer`) flows from `ChatComposer` through `useAIChat` and the chat API into `buildSystemPrompt`, which maps each persona to audience-specific tone rules. Frontend and backend persona lists are kept in sync. |
 | P3-7 | **Production Docker images** | deployment | Workspace-aware `backend/Dockerfile` and `frontend/Dockerfile`, plus `docker-compose.prod.yml`. Backend bundles `main` and the migration runner with esbuild, installs prod deps only, ships native git, runs as non-root, healthchecks readiness, and migrates on boot. Frontend builds a Docker-only Next standalone bundle (guarded by `NEXT_OUTPUT`, so Vercel is unchanged) and runs `server.js` as non-root. See `docs/deployment.md`. |
 | — | **Embedding resilience** | ingestion | Provider failures no longer fail an ingest: chunks are stored, the failure is logged, and retrieval falls back to keyword search. Every ingest re-checks pending embeddings, so a temporary outage self-heals on the next branch prepare; `pnpm embed:backfill` is the bulk path. |
