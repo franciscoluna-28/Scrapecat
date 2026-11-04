@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   customType,
   index,
@@ -182,10 +183,17 @@ export const chatMessages = pgTable(
     citations: jsonb("citations")
       .$type<ChatCitation[]>()
       .default([]),
+    // Client-generated id for the logical turn. Unique per (session, role) so a
+    // retried send can be deduped with ON CONFLICT DO NOTHING instead of
+    // creating a second turn.
+    clientMessageId: text("client_message_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     sessionIdIdx: index("chat_messages_session_id_idx").on(table.sessionId),
+    clientMessageIdIdx: uniqueIndex("chat_messages_client_id_idx")
+      .on(table.sessionId, table.role, table.clientMessageId)
+      .where(sql`${table.clientMessageId} is not null`),
   }),
 );
 

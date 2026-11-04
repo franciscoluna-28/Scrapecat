@@ -221,6 +221,22 @@ describe("chat routes", () => {
     );
   });
 
+  it("forwards the client message id for retry dedupe", async () => {
+    const clientMessageId = "33333333-3333-4333-8333-333333333333";
+    mockStreamMessage.mockResolvedValue(assistantMessage);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/chat/sessions/${SESSION_ID}/messages`,
+      payload: { content: "what changed?", clientMessageId },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockStreamMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ clientMessageId }),
+    );
+  });
+
   it("rejects an empty message body", async () => {
     const res = await app.inject({
       method: "POST",

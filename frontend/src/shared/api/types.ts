@@ -1343,6 +1343,8 @@ export interface paths {
                         model?: string;
                         provider?: string;
                         persona?: "founder" | "cto" | "engineer";
+                        /** Format: uuid */
+                        clientMessageId?: string;
                     };
                 };
             };

@@ -56,6 +56,9 @@ export const SendMessageBody = Type.Object({
   persona: Type.Optional(
     Type.Union([Type.Literal("founder"), Type.Literal("cto"), Type.Literal("engineer")]),
   ),
+  // Client-generated id for this logical send. Retries reuse it so the server
+  // can replay the stored turn instead of creating a duplicate.
+  clientMessageId: Type.Optional(Type.String({ format: "uuid" })),
 });
 
 export const DeleteSessionResponse = Type.Object({

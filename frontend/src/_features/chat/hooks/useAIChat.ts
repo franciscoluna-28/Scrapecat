@@ -114,6 +114,8 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     setInput("");
     setIsStreaming(true);
     forceScrollRef.current = true;
+    // Stable for this logical send so a retry replays instead of duplicating.
+    const clientMessageId = crypto.randomUUID();
 
     let sid = sessionId;
     let isNewSession = false;
@@ -169,6 +171,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
         model: modelId ?? undefined,
         provider: modelProvider ?? undefined,
         persona,
+        clientMessageId,
         onChunk: (chunk) => {
           dispatch({
             type: "progress",

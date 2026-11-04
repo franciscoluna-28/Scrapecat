@@ -118,7 +118,8 @@ primitive stacks are documented rather than migrated.
 
 ## WIP:
 
-No open frontend items. The next cross-cutting priority is backend idempotency
-(P0-4 in [`backlog.md`](./backlog.md)), including the frontend key wiring listed
-there.
+No open frontend items. Chat-turn idempotency (P0-4) shipped as one
+`clientMessageId` generated per logical send in `useAIChat` and sent in the SSE
+body; the original broader frontend key wiring was overengineering and was not
+built.
 

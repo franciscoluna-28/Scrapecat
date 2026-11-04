@@ -61,7 +61,8 @@ export function createChatStore(client: DbOrTx = db) {
       content: string;
       branch?: string | null;
       citations?: ChatCitation[];
-    }): Promise<ChatMessageRow> {
+      clientMessageId?: string | null;
+    }): Promise<ChatMessageRow | null> {
       const [row] = await client
         .insert(chatMessages)
         .values({
@@ -70,9 +71,30 @@ export function createChatStore(client: DbOrTx = db) {
           content: input.content,
           branch: input.branch ?? null,
           citations: input.citations ?? [],
+          clientMessageId: input.clientMessageId ?? null,
         })
+        .onConflictDoNothing()
         .returning();
-      return row;
+      return row ?? null;
+    },
+
+    async findMessageByClientId(
+      sessionId: string,
+      role: "user" | "assistant",
+      clientMessageId: string,
+    ): Promise<ChatMessageRow | null> {
+      const [row] = await client
+        .select()
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.sessionId, sessionId),
+            eq(chatMessages.role, role),
+            eq(chatMessages.clientMessageId, clientMessageId),
+          ),
+        )
+        .limit(1);
+      return row ?? null;
     },
 
     async listMessages(sessionId: string): Promise<ChatMessageRow[]> {

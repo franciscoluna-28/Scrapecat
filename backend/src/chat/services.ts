@@ -19,6 +19,7 @@ export type ChatStreamOptions = {
   model?: string;
   provider?: string;
   persona?: string;
+  clientMessageId?: string;
   signal?: AbortSignal;
   onToken: (chunk: string) => void;
   onProgress?: IngestProgress;
@@ -93,12 +94,21 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
 
   async function prepareTurn(options: ChatStreamOptions) {
     const session = await requireSession(options.sessionId);
-    const history = await deps.store.listMessages(options.sessionId);
+    // Drop a leftover row from a failed attempt with the same client id so a
+    // retry doesn't feed the same question into the prompt twice.
+    const history = (await deps.store.listMessages(options.sessionId)).filter(
+      (message) =>
+        !options.clientMessageId ||
+        message.clientMessageId !== options.clientMessageId,
+    );
 
     await deps.store.addMessage({
       sessionId: options.sessionId,
       role: "user",
       content: options.content,
+      ...(options.clientMessageId
+        ? { clientMessageId: options.clientMessageId }
+        : {}),
     });
 
     const turn = await turnResolver.resolveTurn(
@@ -121,6 +131,17 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
   async function streamMessage(
     options: ChatStreamOptions,
   ): Promise<ChatMessageDTO> {
+    // A retried send reuses the client-generated id, so a completed turn can be
+    // replayed without calling the model again.
+    if (options.clientMessageId) {
+      const existing = await deps.store.findMessageByClientId(
+        options.sessionId,
+        "assistant",
+        options.clientMessageId,
+      );
+      if (existing) return toMessageDTO(existing);
+    }
+
     const turn = await prepareTurn(options);
 
     const result = await deps.ai.stream(
@@ -133,13 +154,29 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
       options.onToken,
     );
 
-    const reply = await deps.store.addMessage({
+    let reply = await deps.store.addMessage({
       sessionId: options.sessionId,
       role: "assistant",
       content: result.content,
       branch: turn.branch,
       citations: turn.scope.citations,
+      ...(options.clientMessageId
+        ? { clientMessageId: options.clientMessageId }
+        : {}),
     });
+
+    // Lost a race with a concurrent retry; reuse the stored turn.
+    if (!reply && options.clientMessageId) {
+      reply = await deps.store.findMessageByClientId(
+        options.sessionId,
+        "assistant",
+        options.clientMessageId,
+      );
+    }
+    if (!reply) {
+      throw new Error("Failed to persist assistant message");
+    }
+
     await deps.store.touchSession(options.sessionId);
 
     return toMessageDTO(reply);

@@ -126,6 +126,7 @@ export type SendChatMessageInput = {
   model?: string;
   provider?: string;
   persona?: Persona;
+  clientMessageId?: string;
   onChunk: (chunk: StreamChunk) => void;
 };
 
@@ -141,6 +142,7 @@ export async function streamChatMessage({
   model,
   provider,
   persona,
+  clientMessageId,
   onChunk,
 }: SendChatMessageInput): Promise<ChatMessage> {
   const body: SendMessageBody = {
@@ -149,6 +151,7 @@ export async function streamChatMessage({
     ...(model ? { model } : {}),
     ...(provider ? { provider } : {}),
     ...(persona ? { persona } : {}),
+    ...(clientMessageId ? { clientMessageId } : {}),
   };
 
   const res = await fetch(`${API_URL}/api/v1/chat/sessions/${sessionId}/messages`, {

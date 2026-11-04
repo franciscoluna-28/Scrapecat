@@ -42,6 +42,7 @@ function makeService() {
     createSession: vi.fn(),
     listSessions: vi.fn(),
     addMessage: vi.fn(),
+    findMessageByClientId: vi.fn(),
     listMessages: vi.fn(),
     deleteSession: vi.fn(),
     touchSession: vi.fn(),
@@ -227,6 +228,60 @@ describe("createChatService", () => {
       ),
     ).toHaveLength(1);
     expect(userMessages.at(-1).content).toContain("what changed?");
+  });
+
+  it("replays a completed turn for a retried client message id", async () => {
+    const clientMessageId = "33333333-3333-4333-8333-333333333333";
+    deps.store.findMessageByClientId.mockResolvedValue(assistantRow);
+
+    const message = await deps.service.streamMessage({
+      sessionId: SESSION_ID,
+      content: "what changed?",
+      clientMessageId,
+      onToken: vi.fn(),
+    });
+
+    expect(deps.store.findMessageByClientId).toHaveBeenCalledWith(
+      SESSION_ID,
+      "assistant",
+      clientMessageId,
+    );
+    expect(deps.ai.stream).not.toHaveBeenCalled();
+    expect(deps.store.addMessage).not.toHaveBeenCalled();
+    expect(message.id).toBe(assistantRow.id);
+  });
+
+  it("reuses the stored turn when the assistant insert loses a race", async () => {
+    const clientMessageId = "33333333-3333-4333-8333-333333333333";
+    deps.store.findMessageByClientId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(assistantRow);
+    deps.store.addMessage
+      .mockResolvedValueOnce(userRow)
+      .mockResolvedValueOnce(null);
+
+    const message = await deps.service.streamMessage({
+      sessionId: SESSION_ID,
+      content: "what changed?",
+      clientMessageId,
+      onToken: vi.fn(),
+    });
+
+    expect(message.id).toBe(assistantRow.id);
+    expect(deps.store.addMessage).toHaveBeenNthCalledWith(1, {
+      sessionId: SESSION_ID,
+      role: "user",
+      content: "what changed?",
+      clientMessageId,
+    });
+    expect(deps.store.addMessage).toHaveBeenNthCalledWith(2, {
+      sessionId: SESSION_ID,
+      role: "assistant",
+      content: "Added chat.",
+      branch: "main",
+      citations: assistantRow.citations,
+      clientMessageId,
+    });
   });
 
   it("creates a session and returns its DTO", async () => {

@@ -274,14 +274,21 @@ message by design (this is commit/PR review, not code review). Revisit only if
 message-based retrieval proves insufficient — the `embed:backfill` script already
 handles one-time re-embedding.
 
-### No request-level idempotency
+### Idempotency is a natural key, not a layer
 
-Mutating routes currently treat retries as new operations. `POST
-/api/v1/chat/sessions/:id/messages` is the sharp edge: a retry writes another
-user/assistant turn and calls the model again. Session, project, and credential
-creation have the same retry hazard. The highest-priority backend item is P0-4
-in [`backlog.md`](./backlog.md), which defines the header contract, DB-backed
-replay table, in-flight locking, SSE replay, and chat-message crash safety.
+There is no generic request-idempotency middleware. Projects, credentials, and
+git connections already upsert on their natural keys (`(git_provider,
+provider_project_id)` and `provider`), so retries are harmless. The only
+duplicate-write sharp edge was chat turns, where a retried send could add a
+second user/assistant pair and call the model again. That is solved with one
+nullable `chat_messages.client_message_id` column, a partial unique index on
+`(session_id, role, client_message_id)`, and `ON CONFLICT DO NOTHING`: the
+frontend generates one id per logical send, the backend dedupes and replays a
+completed turn. No separate key table, hashing, locks, TTLs, or status machine.
+
+A generic `idempotency_keys` design was considered and rejected as
+overengineering for this app — it adds infrastructure for cases that natural
+keys already cover.
 
 ## What needs to happen
 
