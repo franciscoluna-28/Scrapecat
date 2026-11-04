@@ -2,10 +2,6 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Static } from "@sinclair/typebox";
 import { env } from "@/config/env";
 import {
-  getGitProviderConfig,
-  type GitProviderId,
-} from "@/shared/integrations/git-provider";
-import {
   connectGitProvider,
   disconnectGitProvider,
   getGitProviderConnection,
@@ -14,15 +10,6 @@ import {
   ConnectGitProviderBody,
   GitProviderParams,
 } from "@/gitConnections/schemas";
-
-function unimplementedProvider(provider: GitProviderId): string | null {
-  try {
-    getGitProviderConfig(provider);
-    return null;
-  } catch (error) {
-    return (error as Error).message;
-  }
-}
 
 export async function connectProvider(
   req: FastifyRequest,
@@ -37,9 +24,6 @@ export async function connectProvider(
   const { provider } = req.params as Static<typeof GitProviderParams>;
   const { token } = req.body as Static<typeof ConnectGitProviderBody>;
 
-  const unsupported = unimplementedProvider(provider);
-  if (unsupported) return reply.status(400).send({ error: unsupported });
-
   try {
     return reply.code(201).send(await connectGitProvider(provider, token));
   } catch (error) {
@@ -53,9 +37,6 @@ export async function getProviderConnection(
   reply: FastifyReply,
 ) {
   const { provider } = req.params as Static<typeof GitProviderParams>;
-
-  const unsupported = unimplementedProvider(provider);
-  if (unsupported) return reply.status(400).send({ error: unsupported });
 
   try {
     return reply.send(await getGitProviderConnection(provider));
@@ -76,9 +57,6 @@ export async function disconnectProvider(
   }
 
   const { provider } = req.params as Static<typeof GitProviderParams>;
-
-  const unsupported = unimplementedProvider(provider);
-  if (unsupported) return reply.status(400).send({ error: unsupported });
 
   try {
     const deleted = await disconnectGitProvider(provider);

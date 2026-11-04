@@ -10,7 +10,21 @@ not just value — see rationale per item.
 
 ## P0 — Foundation / unblockers
 
-All P0 items are complete — see [Done](#done--completed).
+| ID | Item | Area | Why / notes |
+|---|---|---|---|
+| P0-4 | **Idempotency keys for critical mutations** | backend | Retries, double submits, and SSE reconnects can duplicate chat turns, projects, and credentials. Highest backend priority. P0-1–P0-3 are complete — see [Done](#done--completed). |
+
+### P0-4 implementation notes
+
+- Contract: optional `Idempotency-Key` header on mutating requests; replay the stored response with `Idempotent-Replayed: true`.
+- Storage: `idempotency_keys` table keyed by `(scope, actor, key)` with `request_hash`, `status` (`in_progress`/`completed`), `response_status`, `response_body`, `locked_until`, `expires_at`, plus an `expires_at` index. DB-backed so serverless and multi-instance deployments share state.
+- Semantics: completed + matching hash → replay; same key + different hash → `422`; in-flight with a live lock → `409 + Retry-After`; expired lock → take over. Complete on 2xx; delete the claim on 4xx/5xx.
+- TTL/lock: `IDEMPOTENCY_TTL_HOURS=24`, `IDEMPOTENCY_LOCK_SECONDS=60`; purge expired rows opportunistically and at startup.
+- Scope: `POST /chat/sessions`, `POST /chat/sessions/:id/messages`, `POST /projects`, `POST /credentials`, `POST /git-providers/:provider/connection`. Skip `POST /projects/:id/branches/prepare` (job id already dedupes), `PUT /settings/ai` (naturally idempotent), `POST /credentials/verify` (stateless), and DELETEs.
+- SSE: claim before `reply.hijack()`; cache the final `ChatMessageDTO` and replay it as a single `done` frame; delete the claim when the stream fails.
+- Crash safety: add a nullable idempotency key on `chat_messages` user rows with a partial unique index on `(session_id, idempotency_key)` so a process death between the user-message insert and claim completion cannot duplicate the turn.
+- Tests: route-level replay/conflict/in-flight coverage, an SSE replay test, and an integration test for the unique claim.
+- Frontend follow-up: generate keys per logical action for chat send, chat session create, project create, credential add, and git connect; send the header through `apiClient` and the raw SSE fetch.
 
 ## P1 — Highest-value product work
 
@@ -31,11 +45,11 @@ All P0 items are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-5 | **Chat-session ownership guard** | chat | Session load + `anonymousId` check is duplicated in `chat/routes.ts:69-75,97-103`, and `getMessages` (`51-63`) skips it. Add a `preHandler` + `req.chatSession` decorator: one lookup, 404/403 in one place, and read/delete/stream agree on access. |
-| P2-6 | **SSE reply plugin** | chat | `chat/routes.ts:105-148` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
-| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 (`projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, `chat` routes). Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47`), log via the shared pino logger, and let handlers throw. |
-| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:19-20,33-35,54-56`, `gitConnections/routes.ts:31-35,72-76`, and `projects/routes.ts:58-60`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49`. Extract `preHandler` guards applied in `register-routes.ts`. |
-| P2-9 | **Provider-param guard** | backend | `unimplementedProvider` is re-applied in each `gitConnections` handler (`18-25,40,57,80`) and credential providers are validated inside services. Validate `:provider` once via a `preHandler` / TypeBox union. |
+| P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete repeat the session lookup + `canAccessSession` check (`chat/routes.ts:56-90,98-106`). Add a `preHandler` + `req.chatSession` decorator so one lookup serves all session routes. Authorization behavior itself is already fixed by P2-5a. |
+| P2-6 | **SSE reply plugin** | chat | `chat/routes.ts:108-153` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
+| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, and `chat` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
+| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:20,33,54`, `gitConnections/routes.ts:31,72`, and `projects/routes.ts:42`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49,109,168,212,284`. Extract `preHandler` guards applied in `register-routes.ts`. |
+| P2-9 | **Credential provider body validation** | backend | `AddCredentialBody` / `VerifyCredentialBody` still accept any string and reject unsupported providers inside `credentials/services.ts:39-43`. Derive a `CredentialProviderSchema` from `PROVIDER_REGISTRY` and validate at the route boundary; keep the service check as defense in depth. Git `:provider` validation is done (P2-9a). |
 
 Frontend-specific debt (chat streaming/state, API error boundary, project
 identity duplication, vendored UI, config drift, RSC boundary, test gaps) is
@@ -80,8 +94,11 @@ measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 ("Tech debt" / "What needs to happen") for the underlying structural debt.
 
 The Fastify refactors (P2-5–P2-9) are independent and can land between product
-items; P2-5 should be first because it also aligns chat read authorization with
-delete/stream.
+items. P2-6 is a good first follow-up: it is self-contained and reusable for
+future streaming endpoints. P2-7 is the broadest cleanup, P2-8 and the
+remaining credential-body part of P2-9 are narrow guard extractions, and P2-5 is
+now only a dedupe refactor because its authorization half (P2-5a) already
+landed.
 
 ## Done — completed
 
@@ -99,6 +116,8 @@ delete/stream.
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
 | P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
+| P2-5a | **Chat-session ownership enforcement** | chat | Read, stream, and delete now return 404 for a session owned by another anonymous id; the header is trimmed/capped and input is bounded. Landed in `cf3c6fd`. |
+| P2-9a | **Git provider param validation** | backend | `GitProviderParams` already enforces the `GitProviderSchema` union (`github`/`gitlab`), so the redundant `unimplementedProvider` guard was removed from the connection handlers. |
 | P3-3 | **Persona-driven synthesis** | product | Per-conversation `persona` (`founder` / `cto` / `engineer`) flows from `ChatComposer` through `useAIChat` and the chat API into `buildSystemPrompt`, which maps each persona to audience-specific tone rules. Frontend and backend persona lists are kept in sync. |
 | P3-7 | **Production Docker images** | deployment | Workspace-aware `backend/Dockerfile` and `frontend/Dockerfile`, plus `docker-compose.prod.yml`. Backend bundles `main` and the migration runner with esbuild, installs prod deps only, ships native git, runs as non-root, healthchecks readiness, and migrates on boot. Frontend builds a Docker-only Next standalone bundle (guarded by `NEXT_OUTPUT`, so Vercel is unchanged) and runs `server.js` as non-root. See `docs/deployment.md`. |
 | — | **Embedding resilience** | ingestion | Provider failures no longer fail an ingest: chunks are stored, the failure is logged, and retrieval falls back to keyword search. Every ingest re-checks pending embeddings, so a temporary outage self-heals on the next branch prepare; `pnpm embed:backfill` is the bulk path. |

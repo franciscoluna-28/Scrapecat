@@ -42,10 +42,12 @@ tracked in [`docs/frontend-tech-debt.md`](../docs/frontend-tech-debt.md).
 
 - Route files under `src/app` are Server Components by default. Add
   `"use client"` only to leaves that need state, effects, or browser APIs.
-- Use the existing `src/components/ui` components (Radix). Do not add a second
-  primitive library.
-- Do not vendor new AI Elements or shadcn files unless the app actually uses
-  them. Delete unused vendored files instead of keeping them "for later".
+- Use the existing `src/components/ui` components. Radix is the default.
+  `components/ui/combobox.tsx` is the only `@base-ui/react` consumer and is an
+  accepted exception; do not add a third primitive stack.
+- AI Elements under `src/components/ai-elements` are intentional vendored code.
+  Do not trim or replace them. Do not vendor additional AI Elements or shadcn
+  files unless the app actually uses them.
 - Imports use the `@/src/...` alias.
 
 ## Testing

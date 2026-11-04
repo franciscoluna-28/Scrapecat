@@ -9,10 +9,7 @@ the analysis. See [Suggested order](#suggested-order) for sequencing.
 
 | ID | Area | Priority | Effort |
 |---|---|---|---|
-| FD-4 | Vendored AI Elements and dead UI | Medium | S |
-| FD-5 | Tooling and config drift | Low | S |
-| FD-6 | Server/client boundary underused | Low | M |
-| FD-7 | Test coverage concentrated on low-risk helpers | Medium | M |
+| FD-4 | Vendored AI Elements and dead UI | Accepted | — |
 
 ## Already paid
 
@@ -65,85 +62,63 @@ Paid in `523fa18`.
 - `resolveActiveProjectId` is exported and tested directly in
   `useChatProject.test.ts`.
 
-FD-4 is partially paid: the 32 unused shadcn files and `ai-elements/task.tsx`
-were deleted along with their unused dependencies. Its remaining scope is open
-below.
+### FD-5 — Tooling and config drift
+
+Paid in the current frontend pass.
+
+- `components.json` now points at `src/app/globals.css` and the `@/src/...`
+  aliases the app actually uses, so the next `shadcn add` writes to the right
+  place.
+- `allowJs` is off.
+- The stale root `.next/` directory was removed; the root has no `src/`,
+  `components/`, or `next-env.d.ts` leftovers.
+- `@/*` still maps to `./*`; imports stay `@/src/...` to avoid a repo-wide
+  mechanical rewrite.
+
+### FD-6 — Server/client boundary underused
+
+Paid in the current frontend pass.
+
+- `src/app/app/(dashboard)/layout.tsx` is a Server Component. The client shell
+  (`SidebarProvider`, `TooltipProvider`, `ScrollContainerProvider`, sidebar
+  content) moved to `components/global/DashboardShell`.
+- The dashboard `Suspense` boundary now renders a real sidebar/inset skeleton
+  instead of `fallback={null}`.
+- The dashboard, settings, and API-keys route pages no longer carry
+  `"use client"`; only the interactive components they compose do.
+
+### FD-7 — Test coverage concentrated on low-risk helpers
+
+Paid in the current frontend pass.
+
+- Added `git-providers-api.test.tsx`, `useAddRepository.test.ts`,
+  `AISettingsManager.test.tsx`, and `credentials/services/index.test.tsx`.
+- Coverage now includes connection reads/mutations, repository discovery,
+  branch reads, add-repository selection/creation/validation, settings
+  load/save/error paths, and credential list/add/verify.
+- The existing chat streaming tests remain the regression suite.
+
+FD-4 is accepted debt: AI Elements are intentionally retained, and the two
+primitive stacks are documented rather than migrated.
+
 
 ## FD-4 — Vendored AI Elements and dead UI
 
-**Priority:** medium. **Effort:** small.
+**Status:** accepted. No code changes planned.
 
-- `frontend/src/components/ai-elements/prompt-input.tsx` is 1,464 lines of
-  copied registry code; the chat only uses a small subset of its exports, and it
-  carries its own `fetch` path for attachments (`:83`) that bypasses the API
-  client.
-- The 32 unused scaffolded shadcn files and `ai-elements/task.tsx` have been
-  deleted. The 27 remaining `components/ui` files are all imported.
-  `MessageResponse` stays because assistant messages render Markdown through
+- AI Elements are intentionally kept as vendored registry code. In particular,
+  `components/ai-elements/prompt-input.tsx` is not to be trimmed; its current
+  shape is accepted.
+- `MessageResponse` stays because assistant messages render Markdown through
   Streamdown.
-- Two primitive libraries are active: only `components/ui/combobox.tsx` uses
-  `@base-ui/react`; the rest of the UI is Radix. This fragments API and
-  accessibility behavior and ships two primitive stacks.
-
-**Direction:** reduce `prompt-input` to the components actually used (or pin the
-registry version and document the customization), and choose one primitive
-library for new components. Keep the vendored-file policy in
-`frontend/AGENTS.md` enforced so upgrades are deliberate.
-
-## FD-5 — Tooling and config drift
-
-**Priority:** low. **Effort:** small.
-
-- `frontend/components.json:8,16-20` points at `app/globals.css`,
-  `@/components`, `@/lib`, and `@/hooks`. The app actually lives under `src/`,
-  and `frontend/tsconfig.json` maps `@/*` to `./*`, which is why imports are
-  written as `@/src/...`. The next `shadcn add` will write to a non-existent
-  location instead of `src/components`.
-- The repo root still contains empty `src/` and `components/` directories, a
-  stale root `.next/`, and a root `next-env.d.ts`; the real app is under
-  `frontend/`.
-- `tsconfig.json` keeps `allowJs: true` although the codebase is TypeScript-only.
-
-**Direction:** align `components.json` aliases and CSS path with `src/`, then
-decide whether `@/*` should map to `./src/*` and normalize imports in one
-mechanical pass. Remove the root-level Next.js leftovers.
-
-## FD-6 — Server/client boundary underused
-
-**Priority:** low. **Effort:** medium.
-
-Only `src/app/layout.tsx` and `src/app/page.tsx` are Server Components. Every
-route page and the dashboard layout are client components
-(`src/app/app/(dashboard)/layout.tsx`, `page.tsx`, `settings/page.tsx`,
-`api-keys/page.tsx`). The `Suspense` boundary in the dashboard layout has a
-`null` fallback, so the shell disappears on first load.
-
-**Direction:** keep the interactive chat/sidebar client, but make route layouts
-and static shells Server Components and push `"use client"` down to the leaves
-that need state, effects, or browser APIs. Give the `Suspense` boundary a real
-skeleton.
-
-## FD-7 — Test coverage concentrated on low-risk helpers
-
-**Priority:** medium. **Effort:** medium.
-
-Thirteen test files exist. FD-1 added coverage for chat streaming, transport,
-and active-project resolution, so the remaining gap is provider and credential
-code:
-
-- `_features/git-providers/services/git-providers-api.ts`
-- `_features/git-providers/hooks/useAddRepository.ts`
-- `_features/settings/components/AISettingsManager.tsx`
-- `_features/credentials/services/index.ts`
-
-**Direction:** add provider/credential hook tests around the error contract from
-FD-2, and keep the streaming tests (`chat-api.test.ts`, `useAIChat.test.tsx`,
-`live-messages.test.ts`) green as the regression suite.
+- Two primitive libraries remain: `components/ui/combobox.tsx` is the only
+  `@base-ui/react` consumer; the rest of the UI is Radix. Keep both for now and
+  use Radix for new components unless an exception is recorded in
+  `frontend/AGENTS.md`.
 
 ## WIP:
 
-1. **FD-5** — fix `components.json` and remove stale root artifacts (unblocks
-   future UI work).
-2. **FD-7** — cover the remaining provider and credential modules.
-3. **FD-4** — trim the vendored prompt input and settle on one primitive library.
-4. **FD-6** — move client boundaries inward once the data layer is stable.
+No open frontend items. The next cross-cutting priority is backend idempotency
+(P0-4 in [`backlog.md`](./backlog.md)), including the frontend key wiring listed
+there.
+

@@ -1,65 +1,36 @@
-"use client";
-
 import { Suspense } from "react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarInset,
-  SidebarTrigger,
-} from "@/src/components/ui/sidebar";
-import { TooltipProvider } from "@/src/components/ui/tooltip";
-import Image from "next/image";
-import LogoImage from "@/public/logo.png";
-import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
-import { ScrollContainerProvider } from "@/src/components/global/ScrollContainer";
-import { BRAND } from "@/src/shared/constants";
+import { DashboardShell } from "@/src/components/global/DashboardShell";
+import { Skeleton } from "@/src/components/ui/skeleton";
 
-function SidebarLayoutInner({ children }: { children: React.ReactNode }) {
+function DashboardSkeleton() {
   return (
-    <TooltipProvider delayDuration={0}>
-      <SidebarProvider defaultOpen={true}>
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton size="lg" asChild>
-                  <a href="/app">
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                      <Image src={LogoImage} alt={BRAND.logoAlt} width={28} height={28} />
-                    </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{BRAND.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">{BRAND.tagline}</span>
-                    </div>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarHeader>
-          <SidebarContent>
-            <ChatSidebarContent />
-          </SidebarContent>
-        </Sidebar>
-        <SidebarInset className="flex flex-col h-svh overflow-hidden">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 bg-background/50">
-            <SidebarTrigger className="-ml-1" />
-          </header>
-          <ScrollContainerProvider>{children}</ScrollContainerProvider>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
+    <div className="flex h-svh w-full bg-background" aria-hidden="true">
+      <aside className="hidden w-64 shrink-0 border-r bg-sidebar p-3 md:block">
+        <Skeleton className="h-10 w-full" />
+        <div className="mt-6 space-y-2">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-8 w-full" />
+          ))}
+        </div>
+      </aside>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-12 shrink-0 items-center border-b px-4">
+          <Skeleton className="h-6 w-6" />
+        </div>
+        <div className="flex-1 space-y-4 p-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </main>
+    </div>
   );
 }
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={null}>
-      <SidebarLayoutInner>{children}</SidebarLayoutInner>
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardShell>{children}</DashboardShell>
     </Suspense>
   );
 }

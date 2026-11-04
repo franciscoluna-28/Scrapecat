@@ -261,4 +261,14 @@ describe("DELETE /api/v1/git-providers/:provider/connection", () => {
     expect(res.statusCode).toBe(204);
     expect(mockStore.deleteCredentialById).toHaveBeenCalledWith("1");
   });
+
+  it("rejects an unknown provider", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/v1/git-providers/bitbucket/connection",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty("error");
+  });
 });
