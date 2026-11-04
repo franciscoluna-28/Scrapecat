@@ -146,11 +146,47 @@ Chat model ids are resolved through the provider catalog
 transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
 `google-generative`). `protocols.ts` is the only module that imports model SDKs;
 `createAIClient()` hands it the registry config, catalog entry, and key. The
-client factory and `createChatService()` are the DI seams — tests inject fake
-SDK functions or fake turn dependencies instead of mocking the whole call path.
+client factory, `createTurnResolver()`, `createChatService()`, and
+`createAnswerService()` are the DI seams — tests inject fake SDK functions or
+fake turn dependencies instead of mocking the whole call path.
 The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
 (query window + semantic/keyword search), prompt assembly stays pure, and
-`chatService` composes them with `aiClient.stream()`.
+`turnResolver` composes project/branch/retrieval/model/prompt for both the web
+chat (`chatService` + `aiClient.stream()`) and the stateless MCP/CLI path
+(`answerService` + `aiClient.generate()`).
+
+## Multiple clients (web chat and MCP)
+
+Scrapecat has two front doors over one RAG pipeline: the stateful Next.js chat
+and a stateless MCP/CLI path. They must not reimplement retrieval, prompts, or
+model resolution, so the turn is split into a shared core and thin clients:
+
+```mermaid
+flowchart LR
+  WEB["Next.js web chat"] --> SVC["chatService<br/>sessions + SSE + persistence"]
+  MCP["MCP server / CLI"] --> ANSWER["answerService<br/>stateless one-shot"]
+  SVC --> TURN["turnResolver<br/>project + branch + retrieval + model + prompt"]
+  ANSWER --> TURN
+  TURN --> DB[("Postgres read model")]
+```
+
+- `src/chat/turn.ts` owns project lookup, branch selection, retrieval
+  (`resolveScope` or an explicit window), model resolution, and prompt
+  assembly. It never creates sessions, writes messages, or touches Fastify/SSE.
+- `src/chat/services.ts` is the web-only facade: sessions, history, streaming,
+  and persistence. It passes `prepareProjectBranch` into the turn resolver so
+  the web chat can ingest on demand.
+- `src/chat/answer.ts` is the stateless one-shot path. It calls the same turn
+  resolver and `aiClient.generate()`, with no session or message writes. MCP
+  tools can omit the prepare callback, keeping them read-only over indexed
+  commits.
+- `search_commits` (future MCP tool) uses the retriever directly;
+  `summarize_period` uses `answerService`.
+
+Rule of thumb: a change that affects both clients (persona, retrieval, prompt,
+model selection) belongs in `turn.ts` and must be covered by the turn tests.
+Transport and persistence concerns stay in `services.ts`, `routes.ts`, or the
+MCP adapters.
 
 ## Tech debt
 

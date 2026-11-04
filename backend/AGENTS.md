@@ -47,7 +47,11 @@ Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which
 
 ## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
 
-All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/chat/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/chat/retrieval.ts`) → prompt assembly (pure functions) → `aiClient.stream()`; `createChatService()` orchestrates them and exposes the `chatService` object. Dependencies are injectable.
+All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/chat/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/chat/retrieval.ts`) → prompt assembly (pure functions) → `turnResolver` → `aiClient.stream()` (web chat) or `aiClient.generate()` (stateless MCP/CLI). `createChatService()` owns the stateful web path; `createAnswerService()` owns the stateless one. Dependencies are injectable.
+
+### Chat turn seam (web chat + MCP)
+
+`src/chat/turn.ts` is the transport-agnostic turn resolver: project lookup, branch selection, retrieval, model resolution, and prompt assembly. It must not import `chat/services`, create sessions, write messages, or touch Fastify/SSE. `src/chat/services.ts` is the stateful web facade (sessions, history, streaming, persistence); `src/chat/answer.ts` is the stateless one-shot path for MCP/CLI. Changes to persona, retrieval, prompts, or model selection belong in `turn.ts` so both clients stay consistent. MCP tools must never import `chat/services`, and must not trigger ingestion unless explicitly designed to.
 
 Provider metadata (label, default model/protocol, env key name, verify URL, base URLs, headers) lives in `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The model catalog (`catalog.ts`) maps each model id to its transport protocol: `openai-chat`, `openai-responses`, `anthropic-messages`, or `google-generative`. `protocols.ts` is the only module that imports model SDKs (Vercel AI SDK); `createLanguageModel()` resolves the protocol and base URL for a model. This is how one provider (OpenCode Go) can serve models across several endpoints.
 

@@ -89,7 +89,7 @@ describe("createChatService", () => {
     deps.store.addMessage
       .mockResolvedValueOnce(userRow)
       .mockResolvedValueOnce(assistantRow);
-    deps.store.listMessages.mockResolvedValue([userRow]);
+    deps.store.listMessages.mockResolvedValue([]);
     deps.prepareBranch.mockResolvedValue({ branch: "main" });
     deps.retriever.resolveScope.mockResolvedValue({
       citations: assistantRow.citations,
@@ -189,6 +189,44 @@ describe("createChatService", () => {
       }),
     );
     expect(request.messages.at(-1).content).toContain("abc123");
+  });
+
+  it("passes prior session messages as history without duplicating the current turn", async () => {
+    const priorUser = {
+      ...userRow,
+      id: "prior-user",
+      content: "earlier question",
+    };
+    const priorAssistant = {
+      ...assistantRow,
+      id: "prior-assistant",
+      content: "earlier answer",
+    };
+    deps.store.listMessages.mockResolvedValue([priorUser, priorAssistant]);
+
+    await deps.service.streamMessage({
+      sessionId: SESSION_ID,
+      content: "what changed?",
+      onToken: vi.fn(),
+    });
+
+    const request = deps.ai.stream.mock.calls[0][0];
+    const contents = request.messages.map(
+      (message: { content: string }) => message.content,
+    );
+    expect(contents).toContain("earlier question");
+    expect(contents).toContain("earlier answer");
+
+    const userMessages = request.messages.filter(
+      (message: { role: string }) => message.role === "user",
+    );
+    expect(userMessages).toHaveLength(2);
+    expect(
+      userMessages.filter((message: { content: string }) =>
+        message.content.includes("what changed?"),
+      ),
+    ).toHaveLength(1);
+    expect(userMessages.at(-1).content).toContain("what changed?");
   });
 
   it("creates a session and returns its DTO", async () => {
