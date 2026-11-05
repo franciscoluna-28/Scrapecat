@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "name": "scrapecat-dev",
+  "project": {
+    "gitProvider": "github",
+    "providerOwner": "franciscoluna-28",
+    "repositoryName": "scrapecat",
+    "branch": "dev"
+  },
+  "embeddingSpace": {
+    "provider": "openrouter",
+    "model": "openai/text-embedding-3-small"
+  },
+  "cases": [
+    {
+      "id": "gitlab-support",
+      "query": "When did we add support for GitLab repositories?",
+      "category": "semantic",
+      "relevantShas": [
+        "33f80b55b9e9ec072e2e230ef5661bb2ed754998",
+        "c8a5afe02bf9c8e1e596ffbdfa9fcf2566f659b6",
+        "6504c84a5a596fd82c40c06f29947e65e91c48b4"
+      ]
+    },
+    {
+      "id": "opencode-go-provider",
+      "query": "When did we add the OpenCode Go chat provider?",
+      "category": "semantic",
+      "relevantShas": ["f5d32f408f38320a21871b7ddae6f73c2c410a26"]
+    },
+    {
+      "id": "groq-provider",
+      "query": "When did Groq become a supported model provider?",
+      "category": "semantic",
+      "relevantShas": ["2fe8aff1e342f6a73984bd730d32f9dfb128185c"]
+    },
+    {
+      "id": "ai-protocols",
+      "query": "How does one provider serve models with different API protocols?",
+      "category": "semantic",
+      "relevantShas": ["ceda0adea4de6eef77bdb3a309c83e07f9ce47a0"]
+    },
+    {
+      "id": "production-docker",
+      "query": "When did we add production Docker images?",
+      "category": "semantic",
+      "relevantShas": [
+        "0ccbe8c049087ce51805adb1c916ae4de9ab774a",
+        "9bb5ed58b026500e3775652bf0abc63d1a20f239"
+      ]
+    },
+    {
+      "id": "readiness-probe",
+      "query": "How do we check that the database is ready?",
+      "category": "semantic",
+      "relevantShas": ["c53b633357ae4a0801e423118859217338a63281"]
+    },
+    {
+      "id": "streaming-heartbeat",
+      "query": "How do we keep the chat stream from timing out?",
+      "category": "semantic",
+      "relevantShas": ["8a4feb4336ca61217e1a1fb33f10f57d821cf686"]
+    },
+    {
+      "id": "request-correlation",
+      "query": "How do we correlate logs across a single request?",
+      "category": "semantic",
+      "relevantShas": ["ef55e8f1e15546dfa59c9997f7d568a123d3b68e"]
+    },
+    {
+      "id": "personas",
+      "query": "When did we add audience-specific answer tones?",
+      "category": "semantic",
+      "relevantShas": [
+        "3a55296db966e7236ca3842e7ffdbe0b2a65200f",
+        "e37debca95aa1991f0d85c9e72c87fec64155948"
+      ]
+    },
+    {
+      "id": "session-ownership",
+      "query": "How do we stop one visitor from reading another visitor's chat?",
+      "category": "semantic",
+      "relevantShas": ["cf3c6fde385184b4f935ec0f7e04af1d4a242c74"]
+    },
+    {
+      "id": "embedding-model-change",
+      "query": "How do we handle switching the embedding model?",
+      "category": "semantic",
+      "relevantShas": [
+        "ce13e4c572d7b1791685f5492fbacef28d0c2a16",
+        "2d4992e78656a19b0029c0752da29e5542f4f2f8"
+      ]
+    },
+    {
+      "id": "archive-cache",
+      "query": "How do we cache cloned repository archives?",
+      "category": "semantic",
+      "relevantShas": [
+        "eb8f9e4e4050e54340016a07cd020c78448b6b1f",
+        "98decc0e61d47ed3dff60ad8e0b52809211f1af3"
+      ]
+    },
+    {
+      "id": "remove-redis",
+      "query": "Why did we drop the Redis-backed job queue?",
+      "category": "semantic",
+      "relevantShas": ["25761cde8e2b4c5ce097cc815803883998e19e01"]
+    },
+    {
+      "id": "relative-date-fallback",
+      "query": "What happens when a relative date query returns nothing?",
+      "category": "semantic",
+      "relevantShas": ["0736176d0bf2fd04715bbdd36ecf7088c072073b"]
+    },
+    {
+      "id": "citation-cards",
+      "query": "How are cited commits displayed in the chat?",
+      "category": "semantic",
+      "relevantShas": [
+        "e7d05b823e9a2ae0d7dcd3efe0bd49ca5170cb3b",
+        "905955d4696c68394da2a48e13fc0617ee4194f5",
+        "7ca472909c5e602a59ba6101bb5865a2a8225840"
+      ]
+    },
+    {
+      "id": "embedding-batch-write",
+      "query": "How are embedding batches written efficiently?",
+      "category": "semantic",
+      "relevantShas": ["aa7a3cd01f6ea2a729433712704bb802da726032"]
+    },
+    {
+      "id": "shared-turn",
+      "query": "How do web chat and MCP share the RAG pipeline?",
+      "category": "semantic",
+      "relevantShas": [
+        "24d283a1ce04bed2b78acd14fb2eb9c188fda0ee",
+        "a68e139f53f608c9d18f7b1c63d880a84b1cfd8a"
+      ]
+    },
+    {
+      "id": "error-boundaries",
+      "query": "How do we show errors when the app crashes?",
+      "category": "semantic",
+      "relevantShas": ["cdacc3f78a534530634337bd8f22c2771566b040"]
+    },
+    {
+      "id": "graceful-shutdown",
+      "query": "How do we shut down without dropping active work?",
+      "category": "semantic",
+      "relevantShas": ["507be692d5f6c41c238ae02191efc15198fdba04"]
+    },
+    {
+      "id": "bounded-ai-requests",
+      "query": "How are AI requests bounded?",
+      "category": "semantic",
+      "relevantShas": ["2c5faed66d6c39756f2c880441a8852a1a236baf"]
+    },
+    {
+      "id": "startup-encryption-check",
+      "query": "When is the encryption key validated?",
+      "category": "semantic",
+      "relevantShas": ["3f2c60ad2a82087157b4cc7a8462ed5faa3efe9f"]
+    },
+    {
+      "id": "embedding-failure-resilience",
+      "query": "What happens if embeddings fail during ingestion?",
+      "category": "semantic",
+      "relevantShas": ["d1ff4da477eb5e523cc174e52ffeb7b45018216f"]
+    },
+    {
+      "id": "indexed-branches-query",
+      "query": "How do we avoid an N+1 when listing indexed branches?",
+      "category": "semantic",
+      "relevantShas": ["02eb2ef83ec54b20eebce138de3e88337aabc7c2"]
+    },
+    {
+      "id": "keyword-readiness-probe",
+      "query": "readiness probe",
+      "category": "keyword",
+      "relevantShas": ["c53b633357ae4a0801e423118859217338a63281"]
+    },
+    {
+      "id": "keyword-unnest-update",
+      "query": "unnest update",
+      "category": "keyword",
+      "relevantShas": ["aa7a3cd01f6ea2a729433712704bb802da726032"]
+    },
+    {
+      "id": "keyword-client-message-id",
+      "query": "client message id",
+      "category": "keyword",
+      "relevantShas": ["2791c25cda9b06ab3574ff9facda48882194e3b1"]
+    },
+    {
+      "id": "keyword-request-id",
+      "query": "request-id correlation",
+      "category": "keyword",
+      "relevantShas": ["ef55e8f1e15546dfa59c9997f7d568a123d3b68e"]
+    },
+    {
+      "id": "keyword-graceful-shutdown",
+      "query": "graceful shutdown",
+      "category": "keyword",
+      "relevantShas": ["507be692d5f6c41c238ae02191efc15198fdba04"]
+    },
+    {
+      "id": "keyword-gitlab-adapter",
+      "query": "gitlab provider adapter",
+      "category": "keyword",
+      "relevantShas": ["33f80b55b9e9ec072e2e230ef5661bb2ed754998"]
+    },
+    {
+      "id": "temporal-october-2026",
+      "query": "What did we ship in October 2026?",
+      "category": "temporal",
+      "relevantShas": [
+        "eb8f9e4e4050e54340016a07cd020c78448b6b1f",
+        "8a4feb4336ca61217e1a1fb33f10f57d821cf686",
+        "3a55296db966e7236ca3842e7ffdbe0b2a65200f",
+        "f5d32f408f38320a21871b7ddae6f73c2c410a26",
+        "33f80b55b9e9ec072e2e230ef5661bb2ed754998",
+        "ce13e4c572d7b1791685f5492fbacef28d0c2a16",
+        "2fe8aff1e342f6a73984bd730d32f9dfb128185c",
+        "c53b633357ae4a0801e423118859217338a63281"
+      ]
+    },
+    {
+      "id": "temporal-september-2026-demo",
+      "query": "What demo work landed in September 2026?",
+      "category": "temporal",
+      "relevantShas": [
+        "8fccee9bb37f6f4f38663958618d9f5beac311e2",
+        "6f1d8e8c285bd5569ad51e6ba953a5698e395b2f",
+        "29305e4ec4cc932bccf3b0cb3e31e83fc9a6c9da",
+        "508493184827acd2c27a629b122a41576212a964",
+        "258d00689c9e7c9a2ffb69cfebdc329f154837aa"
+      ]
+    },
+    {
+      "id": "negative-kubernetes",
+      "query": "Which Kubernetes autoscaling settings did we tune?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-billing",
+      "query": "What did we change in the billing and payments system?",
+      "category": "negative",
+      "relevantShas": []
+    }
+  ]
+}

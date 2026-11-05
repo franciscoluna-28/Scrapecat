@@ -8,6 +8,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:integration": "pnpm --filter @scrapecat/backend test:integration",
+    "eval": "pnpm --filter @scrapecat/backend eval",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "codegen": "npx tsx scripts/codegen.ts",
     "db:generate": "pnpm --filter @scrapecat/backend db:generate",
