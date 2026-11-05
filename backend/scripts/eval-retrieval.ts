@@ -122,7 +122,7 @@ function printReport(report: EvalReport) {
     `\nDataset: ${report.dataset} (branch ${report.branch}, k=${report.topK})\n`,
   );
   console.log(
-    `${"case".padEnd(30)} ${"category".padEnd(9)} ${"hits".padEnd(8)} ${"rank".padEnd(5)} ${"recall".padEnd(7)} result`,
+    `${"case".padEnd(30)} ${"category".padEnd(9)} ${"hits".padEnd(8)} ${"rank".padEnd(5)} ${"recall".padEnd(7)} ${"prec".padEnd(5)} result`,
   );
   for (const result of report.cases) {
     const rank = result.metrics
@@ -134,16 +134,19 @@ function printReport(report: EvalReport) {
       ? `${result.metrics.hits}/${result.metrics.relevant}`
       : "-";
     const recall = result.metrics ? result.metrics.recall.toFixed(2) : "-";
+    const precision = result.metrics
+      ? result.metrics.precision.toFixed(2)
+      : "-";
     console.log(
-      `${result.id.padEnd(30)} ${result.category.padEnd(9)} ${hits.padEnd(8)} ${rank.padEnd(5)} ${recall.padEnd(7)} ${result.passed ? "pass" : "miss"}`,
+      `${result.id.padEnd(30)} ${result.category.padEnd(9)} ${hits.padEnd(8)} ${rank.padEnd(5)} ${recall.padEnd(7)} ${precision.padEnd(5)} ${result.passed ? "pass" : "miss"}`,
     );
   }
 
   const summary = report.summary;
   console.log(
     `\nSummary: hit-rate=${summary.hitRate.toFixed(3)} recall=${summary.meanRecall.toFixed(3)} ` +
-      `mrr=${summary.mrr.toFixed(3)} ndcg=${summary.meanNdcg.toFixed(3)} ` +
-      `negative=${report.negativeAccuracy.toFixed(3)}`,
+      `precision=${summary.meanPrecision.toFixed(3)} mrr=${summary.mrr.toFixed(3)} ` +
+      `ndcg=${summary.meanNdcg.toFixed(3)} negative=${report.negativeAccuracy.toFixed(3)}`,
   );
 }
 
