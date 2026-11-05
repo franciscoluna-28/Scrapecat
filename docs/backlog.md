@@ -16,8 +16,7 @@ None open. P0-1–P0-4 are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P1-3 | **RAG evaluation harness** | quality | No golden-set eval exists, so retrieval quality is unfalsifiable. Build before any retrieval change (P2-2) so improvements are measurable, not vibes. |
-| P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. Gated on P1-3. |
+| P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. P1-3 is done, so this can now be measured. |
 
 ## P2 — Roadmap items (larger scope)
 
@@ -70,11 +69,11 @@ Known limits that only bite past a single trusted deployment:
 **Stability comes before feature work.** CI, bounded provider calls, graceful
 shutdown, readiness, and UI error boundaries are prerequisites for asking anyone
 to run the tool. Production images are available for self-hosted clients (P3-7);
-the serverless Vercel path is unchanged. Only after stability does retrieval
-quality (P1-3 → P1-4) become the priority.
+the serverless Vercel path is unchanged. Retrieval quality is now measurable
+(P1-3), so reranking (P1-4) is the next product item.
 
-Eval harness + reranking → providers → next provider (Bitbucket would follow the
-same adapter pattern).
+Reranking → providers → next provider (Bitbucket would follow the same adapter
+pattern).
 External integrations and auth stay deferred until retrieval quality is
 measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
 ("Tech debt" / "What needs to happen") for the underlying structural debt.
@@ -96,6 +95,7 @@ landed.
 | S-5 | **Readiness probe** | backend | `GET /api/v1/health/ready` checks Postgres and returns 503 on failure; liveness stays on `/health`. |
 | S-6 | **UI error boundaries** | frontend | Root `error.tsx` and `global-error.tsx` show a retry surface instead of a blank screen. |
 | S-7 | **Startup config validation** | backend | `ENCRYPTION_KEY` must be base64-encoded 32 bytes at boot, not at first encrypt. |
+| P1-3 | **RAG evaluation harness** | quality | Golden datasets (`backend/eval/datasets/`) score the real retriever with recall@k, precision@k, MRR, nDCG@k, and negative-result accuracy. `pnpm eval` runs one on demand; pure metric/dataset tests run in CI. Baselines and labeling rules live in `docs/evaluation.md`. |
 | P1-1 | **New model providers** | integrations | Added Groq as the first new provider (OpenAI-compatible, Bearer auth): registry + catalog entry, `GROQ_API_KEY`, `credential_provider` enum value, and frontend provider constant. Settings schema unions and the models aggregation now derive from the registry, so the next provider is a registry entry, catalog entries, an env key, and an enum value. Anthropic/Gemini still need provider-aware credential verification (`x-api-key` / `?key=`). |
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |

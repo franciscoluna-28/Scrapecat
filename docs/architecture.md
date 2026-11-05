@@ -54,6 +54,8 @@ sequenceDiagram
 - **Date windows** ("last 30 days", "since June") are parsed into metadata
   filters; temporal keywords with no explicit date anchor on the latest commit.
 - **Grounding** is the commit message plus file scope — see [`embeddings.md`](embeddings.md).
+- **Quality** is measured with golden-set retrieval evals (`pnpm eval`) — see
+  [`evaluation.md`](evaluation.md).
 
 ## Commit ingestion
 

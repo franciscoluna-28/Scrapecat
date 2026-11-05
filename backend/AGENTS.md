@@ -12,6 +12,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - Full local check: `pnpm check` from the project root (typecheck + lint + tests)
 - Docker build bundle: `pnpm build:docker` (`main.mjs` + `migrate.mjs`); the normal `build` stays `tsc` for CI/Vercel
 - Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
+- Retrieval eval: `pnpm eval` (optionally `--prepare` to ingest the golden-set branch; see `docs/evaluation.md`)
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
 
