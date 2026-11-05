@@ -208,6 +208,22 @@ call-site sweep — GitLab (`GitlabAdapter` + a thin `fetch` client, self-hosted
 via `GITLAB_HOST`) was exactly that. Full DI is deliberately unused: the
 registry/factory is the seam and is enough for one adapter per provider.
 
+### GitLab removal (planned)
+
+GitLab support is being removed. Adoption was poor, GitHub is the only provider
+the product needs, and GitHub's native features keep improving. The second
+adapter costs more than it returns: it adds a provider registry entry, a separate
+REST client, token and host env vars, `git_provider`/`credential_provider` enum
+values, discovery fanout, clone/auth branches, and frontend provider selection
+and URL parsing.
+
+The removal covers the backend adapter/client and tests, GitLab env vars, DB enum
+values (with a preflight so existing GitLab rows are handled explicitly), the
+provider-generic discovery and connection surfaces, and the frontend provider
+picker, icon, metadata, and URL parsing. After it lands, the remaining git
+provider code collapses to a single GitHub module. Tracked as P2-10 in the
+backlog.
+
 ### Database coupling
 
 The DB client is initialized at module load in `src/db/client.ts`. Access goes
@@ -296,13 +312,13 @@ keys already cover.
 
 Decouple in phases, no big-bang rewrites:
 
-1. **Git provider interface** — done: the registry/factory returns the interface,
-   and provider-generic connection routes own auth.
+1. **Git provider interface** — GitHub-only. GitLab support is being removed
+   (see Tech debt → GitLab removal); the registry/factory collapses to one
+   adapter.
 2. **Data access layer** — per-domain stores (already largely in place); vector
    search infrastructure is ready.
-3. **Next provider** — GitLab is done (gitlab.com by default, `GITLAB_HOST` for
-   self-hosted). Demo ingestion remains GitHub-only; a Bitbucket adapter would
-   follow the same registry/adapter pattern.
+3. **Provider scope** — GitHub is the product. Bitbucket or any additional
+   provider is deferred until adoption justifies a second adapter.
 
 Full DI is not on the roadmap: the factory is the seam, and injecting services
 would add ceremony without a second consumer. Each future migration: implement

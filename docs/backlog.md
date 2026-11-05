@@ -17,6 +17,7 @@ None open. P0-1–P0-4 are complete — see [Done](#done--completed).
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
 | P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. P1-3 is done, so this can now be measured. |
+| P1-5 | **In-app daily summaries** | product | The daily push: scheduled, in-app reports of what shipped for the selected repositories, grounded in commits with citations. Turns Scrapecat from a pull-only chat into a habit. In-app only in v1; see [`vision.md`](../vision.md). |
 
 ## P2 — Roadmap items (larger scope)
 
@@ -24,7 +25,6 @@ None open. P0-1–P0-4 are complete — see [Done](#done--completed).
 |---|---|---|---|
 | P2-2 | **Scheduled / webhook re-ingest** | ingestion | Ingestion is on-demand per chat, so "what did engineering do today?" depends on someone opening the app. A GitHub webhook or cron re-ingest is what makes the core promise actually true. |
 | P2-3 | **Orphaned archive cleanup on delete** | storage | Deleting a project cascades in Postgres but orphans its S3 object / fs clone (`AGENTS.md:82`). Regenerable but silently leaks. Add a delete hook. |
-| P2-4 | **Per-instance GitLab hosts** | integrations | `GITLAB_HOST` is a server-wide setting. Multi-tenant/self-hosted-per-project needs the host stored alongside the project/credential (the credentials table is keyed by provider only, so two instances would collide). |
 
 ### Engineering hygiene / refactors
 
@@ -35,6 +35,7 @@ None open. P0-1–P0-4 are complete — see [Done](#done--completed).
 | P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, and `chat` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
 | P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:20,33,54`, `gitConnections/routes.ts:31,72`, and `projects/routes.ts:42`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49,109,168,212,284`. Extract `preHandler` guards applied in `register-routes.ts`. |
 | P2-9 | **Credential provider body validation** | backend | `AddCredentialBody` / `VerifyCredentialBody` still accept any string and reject unsupported providers inside `credentials/services.ts:39-43`. Derive a `CredentialProviderSchema` from `PROVIDER_REGISTRY` and validate at the route boundary; keep the service check as defense in depth. Git `:provider` validation is done (P2-9a). |
+| P2-10 | **Remove GitLab provider support** | integrations | Poor adoption, and GitHub is the only provider the product needs while GitHub's native features keep improving. A second adapter costs a REST client, `GITLAB_TOKEN`/`GITLAB_HOST`, `git_provider`/`credential_provider` enum values, discovery fanout, clone/auth branches, and frontend provider selection/URL parsing. Remove it, then collapse the remaining git-provider registry/interface to GitHub-only. See `architecture.md` → Tech debt → "GitLab removal (planned)". |
 
 Frontend-specific debt (chat streaming/state, API error boundary, project
 identity duplication, vendored UI, config drift, RSC boundary, test gaps) is
@@ -59,7 +60,6 @@ Known limits that only bite past a single trusted deployment:
 |---|---|---|
 | **No multi-tenant identity** | Intentional for open-source self-hosted; chat sessions and demo writes are already authorization-scoped, but there is no account/tenant isolation | P3-2 |
 | **In-process queue only** | A crash or redeploy drops queued ingests, and workers cannot scale horizontally | P3-8 |
-| **One GitLab host per backend** | A single `GITLAB_HOST` cannot serve multiple self-hosted instances | P2-4 |
 | **No project-delete / archive cleanup** | Storage grows unbounded as projects are added and removed | P2-3 |
 | **Unbounded pending-embedding reads** | Memory scales with the whole backlog, not the batch size | P3-6 |
 | **No ingest transactions** | Partial writes become unsafe once ingests run concurrently across tenants | P3-1 |
@@ -72,11 +72,12 @@ to run the tool. Production images are available for self-hosted clients (P3-7);
 the serverless Vercel path is unchanged. Retrieval quality is now measurable
 (P1-3), so reranking (P1-4) is the next product item.
 
-Reranking → providers → next provider (Bitbucket would follow the same adapter
-pattern).
-External integrations and auth stay deferred until retrieval quality is
-measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
-("Tech debt" / "What needs to happen") for the underlying structural debt.
+Reranking → Summary (see [`vision.md`](../vision.md)) → ingestion hardening.
+Provider expansion is deferred; GitLab is being removed (P2-10) so the product
+stays GitHub-only. External integrations and auth stay deferred until retrieval
+quality is measurable and the platform is multi-tenant-ready. See
+`docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
+structural debt.
 
 The Fastify refactors (P2-5–P2-9) are independent and can land between product
 items. P2-6 is a good first follow-up: it is self-contained and reusable for
