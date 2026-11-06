@@ -39,7 +39,7 @@ export function ChatSidebarContent() {
     for (const [k, v] of Object.entries(params)) {
       if (v) p.set(k, v);
     }
-    const url = p.toString() ? `/app?${p.toString()}` : "/app";
+    const url = p.toString() ? `/app/chat?${p.toString()}` : "/app/chat";
     router.push(url);
   };
 

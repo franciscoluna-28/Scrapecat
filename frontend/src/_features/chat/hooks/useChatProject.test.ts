@@ -210,6 +210,8 @@ describe("useChatProject", () => {
     expect(useActiveProjectStore.getState().lastProjectId).toBe(
       "demo-project-id",
     );
-    expect(mocks.push).toHaveBeenCalledWith("/app?project=demo-project-id");
+    expect(mocks.push).toHaveBeenCalledWith(
+      "/app/chat?project=demo-project-id",
+    );
   });
 });

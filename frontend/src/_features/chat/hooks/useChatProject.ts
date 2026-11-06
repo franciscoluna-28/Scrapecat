@@ -93,7 +93,7 @@ export function useChatProject() {
       const id = await ensureProject(demo);
       if (!id) return;
       setLastProjectId(id);
-      router.push(`/app?project=${id}`);
+      router.push(`/app/chat?project=${id}`);
     },
     [ensureProject, router, setLastProjectId],
   );
