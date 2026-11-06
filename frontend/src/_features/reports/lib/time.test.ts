@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  cadenceLabel,
+  computeNextLocalRun,
   computeNextRun,
+  formatHourLocal,
   formatInTimeZone,
-  formatPeriod,
+  formatPeriodUtc,
   formatRelativeTime,
   formatUtc,
   formatUtcWithLocal,
+  localCadenceLabel,
+  localScheduleToUtc,
   summaryPreview,
+  utcScheduleToLocal,
 } from "./time";
 
 describe("computeNextRun", () => {
@@ -33,6 +37,27 @@ describe("computeNextRun", () => {
   });
 });
 
+describe("local schedules", () => {
+  it("keeps the local day and hour through a UTC round trip", () => {
+    const now = new Date("2026-01-05T12:00:00.000Z");
+    const local = { cadence: "weekly" as const, dayOfWeek: 5, hour: 9 };
+    const utc = localScheduleToUtc(local, now);
+
+    expect(utcScheduleToLocal(utc, now)).toEqual(local);
+  });
+
+  it("computes the next local run", () => {
+    const now = new Date("2026-01-05T12:00:00.000Z");
+    const next = computeNextLocalRun(
+      { cadence: "weekly", dayOfWeek: 5, hour: 9 },
+      now,
+    );
+
+    expect(next.getDay()).toBe(5);
+    expect(next.getHours()).toBe(9);
+  });
+});
+
 describe("formatting", () => {
   const date = new Date("2026-01-09T09:00:00.000Z");
 
@@ -55,22 +80,26 @@ describe("formatting", () => {
     expect(formatRelativeTime(date, now, "en-US")).toBe("5 minutes ago");
   });
 
-  it("formats report periods", () => {
+  it("formats UTC report periods", () => {
     expect(
-      formatPeriod(
+      formatPeriodUtc(
         "2026-01-02T09:00:00.000Z",
         "2026-01-09T09:00:00.000Z",
       ),
     ).toBe("Jan 2, 09:00 – Jan 9, 09:00 UTC");
   });
 
-  it("labels cadences", () => {
+  it("formats local hours", () => {
+    expect(formatHourLocal(9)).toMatch(/9:00/);
+  });
+
+  it("labels cadences in local time", () => {
     expect(
-      cadenceLabel({ cadence: "daily", dayOfWeek: 5, hourUtc: 9 }),
-    ).toBe("Daily at 09:00 UTC");
-    expect(
-      cadenceLabel({ cadence: "weekly", dayOfWeek: 5, hourUtc: 9 }),
-    ).toBe("Weekly on Friday at 09:00 UTC");
+      localCadenceLabel({
+        cadence: "weekly",
+        nextRunAt: "2026-01-09T09:00:00.000Z",
+      }),
+    ).toMatch(/^Weekly on .+ at .+/);
   });
 
   it("creates a plain summary preview", () => {

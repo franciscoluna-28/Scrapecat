@@ -26,9 +26,13 @@ import {
   type ReportSchedule,
 } from "@/src/_features/reports/services/reports-api";
 import {
-  computeNextRun,
-  formatHourUtc,
+  computeNextLocalRun,
+  formatHourLocal,
   formatInTimeZone,
+  formatTimeZoneName,
+  formatUtc,
+  localScheduleToUtc,
+  utcScheduleToLocal,
   WEEKDAYS,
   type Cadence,
 } from "@/src/_features/reports/lib/time";
@@ -52,21 +56,25 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
   const [branch, setBranch] = useState(
     schedule?.branch ?? initialProject?.defaultBranch ?? "",
   );
-  const [cadence, setCadence] = useState<Cadence>(
-    schedule?.cadence ?? "daily",
-  );
-  const [dayOfWeek, setDayOfWeek] = useState(schedule?.dayOfWeek ?? 5);
-  const [hourUtc, setHourUtc] = useState(schedule?.hourUtc ?? 9);
-  const [enabled, setEnabled] = useState(schedule?.enabled ?? true);
-  const [localPreview, setLocalPreview] = useState(() =>
-    formatInTimeZone(
-      computeNextRun({
-        cadence: schedule?.cadence ?? "daily",
-        dayOfWeek: schedule?.dayOfWeek ?? 5,
-        hourUtc: schedule?.hourUtc ?? 9,
-      }),
-    ),
-  );
+  const initialLocal = schedule
+    ? utcScheduleToLocal({
+        cadence: schedule.cadence,
+        dayOfWeek: schedule.dayOfWeek,
+        hourUtc: schedule.hourUtc,
+      })
+    : { cadence: "daily" as Cadence, dayOfWeek: 5, hour: 9 };
+  const [cadence, setCadence] = useState<Cadence>(initialLocal.cadence);
+  const [dayOfWeek, setDayOfWeek] = useState(initialLocal.dayOfWeek);
+  const [hour, setHour] = useState(initialLocal.hour);
+  const timezone = formatTimeZoneName();
+  const [localPreview, setLocalPreview] = useState(() => {
+    const next = computeNextLocalRun({
+      cadence: initialLocal.cadence,
+      dayOfWeek: initialLocal.dayOfWeek,
+      hour: initialLocal.hour,
+    });
+    return `${formatInTimeZone(next)} your time · ${formatUtc(next)}`;
+  });
 
   const createMutation = useCreateReportSchedule();
   const updateMutation = useUpdateReportSchedule();
@@ -102,9 +110,12 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
   const updatePreview = (input: {
     cadence: Cadence;
     dayOfWeek: number;
-    hourUtc: number;
+    hour: number;
   }) => {
-    setLocalPreview(formatInTimeZone(computeNextRun(input)));
+    const next = computeNextLocalRun(input);
+    setLocalPreview(
+      `${formatInTimeZone(next)} your time · ${formatUtc(next)}`,
+    );
   };
 
   const changeProject = (nextProjectId: string) => {
@@ -115,36 +126,41 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
 
   const changeCadence = (value: Cadence) => {
     setCadence(value);
-    updatePreview({ cadence: value, dayOfWeek, hourUtc });
+    updatePreview({ cadence: value, dayOfWeek, hour });
   };
 
   const changeDayOfWeek = (value: number) => {
     setDayOfWeek(value);
-    updatePreview({ cadence, dayOfWeek: value, hourUtc });
+    updatePreview({ cadence, dayOfWeek: value, hour });
   };
 
-  const changeHourUtc = (value: number) => {
-    setHourUtc(value);
-    updatePreview({ cadence, dayOfWeek, hourUtc: value });
+  const changeHour = (value: number) => {
+    setHour(value);
+    updatePreview({ cadence, dayOfWeek, hour: value });
   };
 
   const submit = async () => {
     if (!projectId || !branch) return;
 
+    const utc = localScheduleToUtc({ cadence, dayOfWeek, hour });
+
     try {
       if (schedule) {
         await updateMutation.mutateAsync({
           id: schedule.id,
-          schedule: { cadence, dayOfWeek, hourUtc, enabled },
+          schedule: {
+            cadence,
+            dayOfWeek: utc.dayOfWeek,
+            hourUtc: utc.hourUtc,
+          },
         });
       } else {
         await createMutation.mutateAsync({
           projectId,
           branch,
           cadence,
-          dayOfWeek,
-          hourUtc,
-          enabled,
+          dayOfWeek: utc.dayOfWeek,
+          hourUtc: utc.hourUtc,
         });
       }
       onOpenChange(false);
@@ -164,7 +180,8 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
             {isEditing ? "Edit summary schedule" : "New summary schedule"}
           </DialogTitle>
           <DialogDescription>
-            Summaries run from UTC hours. The local time is shown as a preview.
+            Times use your browser timezone ({timezone}). Schedules are stored
+            in UTC.
           </DialogDescription>
         </DialogHeader>
 
@@ -262,44 +279,27 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
           )}
 
           <div className="space-y-1.5">
-            <Label>Hour (UTC)</Label>
+            <Label>Time</Label>
             <Select
-              value={String(hourUtc)}
-              onValueChange={(value) => changeHourUtc(Number(value))}
+              value={String(hour)}
+              onValueChange={(value) => changeHour(Number(value))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {HOURS.map((hour) => (
-                  <SelectItem key={hour} value={String(hour)}>
-                    {formatHourUtc(hour)}
+                {HOURS.map((hourOption) => (
+                  <SelectItem key={hourOption} value={String(hourOption)}>
+                    {formatHourLocal(hourOption)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {localPreview && (
               <p className="text-xs text-muted-foreground">
-                Next occurrence: {localPreview} your time
+                Next occurrence: {localPreview}
               </p>
             )}
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label>Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Paused schedules keep their configuration.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant={enabled ? "secondary" : "outline"}
-              onClick={() => setEnabled((value) => !value)}
-            >
-              {enabled ? "Enabled" : "Paused"}
-            </Button>
           </div>
 
           {error && (

@@ -24,7 +24,6 @@ import {
   useDeleteReportSchedule,
   useReportSchedules,
   useRunReportSchedule,
-  useUpdateReportSchedule,
   type ReportSchedule,
   type ReportSummary,
 } from "@/src/_features/reports/services/reports-api";
@@ -41,10 +40,10 @@ export function ReportsDashboard() {
     refetch,
   } = useReportSchedules();
   const runMutation = useRunReportSchedule();
-  const updateMutation = useUpdateReportSchedule();
   const deleteMutation = useDeleteReportSchedule();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogKey, setDialogKey] = useState(0);
   const [editing, setEditing] = useState<ReportSchedule | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
@@ -64,11 +63,13 @@ export function ReportsDashboard() {
 
   const openNew = () => {
     setEditing(null);
+    setDialogKey((key) => key + 1);
     setDialogOpen(true);
   };
 
   const openEdit = (schedule: ReportSchedule) => {
     setEditing(schedule);
+    setDialogKey((key) => key + 1);
     setDialogOpen(true);
   };
 
@@ -79,13 +80,6 @@ export function ReportsDashboard() {
 
   const handleRun = (schedule: ReportSchedule) => {
     runMutation.mutate(schedule.id);
-  };
-
-  const handleToggle = (schedule: ReportSchedule) => {
-    updateMutation.mutate({
-      id: schedule.id,
-      schedule: { enabled: !schedule.enabled },
-    });
   };
 
   const handleDelete = (schedule: ReportSchedule) => {
@@ -102,9 +96,34 @@ export function ReportsDashboard() {
     );
   }
 
-  if (projects.length === 0) {
-    return (
-      <>
+  return (
+    <div className="space-y-8">
+      <AddRepositoryDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onProjectSelected={() => {
+          setConnectOpen(false);
+          queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+        }}
+      />
+
+      <ScheduleDialog
+        key={dialogKey}
+        open={dialogOpen}
+        onOpenChange={(nextOpen) => {
+          setDialogOpen(nextOpen);
+          if (!nextOpen) setEditing(null);
+        }}
+        schedule={editing}
+      />
+
+      <ReportDetailSheet
+        reportId={selectedReportId}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
+
+      {projects.length === 0 ? (
         <Empty className="min-h-[360px] border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -122,20 +141,8 @@ export function ReportsDashboard() {
             </Button>
           </EmptyContent>
         </Empty>
-        <AddRepositoryDialog
-          open={connectOpen}
-          onOpenChange={setConnectOpen}
-          onProjectSelected={() => {
-            setConnectOpen(false);
-            queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-          }}
-        />
-      </>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
+      ) : (
+        <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
@@ -205,7 +212,6 @@ export function ReportsDashboard() {
                 }
                 onRun={handleRun}
                 onEdit={openEdit}
-                onToggle={handleToggle}
                 onDelete={handleDelete}
               />
             ))}
@@ -224,23 +230,8 @@ export function ReportsDashboard() {
         </div>
         <ReportFeed onOpen={openReport} />
       </section>
-
-      {dialogOpen && (
-        <ScheduleDialog
-          open={dialogOpen}
-          onOpenChange={(nextOpen) => {
-            setDialogOpen(nextOpen);
-            if (!nextOpen) setEditing(null);
-          }}
-          schedule={editing}
-        />
+        </>
       )}
-
-      <ReportDetailSheet
-        reportId={selectedReportId}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-      />
     </div>
   );
 }

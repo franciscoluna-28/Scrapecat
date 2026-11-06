@@ -2,7 +2,6 @@
 
 import {
   MoreHorizontal,
-  Pause,
   Pencil,
   Play,
   Trash2,
@@ -27,9 +26,9 @@ import {
 import { ScheduleStatusBadge } from "@/src/_features/reports/components/ScheduleStatusBadge";
 import type { ReportSchedule } from "@/src/_features/reports/services/reports-api";
 import {
-  cadenceLabel,
   formatRelativeTime,
   formatUtcWithLocal,
+  localCadenceLabel,
 } from "@/src/_features/reports/lib/time";
 
 type Props = {
@@ -37,7 +36,6 @@ type Props = {
   isRunning: boolean;
   onRun: (schedule: ReportSchedule) => void;
   onEdit: (schedule: ReportSchedule) => void;
-  onToggle: (schedule: ReportSchedule) => void;
   onDelete: (schedule: ReportSchedule) => void;
 };
 
@@ -46,7 +44,6 @@ export function ScheduleCard({
   isRunning,
   onRun,
   onEdit,
-  onToggle,
   onDelete,
 }: Props) {
   const nextRun = formatUtcWithLocal(schedule.nextRunAt);
@@ -62,7 +59,10 @@ export function ScheduleCard({
           <span className="text-muted-foreground"> · {schedule.branch}</span>
         </CardTitle>
         <CardDescription>
-          {cadenceLabel(schedule)}
+          {localCadenceLabel({
+            cadence: schedule.cadence,
+            nextRunAt: schedule.nextRunAt,
+          })}
         </CardDescription>
         <CardAction>
           <ScheduleStatusBadge schedule={schedule} />
@@ -71,9 +71,10 @@ export function ScheduleCard({
 
       <CardContent className="space-y-1.5 text-xs text-muted-foreground">
         <p>
-          Next run: <span className="text-foreground">{nextRun.utc}</span>
+          Next run: <span className="text-foreground">{nextRun.local}</span>{" "}
+          your time
         </p>
-        <p>{nextRun.local} your time</p>
+        <p>{nextRun.utc}</p>
         <p>
           Last run: <span className="text-foreground">{lastRun}</span>
         </p>
@@ -109,10 +110,6 @@ export function ScheduleCard({
             <DropdownMenuItem onSelect={() => onEdit(schedule)}>
               <Pencil />
               Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onToggle(schedule)}>
-              {schedule.enabled ? <Pause /> : <Play />}
-              {schedule.enabled ? "Pause" : "Resume"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -39,6 +39,57 @@ export function computeNextRun(
   return next;
 }
 
+export function computeNextLocalRun(
+  input: { cadence: Cadence; dayOfWeek: number; hour: number },
+  now: Date = new Date(),
+): Date {
+  const next = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    input.hour,
+    0,
+    0,
+    0,
+  );
+
+  if (input.cadence === "weekly") {
+    const target = ((input.dayOfWeek % 7) + 7) % 7;
+    const delta = (target - next.getDay() + 7) % 7;
+    next.setDate(next.getDate() + delta);
+  }
+
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + (input.cadence === "weekly" ? 7 : 1));
+  }
+
+  return next;
+}
+
+export function localScheduleToUtc(
+  input: { cadence: Cadence; dayOfWeek: number; hour: number },
+  now: Date = new Date(),
+): { cadence: Cadence; dayOfWeek: number; hourUtc: number } {
+  const next = computeNextLocalRun(input, now);
+  return {
+    cadence: input.cadence,
+    dayOfWeek: next.getUTCDay(),
+    hourUtc: next.getUTCHours(),
+  };
+}
+
+export function utcScheduleToLocal(
+  input: { cadence: Cadence; dayOfWeek: number; hourUtc: number },
+  now: Date = new Date(),
+): { cadence: Cadence; dayOfWeek: number; hour: number } {
+  const next = computeNextRun(input, now);
+  return {
+    cadence: input.cadence,
+    dayOfWeek: next.getDay(),
+    hour: next.getHours(),
+  };
+}
+
 export function formatUtc(date: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
@@ -100,6 +151,21 @@ export function formatRelativeTime(
 }
 
 export function formatPeriod(start: string | Date, end: string | Date): string {
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
+  return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))}`;
+}
+
+export function formatPeriodUtc(
+  start: string | Date,
+  end: string | Date,
+): string {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     month: "short",
@@ -111,19 +177,37 @@ export function formatPeriod(start: string | Date, end: string | Date): string {
   return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))} UTC`;
 }
 
-export function formatHourUtc(hour: number): string {
-  return `${String(hour).padStart(2, "0")}:00 UTC`;
+export function formatHourLocal(hour: number): string {
+  const date = new Date(2000, 0, 1, hour, 0, 0);
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
-export function cadenceLabel(input: {
+export function formatTimeZoneName(date: Date = new Date()): string {
+  return (
+    new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value ?? "your time"
+  );
+}
+
+export function localCadenceLabel(input: {
   cadence: string;
-  dayOfWeek: number;
-  hourUtc: number;
+  nextRunAt: string | Date;
 }): string {
+  const date = new Date(input.nextRunAt);
+  const day = WEEKDAYS[date.getDay()];
+  const hour = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+
   if (input.cadence === "weekly") {
-    return `Weekly on ${WEEKDAYS[input.dayOfWeek] ?? "Friday"} at ${formatHourUtc(input.hourUtc)}`;
+    return `Weekly on ${day} at ${hour}`;
   }
-  return `Daily at ${formatHourUtc(input.hourUtc)}`;
+  return `Daily at ${hour}`;
 }
 
 export function summaryPreview(summary: string, maxLength = 240): string {
