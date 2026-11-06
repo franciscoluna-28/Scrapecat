@@ -26,6 +26,7 @@ import {
 import { ScheduleStatusBadge } from "@/src/_features/reports/components/ScheduleStatusBadge";
 import type { ReportSchedule } from "@/src/_features/reports/services/reports-api";
 import {
+  browserTimeZone,
   formatInTimeZone,
   formatRelativeTime,
   formatUtc,
@@ -47,10 +48,8 @@ export function ScheduleCard({
   onEdit,
   onDelete,
 }: Props) {
-  const nextRun = formatInTimeZone(
-    schedule.nextRunAt,
-    schedule.timezone,
-  );
+  const timezone = schedule.timezone || browserTimeZone();
+  const nextRun = formatInTimeZone(schedule.nextRunAt, timezone);
   const nextRunUtc = formatUtc(schedule.nextRunAt);
   const lastRun = schedule.lastRunAt
     ? formatRelativeTime(schedule.lastRunAt)
@@ -67,7 +66,7 @@ export function ScheduleCard({
           {localCadenceLabel({
             cadence: schedule.cadence,
             nextRunAt: schedule.nextRunAt,
-            timezone: schedule.timezone,
+            timezone,
           })}
         </CardDescription>
         <CardAction>
@@ -78,9 +77,15 @@ export function ScheduleCard({
       <CardContent className="space-y-1.5 text-xs text-muted-foreground">
         <p>
           Next run: <span className="text-foreground">{nextRun}</span> (
-          {schedule.timezone})
+          {timezone})
         </p>
         <p>UTC: {nextRunUtc}</p>
+        {!schedule.timezone && (
+          <p className="text-destructive">
+            This schedule is missing timezone data. Edit it to set your
+            timezone.
+          </p>
+        )}
         <p>
           Last run: <span className="text-foreground">{lastRun}</span>
         </p>

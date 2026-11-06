@@ -150,7 +150,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               onValueChange={changeProject}
               disabled={isEditing}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-label="Project">
                 <SelectValue placeholder="Select a project" />
               </SelectTrigger>
               <SelectContent>
@@ -175,7 +175,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               onValueChange={setBranch}
               disabled={isEditing || !projectId}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-label="Branch">
                 <SelectValue
                   placeholder={
                     branchesLoading ? "Loading branches…" : "Select a branch"
@@ -198,7 +198,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               value={cadence}
               onValueChange={(value) => setCadence(value as Cadence)}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-label="Cadence">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -215,7 +215,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
                 value={String(dayOfWeek)}
                 onValueChange={(value) => setDayOfWeek(Number(value))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Day of week">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,7 +235,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               value={String(hour)}
               onValueChange={(value) => setHour(Number(value))}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-label="Time">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
