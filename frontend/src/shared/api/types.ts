@@ -1482,7 +1482,8 @@ export interface paths {
                                 branch: string;
                                 cadence: "daily" | "weekly";
                                 dayOfWeek: number;
-                                hourUtc: number;
+                                hour: number;
+                                timezone: string;
                                 enabled: boolean;
                                 /** Format: date-time */
                                 nextRunAt: string;
@@ -1545,7 +1546,9 @@ export interface paths {
                         /** @default 5 */
                         dayOfWeek?: number;
                         /** @default 9 */
-                        hourUtc?: number;
+                        hour?: number;
+                        /** @default UTC */
+                        timezone?: string;
                         /** @default true */
                         enabled?: boolean;
                     };
@@ -1564,7 +1567,8 @@ export interface paths {
                             branch: string;
                             cadence: "daily" | "weekly";
                             dayOfWeek: number;
-                            hourUtc: number;
+                            hour: number;
+                            timezone: string;
                             enabled: boolean;
                             /** Format: date-time */
                             nextRunAt: string;
@@ -1728,7 +1732,8 @@ export interface paths {
                     "application/json": {
                         cadence?: "daily" | "weekly";
                         dayOfWeek?: number;
-                        hourUtc?: number;
+                        hour?: number;
+                        timezone?: string;
                         enabled?: boolean;
                     };
                 };
@@ -1746,7 +1751,8 @@ export interface paths {
                             branch: string;
                             cadence: "daily" | "weekly";
                             dayOfWeek: number;
-                            hourUtc: number;
+                            hour: number;
+                            timezone: string;
                             enabled: boolean;
                             /** Format: date-time */
                             nextRunAt: string;

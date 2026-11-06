@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  computeNextLocalRun,
-  computeNextRun,
+  browserTimeZone,
+  cadenceSummary,
   formatHourLocal,
   formatInTimeZone,
   formatPeriodUtc,
@@ -9,52 +9,46 @@ import {
   formatUtc,
   formatUtcWithLocal,
   localCadenceLabel,
-  localScheduleToUtc,
   summaryPreview,
-  utcScheduleToLocal,
 } from "./time";
 
-describe("computeNextRun", () => {
-  it("returns today when the daily hour is ahead", () => {
-    const now = new Date("2026-01-01T08:00:00.000Z");
-    expect(
-      computeNextRun({ cadence: "daily", dayOfWeek: 5, hourUtc: 9 }, now),
-    ).toEqual(new Date("2026-01-01T09:00:00.000Z"));
-  });
-
-  it("returns the next Friday for a weekly schedule", () => {
-    const now = new Date("2026-01-05T12:00:00.000Z");
-    expect(
-      computeNextRun({ cadence: "weekly", dayOfWeek: 5, hourUtc: 9 }, now),
-    ).toEqual(new Date("2026-01-09T09:00:00.000Z"));
-  });
-
-  it("supports a custom weekday", () => {
-    const now = new Date("2026-01-02T12:00:00.000Z");
-    expect(
-      computeNextRun({ cadence: "weekly", dayOfWeek: 1, hourUtc: 9 }, now),
-    ).toEqual(new Date("2026-01-05T09:00:00.000Z"));
+describe("timezone helpers", () => {
+  it("returns a browser timezone", () => {
+    expect(browserTimeZone()).toBeTruthy();
   });
 });
 
-describe("local schedules", () => {
-  it("keeps the local day and hour through a UTC round trip", () => {
-    const now = new Date("2026-01-05T12:00:00.000Z");
-    const local = { cadence: "weekly" as const, dayOfWeek: 5, hour: 9 };
-    const utc = localScheduleToUtc(local, now);
-
-    expect(utcScheduleToLocal(utc, now)).toEqual(local);
+describe("cadence labels", () => {
+  it("describes daily weekday reports", () => {
+    expect(
+      cadenceSummary({
+        cadence: "daily",
+        dayOfWeek: 5,
+        hour: 9,
+        timezone: "America/New_York",
+      }),
+    ).toMatch(/^Runs Monday–Friday at .+ \(America\/New_York\)$/);
   });
 
-  it("computes the next local run", () => {
-    const now = new Date("2026-01-05T12:00:00.000Z");
-    const next = computeNextLocalRun(
-      { cadence: "weekly", dayOfWeek: 5, hour: 9 },
-      now,
-    );
+  it("describes weekly reports", () => {
+    expect(
+      cadenceSummary({
+        cadence: "weekly",
+        dayOfWeek: 5,
+        hour: 9,
+        timezone: "America/New_York",
+      }),
+    ).toMatch(/^Runs every Friday at .+ \(America\/New_York\)$/);
+  });
 
-    expect(next.getDay()).toBe(5);
-    expect(next.getHours()).toBe(9);
+  it("uses the schedule timezone for the next run", () => {
+    expect(
+      localCadenceLabel({
+        cadence: "weekly",
+        nextRunAt: "2026-01-09T14:00:00.000Z",
+        timezone: "America/New_York",
+      }),
+    ).toMatch(/^Weekly on Friday at .+/);
   });
 });
 
@@ -91,15 +85,6 @@ describe("formatting", () => {
 
   it("formats local hours", () => {
     expect(formatHourLocal(9)).toMatch(/9:00/);
-  });
-
-  it("labels cadences in local time", () => {
-    expect(
-      localCadenceLabel({
-        cadence: "weekly",
-        nextRunAt: "2026-01-09T09:00:00.000Z",
-      }),
-    ).toMatch(/^Weekly on .+ at .+/);
   });
 
   it("creates a plain summary preview", () => {

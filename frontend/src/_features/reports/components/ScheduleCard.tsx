@@ -26,8 +26,9 @@ import {
 import { ScheduleStatusBadge } from "@/src/_features/reports/components/ScheduleStatusBadge";
 import type { ReportSchedule } from "@/src/_features/reports/services/reports-api";
 import {
+  formatInTimeZone,
   formatRelativeTime,
-  formatUtcWithLocal,
+  formatUtc,
   localCadenceLabel,
 } from "@/src/_features/reports/lib/time";
 
@@ -46,7 +47,11 @@ export function ScheduleCard({
   onEdit,
   onDelete,
 }: Props) {
-  const nextRun = formatUtcWithLocal(schedule.nextRunAt);
+  const nextRun = formatInTimeZone(
+    schedule.nextRunAt,
+    schedule.timezone,
+  );
+  const nextRunUtc = formatUtc(schedule.nextRunAt);
   const lastRun = schedule.lastRunAt
     ? formatRelativeTime(schedule.lastRunAt)
     : "never";
@@ -62,6 +67,7 @@ export function ScheduleCard({
           {localCadenceLabel({
             cadence: schedule.cadence,
             nextRunAt: schedule.nextRunAt,
+            timezone: schedule.timezone,
           })}
         </CardDescription>
         <CardAction>
@@ -71,10 +77,10 @@ export function ScheduleCard({
 
       <CardContent className="space-y-1.5 text-xs text-muted-foreground">
         <p>
-          Next run: <span className="text-foreground">{nextRun.local}</span>{" "}
-          your time
+          Next run: <span className="text-foreground">{nextRun}</span> (
+          {schedule.timezone})
         </p>
-        <p>{nextRun.utc}</p>
+        <p>UTC: {nextRunUtc}</p>
         <p>
           Last run: <span className="text-foreground">{lastRun}</span>
         </p>

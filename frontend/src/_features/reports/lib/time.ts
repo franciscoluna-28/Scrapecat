@@ -10,84 +10,8 @@ export const WEEKDAYS = [
 
 export type Cadence = "daily" | "weekly";
 
-export function computeNextRun(
-  input: { cadence: Cadence; dayOfWeek: number; hourUtc: number },
-  now: Date = new Date(),
-): Date {
-  const next = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      input.hourUtc,
-      0,
-      0,
-      0,
-    ),
-  );
-
-  if (input.cadence === "weekly") {
-    const target = ((input.dayOfWeek % 7) + 7) % 7;
-    const delta = (target - next.getUTCDay() + 7) % 7;
-    next.setUTCDate(next.getUTCDate() + delta);
-  }
-
-  if (next.getTime() <= now.getTime()) {
-    next.setUTCDate(next.getUTCDate() + (input.cadence === "weekly" ? 7 : 1));
-  }
-
-  return next;
-}
-
-export function computeNextLocalRun(
-  input: { cadence: Cadence; dayOfWeek: number; hour: number },
-  now: Date = new Date(),
-): Date {
-  const next = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    input.hour,
-    0,
-    0,
-    0,
-  );
-
-  if (input.cadence === "weekly") {
-    const target = ((input.dayOfWeek % 7) + 7) % 7;
-    const delta = (target - next.getDay() + 7) % 7;
-    next.setDate(next.getDate() + delta);
-  }
-
-  if (next.getTime() <= now.getTime()) {
-    next.setDate(next.getDate() + (input.cadence === "weekly" ? 7 : 1));
-  }
-
-  return next;
-}
-
-export function localScheduleToUtc(
-  input: { cadence: Cadence; dayOfWeek: number; hour: number },
-  now: Date = new Date(),
-): { cadence: Cadence; dayOfWeek: number; hourUtc: number } {
-  const next = computeNextLocalRun(input, now);
-  return {
-    cadence: input.cadence,
-    dayOfWeek: next.getUTCDay(),
-    hourUtc: next.getUTCHours(),
-  };
-}
-
-export function utcScheduleToLocal(
-  input: { cadence: Cadence; dayOfWeek: number; hourUtc: number },
-  now: Date = new Date(),
-): { cadence: Cadence; dayOfWeek: number; hour: number } {
-  const next = computeNextRun(input, now);
-  return {
-    cadence: input.cadence,
-    dayOfWeek: next.getDay(),
-    hour: next.getHours(),
-  };
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
 export function formatUtc(date: string | Date): string {
@@ -193,21 +117,39 @@ export function formatTimeZoneName(date: Date = new Date()): string {
   );
 }
 
+export function cadenceSummary(input: {
+  cadence: string;
+  dayOfWeek: number;
+  hour: number;
+  timezone: string;
+}): string {
+  const time = formatHourLocal(input.hour);
+  if (input.cadence === "weekly") {
+    return `Runs every ${WEEKDAYS[input.dayOfWeek] ?? "Friday"} at ${time} (${input.timezone})`;
+  }
+  return `Runs Monday–Friday at ${time} (${input.timezone})`;
+}
+
 export function localCadenceLabel(input: {
   cadence: string;
   nextRunAt: string | Date;
+  timezone: string;
 }): string {
   const date = new Date(input.nextRunAt);
-  const day = WEEKDAYS[date.getDay()];
+  const day = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: input.timezone,
+  }).format(date);
   const hour = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: input.timezone,
   }).format(date);
 
   if (input.cadence === "weekly") {
     return `Weekly on ${day} at ${hour}`;
   }
-  return `Daily at ${hour}`;
+  return `Monday–Friday at ${hour}`;
 }
 
 export function summaryPreview(summary: string, maxLength = 240): string {

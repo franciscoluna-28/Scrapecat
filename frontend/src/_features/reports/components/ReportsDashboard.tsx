@@ -27,6 +27,7 @@ import {
   type ReportSchedule,
   type ReportSummary,
 } from "@/src/_features/reports/services/reports-api";
+import { formatInTimeZone } from "@/src/_features/reports/lib/time";
 import { queryKeys } from "@/src/shared/services/keys";
 import { errorMessage } from "@/src/shared/api/client";
 
@@ -51,6 +52,15 @@ export function ReportsDashboard() {
 
   const running = schedules.some(
     (schedule) => schedule.lastStatus === "running",
+  );
+  const nextSchedule = schedules.reduce<ReportSchedule | null>(
+    (earliest, schedule) =>
+      !earliest ||
+      new Date(schedule.nextRunAt).getTime() <
+        new Date(earliest.nextRunAt).getTime()
+        ? schedule
+        : earliest,
+    null,
   );
   const wasRunning = useRef(running);
 
@@ -149,6 +159,16 @@ export function ReportsDashboard() {
           <p className="text-sm text-muted-foreground">
             Schedule branch summaries and review what shipped.
           </p>
+          {nextSchedule && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Next report:{" "}
+              {formatInTimeZone(
+                nextSchedule.nextRunAt,
+                nextSchedule.timezone,
+              )}{" "}
+              ({nextSchedule.timezone})
+            </p>
+          )}
         </div>
         <Button onClick={openNew}>
           <Plus data-icon="inline-start" />
@@ -228,7 +248,7 @@ export function ReportsDashboard() {
             </span>
           )}
         </div>
-        <ReportFeed onOpen={openReport} />
+        <ReportFeed schedules={schedules} onOpen={openReport} />
       </section>
         </>
       )}

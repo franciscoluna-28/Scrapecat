@@ -57,7 +57,8 @@ function schedule(): ReportSchedule {
     branch: "main",
     cadence: "daily",
     dayOfWeek: 5,
-    hourUtc: 9,
+    hour: 9,
+    timezone: "America/New_York",
     enabled: true,
     nextRunAt: "2026-01-11T09:00:00.000Z",
     lastRunAt: null,
@@ -188,7 +189,8 @@ describe("report mutations", () => {
       branch: "main",
       cadence: "daily" as const,
       dayOfWeek: 5,
-      hourUtc: 9,
+      hour: 9,
+      timezone: "America/New_York",
       enabled: true,
     };
 
@@ -202,7 +204,9 @@ describe("report mutations", () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: queryKeys.reportSchedules.all,
     });
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Schedule created");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Schedule created", {
+      description: expect.stringContaining("Runs Monday–Friday"),
+    });
   });
 
   it("updates a schedule", async () => {
@@ -215,7 +219,7 @@ describe("report mutations", () => {
     await act(async () => {
       await result.current.mutateAsync({
         id: SCHEDULE_ID,
-        schedule: { enabled: false },
+        schedule: { hour: 10, timezone: "America/New_York" },
       });
     });
 
@@ -223,7 +227,7 @@ describe("report mutations", () => {
       "/api/v1/report-schedules/{id}",
       {
         params: { path: { id: SCHEDULE_ID } },
-        body: { enabled: false },
+        body: { hour: 10, timezone: "America/New_York" },
       },
     );
   });

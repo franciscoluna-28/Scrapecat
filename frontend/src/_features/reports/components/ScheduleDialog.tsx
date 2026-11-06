@@ -26,13 +26,9 @@ import {
   type ReportSchedule,
 } from "@/src/_features/reports/services/reports-api";
 import {
-  computeNextLocalRun,
+  browserTimeZone,
+  cadenceSummary,
   formatHourLocal,
-  formatInTimeZone,
-  formatTimeZoneName,
-  formatUtc,
-  localScheduleToUtc,
-  utcScheduleToLocal,
   WEEKDAYS,
   type Cadence,
 } from "@/src/_features/reports/lib/time";
@@ -56,25 +52,12 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
   const [branch, setBranch] = useState(
     schedule?.branch ?? initialProject?.defaultBranch ?? "",
   );
-  const initialLocal = schedule
-    ? utcScheduleToLocal({
-        cadence: schedule.cadence,
-        dayOfWeek: schedule.dayOfWeek,
-        hourUtc: schedule.hourUtc,
-      })
-    : { cadence: "daily" as Cadence, dayOfWeek: 5, hour: 9 };
-  const [cadence, setCadence] = useState<Cadence>(initialLocal.cadence);
-  const [dayOfWeek, setDayOfWeek] = useState(initialLocal.dayOfWeek);
-  const [hour, setHour] = useState(initialLocal.hour);
-  const timezone = formatTimeZoneName();
-  const [localPreview, setLocalPreview] = useState(() => {
-    const next = computeNextLocalRun({
-      cadence: initialLocal.cadence,
-      dayOfWeek: initialLocal.dayOfWeek,
-      hour: initialLocal.hour,
-    });
-    return `${formatInTimeZone(next)} your time · ${formatUtc(next)}`;
-  });
+  const [cadence, setCadence] = useState<Cadence>(
+    schedule?.cadence ?? "daily",
+  );
+  const [dayOfWeek, setDayOfWeek] = useState(schedule?.dayOfWeek ?? 5);
+  const [hour, setHour] = useState(schedule?.hour ?? 9);
+  const timezone = schedule?.timezone ?? browserTimeZone();
 
   const createMutation = useCreateReportSchedule();
   const updateMutation = useUpdateReportSchedule();
@@ -107,60 +90,29 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
     return Array.from(new Set(values));
   }, [branch, branches, selectedProject]);
 
-  const updatePreview = (input: {
-    cadence: Cadence;
-    dayOfWeek: number;
-    hour: number;
-  }) => {
-    const next = computeNextLocalRun(input);
-    setLocalPreview(
-      `${formatInTimeZone(next)} your time · ${formatUtc(next)}`,
-    );
-  };
-
   const changeProject = (nextProjectId: string) => {
     setProjectId(nextProjectId);
     const project = projects.find((item) => item.id === nextProjectId);
     setBranch(project?.defaultBranch ?? "");
   };
 
-  const changeCadence = (value: Cadence) => {
-    setCadence(value);
-    updatePreview({ cadence: value, dayOfWeek, hour });
-  };
-
-  const changeDayOfWeek = (value: number) => {
-    setDayOfWeek(value);
-    updatePreview({ cadence, dayOfWeek: value, hour });
-  };
-
-  const changeHour = (value: number) => {
-    setHour(value);
-    updatePreview({ cadence, dayOfWeek, hour: value });
-  };
-
   const submit = async () => {
     if (!projectId || !branch) return;
-
-    const utc = localScheduleToUtc({ cadence, dayOfWeek, hour });
 
     try {
       if (schedule) {
         await updateMutation.mutateAsync({
           id: schedule.id,
-          schedule: {
-            cadence,
-            dayOfWeek: utc.dayOfWeek,
-            hourUtc: utc.hourUtc,
-          },
+          schedule: { cadence, dayOfWeek, hour, timezone },
         });
       } else {
         await createMutation.mutateAsync({
           projectId,
           branch,
           cadence,
-          dayOfWeek: utc.dayOfWeek,
-          hourUtc: utc.hourUtc,
+          dayOfWeek,
+          hour,
+          timezone,
         });
       }
       onOpenChange(false);
@@ -180,8 +132,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
             {isEditing ? "Edit summary schedule" : "New summary schedule"}
           </DialogTitle>
           <DialogDescription>
-            Times use your browser timezone ({timezone}). Schedules are stored
-            in UTC.
+            Times use {timezone}. Daily reports run Monday–Friday.
           </DialogDescription>
         </DialogHeader>
 
@@ -245,7 +196,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
             <Label>Cadence</Label>
             <Select
               value={cadence}
-              onValueChange={(value) => changeCadence(value as Cadence)}
+              onValueChange={(value) => setCadence(value as Cadence)}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -262,7 +213,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               <Label>Day of week</Label>
               <Select
                 value={String(dayOfWeek)}
-                onValueChange={(value) => changeDayOfWeek(Number(value))}
+                onValueChange={(value) => setDayOfWeek(Number(value))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -282,7 +233,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
             <Label>Time</Label>
             <Select
               value={String(hour)}
-              onValueChange={(value) => changeHour(Number(value))}
+              onValueChange={(value) => setHour(Number(value))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -295,11 +246,9 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
                 ))}
               </SelectContent>
             </Select>
-            {localPreview && (
-              <p className="text-xs text-muted-foreground">
-                Next occurrence: {localPreview}
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {cadenceSummary({ cadence, dayOfWeek, hour, timezone })}
+            </p>
           </div>
 
           {error && (

@@ -8,19 +8,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/src/components/ui/card";
-import type { ReportSummary } from "@/src/_features/reports/services/reports-api";
+import type {
+  ReportSchedule,
+  ReportSummary,
+} from "@/src/_features/reports/services/reports-api";
 import {
   formatPeriod,
   formatRelativeTime,
+  localCadenceLabel,
   summaryPreview,
 } from "@/src/_features/reports/lib/time";
 
 type Props = {
   report: ReportSummary;
+  schedule?: ReportSchedule;
   onOpen: (report: ReportSummary) => void;
 };
 
-export function ReportCard({ report, onOpen }: Props) {
+export function ReportCard({ report, schedule, onOpen }: Props) {
   return (
     <button
       type="button"
@@ -51,6 +56,16 @@ export function ReportCard({ report, onOpen }: Props) {
                 ? `${report.provider}/${report.model}`
                 : "No model used"}
             </p>
+            {schedule && (
+              <p className="text-xs text-muted-foreground">
+                {localCadenceLabel({
+                  cadence: schedule.cadence,
+                  nextRunAt: schedule.nextRunAt,
+                  timezone: schedule.timezone,
+                })}{" "}
+                ({schedule.timezone})
+              </p>
+            )}
           </div>
           <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
         </CardContent>

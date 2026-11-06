@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient, errorMessage, unwrap } from "@/src/shared/api/client";
 import { queryKeys } from "@/src/shared/services/keys";
+import { cadenceSummary } from "@/src/_features/reports/lib/time";
 import type { paths } from "@/src/shared/api/types";
 
 export type ReportSchedule =
@@ -92,11 +93,18 @@ export function useCreateReportSchedule() {
           body: input,
         }),
       ),
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.reportSchedules.all,
       });
-      toast.success("Schedule created");
+      toast.success("Schedule created", {
+        description: cadenceSummary({
+          cadence: input.cadence ?? "daily",
+          dayOfWeek: input.dayOfWeek ?? 5,
+          hour: input.hour ?? 9,
+          timezone: input.timezone ?? "UTC",
+        }),
+      });
     },
     onError: (error) => {
       toast.error(errorMessage(error, "Failed to create schedule"));
