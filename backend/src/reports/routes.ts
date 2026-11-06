@@ -26,7 +26,8 @@ function errorStatus(error: unknown): number {
   }
   if (
     message === REPORT_ERROR_MESSAGES.branchNotFound ||
-    message === REPORT_ERROR_MESSAGES.branchUnavailable
+    message === REPORT_ERROR_MESSAGES.branchUnavailable ||
+    message === REPORT_ERROR_MESSAGES.invalidTimezone
   ) {
     return 400;
   }

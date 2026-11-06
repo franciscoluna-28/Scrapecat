@@ -11,5 +11,6 @@ export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
 export const DEFAULT_CADENCE: ReportCadence = "daily";
 export const DEFAULT_DAY_OF_WEEK = 5;
-export const DEFAULT_HOUR_UTC = 9;
+export const DEFAULT_HOUR = 9;
+export const DEFAULT_TIMEZONE = "UTC";
 export const DEFAULT_INITIAL_LOOKBACK_DAYS = 7;

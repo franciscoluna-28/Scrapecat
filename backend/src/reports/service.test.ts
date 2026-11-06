@@ -32,7 +32,8 @@ function makeScheduleRow(
     branch: "main",
     cadence: "daily",
     dayOfWeek: 5,
-    hourUtc: 9,
+    hour: 9,
+    timezone: "UTC",
     enabled: true,
     nextRunAt: NOW,
     lastRunAt: null,
@@ -248,7 +249,8 @@ describe("createReportsService", () => {
       projectId: PROJECT_ID,
       branch: "main",
       cadence: "daily",
-      hourUtc: 9,
+      hour: 9,
+      timezone: "UTC",
     });
 
     expect(deps.branchExists).toHaveBeenCalledWith(
@@ -260,7 +262,7 @@ describe("createReportsService", () => {
         projectId: PROJECT_ID,
         branch: "main",
         cadence: "daily",
-        nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+        nextRunAt: new Date("2026-01-12T09:00:00.000Z"),
       }),
     );
     expect(result.nextRunAt).toBe("2026-01-10T12:00:00.000Z");
@@ -281,6 +283,16 @@ describe("createReportsService", () => {
     await expect(
       deps.service.createSchedule({ projectId: PROJECT_ID, branch: "nope" }),
     ).rejects.toThrow(REPORT_ERROR_MESSAGES.branchNotFound);
+  });
+
+  it("rejects an invalid timezone", async () => {
+    await expect(
+      deps.service.createSchedule({
+        projectId: PROJECT_ID,
+        branch: "main",
+        timezone: "Mars/Olympus_Mons",
+      }),
+    ).rejects.toThrow(REPORT_ERROR_MESSAGES.invalidTimezone);
   });
 
   it("rejects a duplicate project branch schedule", async () => {
@@ -328,7 +340,7 @@ describe("createReportsService", () => {
 
     expect(deps.store.claimSchedule).toHaveBeenCalledWith({
       id: SCHEDULE_ID,
-      nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+      nextRunAt: new Date("2026-01-12T09:00:00.000Z"),
       now: NOW,
     });
     expect(deps.commits.listCommitsForProject).toHaveBeenCalledWith({
@@ -442,13 +454,13 @@ describe("createReportsService", () => {
     expect(deps.store.markScheduleRunning).toHaveBeenCalledWith({
       id: SCHEDULE_ID,
       now: NOW,
-      nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+      nextRunAt: new Date("2026-01-12T09:00:00.000Z"),
     });
   });
 
   it("does not move the next run when the schedule is not due", async () => {
     const row = makeScheduleRow({
-      nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+      nextRunAt: new Date("2026-01-12T09:00:00.000Z"),
     });
     deps.store.getSchedule.mockResolvedValue(row);
     deps.store.markScheduleRunning.mockResolvedValue(row);
@@ -470,7 +482,8 @@ describe("createReportsService", () => {
     const schedule = makeScheduleRow({
       cadence: "weekly",
       dayOfWeek: 5,
-      hourUtc: 9,
+      hour: 9,
+      timezone: "UTC",
       nextRunAt: scheduledRunAt,
       lastSuccessAt: previousRun,
     });

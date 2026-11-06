@@ -13,6 +13,7 @@ import {
 import {
   computeInitialPeriodStart,
   computeNextRun,
+  isValidTimeZone,
 } from "@/reports/next-run";
 import {
   buildReportMessages,
@@ -21,7 +22,8 @@ import {
 import {
   DEFAULT_CADENCE,
   DEFAULT_DAY_OF_WEEK,
-  DEFAULT_HOUR_UTC,
+  DEFAULT_HOUR,
+  DEFAULT_TIMEZONE,
   type ReportCadence,
   type ReportStatus,
 } from "@/reports/types";
@@ -44,6 +46,7 @@ export const REPORT_ERROR_MESSAGES = {
   scheduleNotFound: "Schedule not found",
   scheduleRunning: "Schedule is already running",
   reportNotFound: "Report not found",
+  invalidTimezone: "Invalid timezone",
 } as const;
 
 export type ReportScheduleDTO = {
@@ -52,7 +55,8 @@ export type ReportScheduleDTO = {
   branch: string;
   cadence: ReportCadence;
   dayOfWeek: number;
-  hourUtc: number;
+  hour: number;
+  timezone: string;
   enabled: boolean;
   nextRunAt: string;
   lastRunAt: string | null;
@@ -129,7 +133,8 @@ function toScheduleDTO(row: ReportScheduleView): ReportScheduleDTO {
     branch: row.branch,
     cadence: row.cadence as ReportCadence,
     dayOfWeek: row.dayOfWeek,
-    hourUtc: row.hourUtc,
+    hour: row.hour,
+    timezone: row.timezone,
     enabled: row.enabled,
     nextRunAt: row.nextRunAt.toISOString(),
     lastRunAt: row.lastRunAt?.toISOString() ?? null,
@@ -203,6 +208,12 @@ export function createReportsService(
     if (!exists) throw new Error(REPORT_ERROR_MESSAGES.branchNotFound);
   }
 
+  function requireTimeZone(timeZone: string): void {
+    if (!isValidTimeZone(timeZone)) {
+      throw new Error(REPORT_ERROR_MESSAGES.invalidTimezone);
+    }
+  }
+
   async function listSchedules(): Promise<ReportScheduleDTO[]> {
     const rows = await deps.store.listSchedules();
     return rows.map(toScheduleDTO);
@@ -213,7 +224,8 @@ export function createReportsService(
     branch: string;
     cadence?: ReportCadence;
     dayOfWeek?: number;
-    hourUtc?: number;
+    hour?: number;
+    timezone?: string;
     enabled?: boolean;
   }): Promise<ReportScheduleDTO> {
     const project = await requireProject(input.projectId);
@@ -228,7 +240,9 @@ export function createReportsService(
     const now = deps.now();
     const cadence = input.cadence ?? DEFAULT_CADENCE;
     const dayOfWeek = input.dayOfWeek ?? DEFAULT_DAY_OF_WEEK;
-    const hourUtc = input.hourUtc ?? DEFAULT_HOUR_UTC;
+    const hour = input.hour ?? DEFAULT_HOUR;
+    const timezone = input.timezone ?? DEFAULT_TIMEZONE;
+    requireTimeZone(timezone);
 
     let row: ReportScheduleRow;
     try {
@@ -237,9 +251,13 @@ export function createReportsService(
         branch: input.branch,
         cadence,
         dayOfWeek,
-        hourUtc,
+        hour,
+        timezone,
         enabled: input.enabled ?? true,
-        nextRunAt: computeNextRun({ cadence, dayOfWeek, hourUtc }, now),
+        nextRunAt: computeNextRun(
+          { cadence, dayOfWeek, hour, timezone },
+          now,
+        ),
       });
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -258,7 +276,8 @@ export function createReportsService(
     input: {
       cadence?: ReportCadence;
       dayOfWeek?: number;
-      hourUtc?: number;
+      hour?: number;
+      timezone?: string;
       enabled?: boolean;
     },
   ): Promise<ReportScheduleDTO> {
@@ -268,15 +287,21 @@ export function createReportsService(
     const now = deps.now();
     const cadence = input.cadence ?? (current.cadence as ReportCadence);
     const dayOfWeek = input.dayOfWeek ?? current.dayOfWeek;
-    const hourUtc = input.hourUtc ?? current.hourUtc;
+    const hour = input.hour ?? current.hour;
+    const timezone = input.timezone ?? current.timezone;
     const enabled = input.enabled ?? current.enabled;
+    requireTimeZone(timezone);
 
     const updated = await deps.store.updateSchedule(id, {
       cadence,
       dayOfWeek,
-      hourUtc,
+      hour,
+      timezone,
       enabled,
-      nextRunAt: computeNextRun({ cadence, dayOfWeek, hourUtc }, now),
+      nextRunAt: computeNextRun(
+        { cadence, dayOfWeek, hour, timezone },
+        now,
+      ),
     });
     if (!updated) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
 

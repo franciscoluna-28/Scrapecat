@@ -32,7 +32,8 @@ const SCHEDULE = {
   branch: "main",
   cadence: "daily",
   dayOfWeek: 5,
-  hourUtc: 9,
+  hour: 9,
+  timezone: "UTC",
   enabled: true,
   nextRunAt: "2026-01-11T09:00:00.000Z",
   lastRunAt: null,
@@ -102,7 +103,8 @@ describe("report routes", () => {
         projectId: PROJECT_ID,
         branch: "main",
         cadence: "daily",
-        hourUtc: 9,
+        hour: 9,
+        timezone: "UTC",
       },
     });
 
@@ -113,7 +115,8 @@ describe("report routes", () => {
       branch: "main",
       cadence: "daily",
       dayOfWeek: 5,
-      hourUtc: 9,
+      hour: 9,
+      timezone: "UTC",
       enabled: true,
     });
   });

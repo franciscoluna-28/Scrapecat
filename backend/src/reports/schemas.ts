@@ -3,7 +3,8 @@ import { GitProviderSchema } from "@/shared/typebox";
 import {
   DEFAULT_CADENCE,
   DEFAULT_DAY_OF_WEEK,
-  DEFAULT_HOUR_UTC,
+  DEFAULT_HOUR,
+  DEFAULT_TIMEZONE,
   REPORT_CADENCES,
   REPORT_STATUSES,
 } from "@/reports/types";
@@ -45,12 +46,15 @@ export const CreateReportScheduleBody = Type.Object({
       default: DEFAULT_DAY_OF_WEEK,
     }),
   ),
-  hourUtc: Type.Optional(
+  hour: Type.Optional(
     Type.Integer({
       minimum: 0,
       maximum: 23,
-      default: DEFAULT_HOUR_UTC,
+      default: DEFAULT_HOUR,
     }),
+  ),
+  timezone: Type.Optional(
+    Type.String({ minLength: 1, default: DEFAULT_TIMEZONE }),
   ),
   enabled: Type.Optional(Type.Boolean({ default: true })),
 });
@@ -58,7 +62,8 @@ export const CreateReportScheduleBody = Type.Object({
 export const UpdateReportScheduleBody = Type.Object({
   cadence: Type.Optional(ReportCadenceSchema),
   dayOfWeek: Type.Optional(Type.Integer({ minimum: 0, maximum: 6 })),
-  hourUtc: Type.Optional(Type.Integer({ minimum: 0, maximum: 23 })),
+  hour: Type.Optional(Type.Integer({ minimum: 0, maximum: 23 })),
+  timezone: Type.Optional(Type.String({ minLength: 1 })),
   enabled: Type.Optional(Type.Boolean()),
 });
 
@@ -68,7 +73,8 @@ export const ReportScheduleResponse = Type.Object({
   branch: Type.String(),
   cadence: ReportCadenceSchema,
   dayOfWeek: Type.Integer(),
-  hourUtc: Type.Integer(),
+  hour: Type.Integer(),
+  timezone: Type.String(),
   enabled: Type.Boolean(),
   nextRunAt: Type.String({ format: "date-time" }),
   lastRunAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
