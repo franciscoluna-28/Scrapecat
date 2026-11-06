@@ -33,6 +33,15 @@ import {
   removeSession as deleteChatSession,
   streamMessage as streamChatMessage,
 } from "@/chat/routes";
+import {
+  listReportSchedules,
+  createReportSchedule,
+  updateReportSchedule,
+  deleteReportSchedule,
+  runReportSchedule,
+  listReports as listReportRuns,
+  getReport as getReportById,
+} from "@/reports/routes";
 
 import { ErrorResponse } from "@/shared/typebox";
 import {
@@ -81,6 +90,18 @@ import {
   ConnectGitProviderBody,
   GitConnectionResponse,
 } from "@/gitConnections/schemas";
+import {
+  CreateReportScheduleBody,
+  UpdateReportScheduleBody,
+  ReportScheduleIdParams,
+  ReportScheduleListResponse,
+  ReportScheduleResponse,
+  RunReportScheduleResponse,
+  ReportsQuery,
+  ReportsListResponse,
+  ReportIdParams,
+  ReportResponse,
+} from "@/reports/schemas";
 
 export function registerRoutes(app: FastifyInstance) {
   registerSystemRoutes(app);
@@ -91,6 +112,7 @@ export function registerRoutes(app: FastifyInstance) {
   registerCredentialRoutes(app);
   registerSettingsRoutes(app);
   registerChatRoutes(app);
+  registerReportRoutes(app);
 }
 
 function registerSystemRoutes(app: FastifyInstance) {
@@ -284,6 +306,108 @@ function registerSettingsRoutes(app: FastifyInstance) {
       response: { 200: AISettingsGetResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
   }, updateSettingsRoute);
+}
+
+function registerReportRoutes(app: FastifyInstance) {
+  app.get("/api/v1/report-schedules", {
+    schema: {
+      description: "List scheduled repository summaries",
+      tags: ["reports"],
+      response: {
+        200: ReportScheduleListResponse,
+        403: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, listReportSchedules);
+
+  app.post("/api/v1/report-schedules", {
+    schema: {
+      description: "Create a daily or weekly summary schedule for a project branch",
+      tags: ["reports"],
+      body: CreateReportScheduleBody,
+      response: {
+        201: ReportScheduleResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, createReportSchedule);
+
+  app.patch("/api/v1/report-schedules/:id", {
+    schema: {
+      description: "Update a summary schedule",
+      tags: ["reports"],
+      params: ReportScheduleIdParams,
+      body: UpdateReportScheduleBody,
+      response: {
+        200: ReportScheduleResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, updateReportSchedule);
+
+  app.delete("/api/v1/report-schedules/:id", {
+    schema: {
+      description: "Delete a summary schedule",
+      tags: ["reports"],
+      params: ReportScheduleIdParams,
+      response: {
+        204: {},
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, deleteReportSchedule);
+
+  app.post("/api/v1/report-schedules/:id/run", {
+    schema: {
+      description: "Run a summary schedule now without moving its next run",
+      tags: ["reports"],
+      params: ReportScheduleIdParams,
+      response: {
+        202: RunReportScheduleResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, runReportSchedule);
+
+  app.get("/api/v1/reports", {
+    schema: {
+      description: "List generated repository summaries, newest first",
+      tags: ["reports"],
+      querystring: ReportsQuery,
+      response: {
+        200: ReportsListResponse,
+        403: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, listReportRuns);
+
+  app.get("/api/v1/reports/:id", {
+    schema: {
+      description: "Get a generated repository summary with its source commits",
+      tags: ["reports"],
+      params: ReportIdParams,
+      response: {
+        200: ReportResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+      },
+    },
+  }, getReportById);
 }
 
 function registerChatRoutes(app: FastifyInstance) {
