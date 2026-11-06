@@ -11,8 +11,7 @@
     "typegen": "next typegen",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "codegen": "openapi-typescript http://localhost:4000/docs/json -o ./src/shared/api/types.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

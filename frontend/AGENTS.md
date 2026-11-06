@@ -10,7 +10,7 @@ tracked in [`docs/frontend-tech-debt.md`](../docs/frontend-tech-debt.md).
 - Typecheck: `pnpm typecheck` (`next typegen && tsc --noEmit`)
 - Lint: `pnpm lint`
 - Tests: `pnpm test` (`vitest run`)
-- Regenerate API types: `pnpm codegen` from the repo root (starts the backend)
+- Regenerate API types: `pnpm codegen` from the repo root (builds the backend app in-process; no running server or database needed)
 
 ## API boundary
 
