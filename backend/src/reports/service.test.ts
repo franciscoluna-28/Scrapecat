@@ -127,6 +127,108 @@ function makeService() {
   };
 }
 
+function makeStatefulService(
+  initialSchedule: ReportScheduleRow,
+  initialNow: Date,
+) {
+  let now = initialNow;
+  let schedule = { ...initialSchedule };
+  const reports: Array<Record<string, unknown>> = [];
+
+  const store = {
+    getSchedule: vi.fn(async () => ({ ...schedule })),
+    listDueSchedules: vi.fn(async (at: Date) =>
+      schedule.enabled &&
+      schedule.nextRunAt.getTime() <= at.getTime() &&
+      schedule.lastStatus !== "running"
+        ? [{ ...schedule }]
+        : [],
+    ),
+    claimSchedule: vi.fn(
+      async (input: { id: string; nextRunAt: Date; now: Date }) => {
+        if (
+          schedule.nextRunAt.getTime() > input.now.getTime() ||
+          schedule.lastStatus === "running"
+        ) {
+          return null;
+        }
+        schedule = {
+          ...schedule,
+          nextRunAt: input.nextRunAt,
+          lastRunAt: input.now,
+          lastStatus: "running",
+          lastError: null,
+          updatedAt: input.now,
+        };
+        return { ...schedule };
+      },
+    ),
+    markScheduleRunning: vi.fn(
+      async (input: { id: string; now: Date; nextRunAt?: Date }) => {
+        if (schedule.lastStatus === "running") return null;
+        schedule = {
+          ...schedule,
+          ...(input.nextRunAt ? { nextRunAt: input.nextRunAt } : {}),
+          lastRunAt: input.now,
+          lastStatus: "running",
+          lastError: null,
+          updatedAt: input.now,
+        };
+        return { ...schedule };
+      },
+    ),
+    markScheduleSucceeded: vi.fn(
+      async (input: { id: string; periodEnd: Date; now: Date }) => {
+        schedule = {
+          ...schedule,
+          lastStatus: "succeeded",
+          lastSuccessAt: input.periodEnd,
+          lastError: null,
+          updatedAt: input.now,
+        };
+      },
+    ),
+    markScheduleFailed: vi.fn(
+      async (input: { id: string; error: string; now: Date }) => {
+        schedule = {
+          ...schedule,
+          lastStatus: "failed",
+          lastError: input.error,
+          updatedAt: input.now,
+        };
+      },
+    ),
+    createReport: vi.fn(async (input: Record<string, unknown>) => {
+      reports.push(input);
+      return input;
+    }),
+  };
+
+  const service = createReportsService({
+    store: store as never,
+    projects: {
+      getProjectById: vi.fn(async () => makeProject()),
+    } as never,
+    commits: {
+      listCommitsForProject: vi.fn(async () => []),
+    } as never,
+    ai: { generate: vi.fn() } as never,
+    resolveModel: vi.fn() as never,
+    prepareBranch: vi.fn(async () => ({ branch: "main" })) as never,
+    branchExists: vi.fn(async () => true),
+    now: () => now,
+  });
+
+  return {
+    service,
+    reports,
+    getSchedule: () => schedule,
+    setNow: (value: Date) => {
+      now = value;
+    },
+  };
+}
+
 describe("createReportsService", () => {
   let deps: ReturnType<typeof makeService>;
 
@@ -327,6 +429,77 @@ describe("createReportsService", () => {
     await deps.service.runDueSchedules();
 
     expect(deps.prepareBranch).not.toHaveBeenCalled();
+  });
+
+  it("advances a due schedule when it is run manually", async () => {
+    const row = makeScheduleRow();
+    deps.store.getSchedule.mockResolvedValue(row);
+    deps.store.markScheduleRunning.mockResolvedValue(row);
+    deps.prepareBranch.mockRejectedValue(new Error("stop"));
+
+    await deps.service.startScheduleRun(SCHEDULE_ID);
+
+    expect(deps.store.markScheduleRunning).toHaveBeenCalledWith({
+      id: SCHEDULE_ID,
+      now: NOW,
+      nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+    });
+  });
+
+  it("does not move the next run when the schedule is not due", async () => {
+    const row = makeScheduleRow({
+      nextRunAt: new Date("2026-01-11T09:00:00.000Z"),
+    });
+    deps.store.getSchedule.mockResolvedValue(row);
+    deps.store.markScheduleRunning.mockResolvedValue(row);
+    deps.prepareBranch.mockRejectedValue(new Error("stop"));
+
+    await deps.service.startScheduleRun(SCHEDULE_ID);
+
+    expect(deps.store.markScheduleRunning).toHaveBeenCalledWith({
+      id: SCHEDULE_ID,
+      now: NOW,
+      nextRunAt: undefined,
+    });
+  });
+
+  it("keeps the Friday 9am run after a manual 8am run", async () => {
+    const previousRun = new Date("2026-01-02T09:00:00.000Z");
+    const manualRunAt = new Date("2026-01-09T08:00:00.000Z");
+    const scheduledRunAt = new Date("2026-01-09T09:00:00.000Z");
+    const schedule = makeScheduleRow({
+      cadence: "weekly",
+      dayOfWeek: 5,
+      hourUtc: 9,
+      nextRunAt: scheduledRunAt,
+      lastSuccessAt: previousRun,
+    });
+    const state = makeStatefulService(schedule, manualRunAt);
+
+    await state.service.startScheduleRun(SCHEDULE_ID);
+    await vi.waitFor(() => expect(state.reports).toHaveLength(1));
+
+    expect(state.getSchedule().nextRunAt).toEqual(scheduledRunAt);
+    expect(state.reports[0]).toEqual(
+      expect.objectContaining({
+        periodStart: previousRun,
+        periodEnd: manualRunAt,
+      }),
+    );
+
+    state.setNow(scheduledRunAt);
+    await state.service.runDueSchedules();
+    await vi.waitFor(() => expect(state.reports).toHaveLength(2));
+
+    expect(state.getSchedule().nextRunAt).toEqual(
+      new Date("2026-01-16T09:00:00.000Z"),
+    );
+    expect(state.reports[1]).toEqual(
+      expect.objectContaining({
+        periodStart: manualRunAt,
+        periodEnd: scheduledRunAt,
+      }),
+    );
   });
 
   it("rejects a manual run when the schedule is already running", async () => {

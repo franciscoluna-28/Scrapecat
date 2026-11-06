@@ -416,7 +416,14 @@ export function createReportsService(
     if (!current) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
 
     const now = deps.now();
-    const claimed = await deps.store.markScheduleRunning(id, now);
+    const claimed = await deps.store.markScheduleRunning({
+      id,
+      now,
+      nextRunAt:
+        current.nextRunAt.getTime() <= now.getTime()
+          ? computeNextRun(current, now)
+          : undefined,
+    });
     if (!claimed) throw new Error(REPORT_ERROR_MESSAGES.scheduleRunning);
 
     void executeSchedule(claimed, now).catch((error) => {

@@ -157,21 +157,23 @@ export function createReportsStore(client: DbOrTx = db) {
       return row ?? null;
     },
 
-    async markScheduleRunning(
-      id: string,
-      now: Date,
-    ): Promise<ReportScheduleRow | null> {
+    async markScheduleRunning(input: {
+      id: string;
+      now: Date;
+      nextRunAt?: Date;
+    }): Promise<ReportScheduleRow | null> {
       const [row] = await client
         .update(reportSchedules)
         .set({
-          lastRunAt: now,
+          ...(input.nextRunAt ? { nextRunAt: input.nextRunAt } : {}),
+          lastRunAt: input.now,
           lastStatus: "running",
           lastError: null,
-          updatedAt: now,
+          updatedAt: input.now,
         })
         .where(
           and(
-            eq(reportSchedules.id, id),
+            eq(reportSchedules.id, input.id),
             ne(reportSchedules.lastStatus, "running"),
           ),
         )
