@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   customType,
   index,
   jsonb,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -206,4 +208,64 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const reportSchedules = pgTable(
+  "report_schedules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    cadence: text("cadence").default("daily").notNull(),
+    dayOfWeek: smallint("day_of_week").default(5).notNull(),
+    hourUtc: smallint("hour_utc").default(9).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastStatus: text("last_status").default("idle").notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectBranchIdx: uniqueIndex("report_schedules_project_branch_idx").on(
+      table.projectId,
+      table.branch,
+    ),
+    dueIdx: index("report_schedules_due_idx").on(table.enabled, table.nextRunAt),
+  }),
+);
+
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    summary: text("summary").notNull(),
+    sourceCommits: jsonb("source_commits")
+      .$type<ChatCitation[]>()
+      .default([])
+      .notNull(),
+    provider: text("provider"),
+    model: text("model"),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectBranchCreatedIdx: index("reports_project_branch_created_idx").on(
+      table.projectId,
+      table.branch,
+      table.createdAt,
+    ),
+    createdIdx: index("reports_created_idx").on(table.createdAt),
+  }),
+);
+
+export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
+export type ReportRow = typeof reports.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];
