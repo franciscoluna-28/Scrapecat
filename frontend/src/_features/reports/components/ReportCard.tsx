@@ -54,7 +54,7 @@ export function ReportCard({ report, schedule, onOpen }: Props) {
             <p className="text-xs text-muted-foreground">
               {report.provider && report.model
                 ? `${report.provider}/${report.model}`
-                : "No model used"}
+                : "Quiet period — no commits to summarize"}
             </p>
             {schedule && (
               <p className="text-xs text-muted-foreground">

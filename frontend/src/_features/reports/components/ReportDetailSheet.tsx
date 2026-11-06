@@ -68,10 +68,12 @@ export function ReportDetailSheet({ reportId, open, onOpenChange }: Props) {
                     <FileText data-icon="inline-start" />
                     {formatPeriod(report.periodStart, report.periodEnd)}
                   </Badge>
-                  {report.provider && report.model && (
+                  {report.provider && report.model ? (
                     <Badge variant="secondary">
                       {report.provider}/{report.model}
                     </Badge>
+                  ) : (
+                    <Badge variant="outline">Quiet period</Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
