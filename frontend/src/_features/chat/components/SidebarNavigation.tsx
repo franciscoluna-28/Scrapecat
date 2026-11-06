@@ -6,10 +6,16 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/src/components/ui/sidebar";
-import { Key, Settings } from "lucide-react";
+import { Key, LayoutDashboard, Settings } from "lucide-react";
 import { IS_DEMO } from "@/src/shared/constants";
 
 const NAV_ITEMS = [
+  {
+    id: "reports",
+    label: "Reports",
+    icon: LayoutDashboard,
+    route: "/app/dashboard",
+  },
   { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
   { id: "settings", label: "Settings", icon: Settings, route: "/app/settings" },
 ] as const;
