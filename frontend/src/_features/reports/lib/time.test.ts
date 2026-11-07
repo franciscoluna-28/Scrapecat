@@ -4,10 +4,14 @@ import {
   cadenceSummary,
   formatHourLocal,
   formatInTimeZone,
+  formatNextRun,
+  formatNextRunRelative,
+  formatPeriodDate,
   formatPeriodUtc,
   formatRelativeTime,
   formatUtc,
   formatUtcWithLocal,
+  friendlyTimeZoneLabel,
   localCadenceLabel,
   summaryPreview,
 } from "./time";
@@ -83,6 +87,16 @@ describe("formatting", () => {
     ).toBe("Jan 2, 09:00 – Jan 9, 09:00 UTC");
   });
 
+  it("formats a compact date-only report period", () => {
+    expect(
+      formatPeriodDate(
+        "2026-10-31T17:58:00.000Z",
+        "2026-11-07T17:58:00.000Z",
+        "en-US",
+      ),
+    ).toBe("Oct 31 – Nov 7");
+  });
+
   it("formats local hours", () => {
     expect(formatHourLocal(9)).toMatch(/9:00/);
   });
@@ -91,5 +105,40 @@ describe("formatting", () => {
     expect(
       summaryPreview("## Shipped\n\n- **Reports** and `schedules`"),
     ).toBe("Shipped - Reports and schedules");
+  });
+});
+
+describe("next run", () => {
+  // 12:00 in Caracas (UTC-4).
+  const nextRunAt = "2026-11-09T16:00:00.000Z";
+
+  it("renders the next run in the schedule timezone, 12-hour", () => {
+    expect(formatNextRun(nextRunAt, "America/Caracas", "en-US")).toBe(
+      "Mon, Nov 9, 12:00 PM",
+    );
+  });
+
+  it("shortens timezone ids to a friendly label", () => {
+    expect(friendlyTimeZoneLabel("America/Caracas")).toBe("Caracas");
+    expect(friendlyTimeZoneLabel("America/Argentina/Buenos_Aires")).toBe(
+      "Buenos Aires",
+    );
+    expect(friendlyTimeZoneLabel("UTC")).toBe("UTC");
+    expect(friendlyTimeZoneLabel("")).toBe("UTC");
+    expect(friendlyTimeZoneLabel(undefined)).toBe("UTC");
+  });
+
+  it("counts down to the next run", () => {
+    const now = new Date("2026-11-06T16:00:00.000Z");
+    expect(formatNextRunRelative(nextRunAt, now, "en-US")).toBe("in 3 days");
+  });
+
+  it("says Due now within a minute and Overdue after it", () => {
+    expect(
+      formatNextRunRelative(nextRunAt, new Date("2026-11-09T15:59:30.000Z")),
+    ).toBe("Due now");
+    expect(
+      formatNextRunRelative(nextRunAt, new Date("2026-11-09T16:30:00.000Z")),
+    ).toBe("Overdue");
   });
 });

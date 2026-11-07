@@ -14,17 +14,15 @@ import { Skeleton } from "@/src/components/ui/skeleton";
 import { ReportCard } from "@/src/_features/reports/components/ReportCard";
 import {
   useReports,
-  type ReportSchedule,
   type ReportSummary,
 } from "@/src/_features/reports/services/reports-api";
 import { errorMessage } from "@/src/shared/api/client";
 
 type Props = {
-  schedules: ReportSchedule[];
   onOpen: (report: ReportSummary) => void;
 };
 
-export function ReportFeed({ schedules, onOpen }: Props) {
+export function ReportFeed({ onOpen }: Props) {
   const { reports, isLoading, error, refetch } = useReports();
 
   if (isLoading) {
@@ -73,16 +71,7 @@ export function ReportFeed({ schedules, onOpen }: Props) {
   return (
     <div className="space-y-3">
       {reports.map((report) => (
-        <ReportCard
-          key={report.id}
-          report={report}
-          schedule={schedules.find(
-            (schedule) =>
-              schedule.projectId === report.projectId &&
-              schedule.branch === report.branch,
-          )}
-          onOpen={onOpen}
-        />
+        <ReportCard key={report.id} report={report} onOpen={onOpen} />
       ))}
     </div>
   );

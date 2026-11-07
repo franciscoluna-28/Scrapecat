@@ -53,6 +53,44 @@ export function formatUtcWithLocal(date: string | Date): {
   };
 }
 
+/** Short, human timezone name: "America/Caracas" → "Caracas". */
+export function friendlyTimeZoneLabel(timeZone?: string): string {
+  if (!timeZone) return "UTC";
+  const segment = timeZone.split("/").pop() ?? timeZone;
+  return segment.replace(/_/g, " ");
+}
+
+/** The next run in the schedule's timezone, 12-hour, e.g. "Mon, Nov 9, 9:00 AM". */
+export function formatNextRun(
+  date: string | Date,
+  timeZone?: string,
+  locale?: string,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    ...(timeZone ? { timeZone } : {}),
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
+/**
+ * Countdown to the next run: "in 3 days", "Due now" (within a minute),
+ * or "Overdue" — a past next-run must never read as "3 hours ago".
+ */
+export function formatNextRunRelative(
+  date: string | Date,
+  now: Date = new Date(),
+  locale?: string,
+): string {
+  const diffMs = new Date(date).getTime() - now.getTime();
+  if (Math.abs(diffMs) <= 60_000) return "Due now";
+  if (diffMs < 0) return "Overdue";
+  return formatRelativeTime(date, now, locale);
+}
+
 export function formatRelativeTime(
   date: string | Date,
   now: Date = new Date(),
@@ -82,6 +120,19 @@ export function formatPeriod(start: string | Date, end: string | Date): string {
     minute: "2-digit",
     hour12: false,
     timeZoneName: "short",
+  });
+  return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))}`;
+}
+
+/** Date-only period for compact list rows: "Oct 31 – Nov 7". */
+export function formatPeriodDate(
+  start: string | Date,
+  end: string | Date,
+  locale?: string,
+): string {
+  const formatter = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
   });
   return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))}`;
 }

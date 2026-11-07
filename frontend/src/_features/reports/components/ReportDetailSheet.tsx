@@ -8,7 +8,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/src/components/ui/sheet";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Badge } from "@/src/components/ui/badge";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { MessageResponse } from "@/src/components/ai-elements/message";
@@ -29,14 +28,19 @@ type Props = {
 
 export function ReportDetailSheet({ reportId, open, onOpenChange }: Props) {
   const { report, isLoading, error } = useReport(reportId);
-  const period = report
-    ? formatUtcWithLocal(report.periodEnd)
-    : null;
+  const period = report ? formatUtcWithLocal(report.periodEnd) : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl">
-        <SheetHeader className="border-b">
+      <SheetContent
+        tabIndex={-1}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).focus();
+        }}
+        className="flex flex-col gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-3xl"
+      >
+        <SheetHeader className="shrink-0 border-b px-6 py-4 pr-12">
           <SheetTitle>Report</SheetTitle>
           <SheetDescription>
             {report
@@ -46,7 +50,7 @@ export function ReportDetailSheet({ reportId, open, onOpenChange }: Props) {
         </SheetHeader>
 
         {isLoading && (
-          <div className="space-y-3 px-4">
+          <div className="space-y-3 overflow-y-auto px-6 py-5">
             <Skeleton className="h-6 w-2/3" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
@@ -54,13 +58,13 @@ export function ReportDetailSheet({ reportId, open, onOpenChange }: Props) {
         )}
 
         {error && (
-          <p className="px-4 text-sm text-destructive">
+          <p className="overflow-y-auto px-6 py-5 text-sm text-destructive">
             {errorMessage(error, "Failed to load report")}
           </p>
         )}
 
         {report && (
-          <ScrollArea className="flex-1 px-4 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <div className="space-y-5">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -86,7 +90,7 @@ export function ReportDetailSheet({ reportId, open, onOpenChange }: Props) {
 
               <SourceCommits commits={report.sourceCommits} />
             </div>
-          </ScrollArea>
+          </div>
         )}
       </SheetContent>
     </Sheet>

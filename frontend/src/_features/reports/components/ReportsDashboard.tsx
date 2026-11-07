@@ -27,7 +27,6 @@ import {
   type ReportSchedule,
   type ReportSummary,
 } from "@/src/_features/reports/services/reports-api";
-import { formatInTimeZone } from "@/src/_features/reports/lib/time";
 import { queryKeys } from "@/src/shared/services/keys";
 import { errorMessage } from "@/src/shared/api/client";
 
@@ -48,19 +47,10 @@ export function ReportsDashboard() {
   const [editing, setEditing] = useState<ReportSchedule | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const running = schedules.some(
     (schedule) => schedule.lastStatus === "running",
-  );
-  const nextSchedule = schedules.reduce<ReportSchedule | null>(
-    (earliest, schedule) =>
-      !earliest ||
-      new Date(schedule.nextRunAt).getTime() <
-        new Date(earliest.nextRunAt).getTime()
-        ? schedule
-        : earliest,
-    null,
   );
   const wasRunning = useRef(running);
 
@@ -85,7 +75,7 @@ export function ReportsDashboard() {
 
   const openReport = (report: ReportSummary) => {
     setSelectedReportId(report.id);
-    setSheetOpen(true);
+    setReportOpen(true);
   };
 
   const handleRun = (schedule: ReportSchedule) => {
@@ -129,8 +119,8 @@ export function ReportsDashboard() {
 
       <ReportDetailSheet
         reportId={selectedReportId}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        open={reportOpen}
+        onOpenChange={setReportOpen}
       />
 
       {projects.length === 0 ? (
@@ -156,19 +146,6 @@ export function ReportsDashboard() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-          <p className="text-sm text-muted-foreground">
-            Schedule branch summaries and review what shipped.
-          </p>
-          {nextSchedule && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Next report:{" "}
-              {formatInTimeZone(
-                nextSchedule.nextRunAt,
-                nextSchedule.timezone,
-              )}{" "}
-              ({nextSchedule.timezone})
-            </p>
-          )}
         </div>
         <Button onClick={openNew}>
           <Plus data-icon="inline-start" />
@@ -195,12 +172,7 @@ export function ReportsDashboard() {
       )}
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-medium">Schedules</h2>
-          <span className="text-xs text-muted-foreground">
-            {schedules.length} total
-          </span>
-        </div>
+        <h2 className="text-sm font-medium">Schedules</h2>
 
         {schedules.length === 0 ? (
           <Empty className="border">
@@ -221,7 +193,7 @@ export function ReportsDashboard() {
             </EmptyContent>
           </Empty>
         ) : (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="space-y-2">
             {schedules.map((schedule) => (
               <ScheduleCard
                 key={schedule.id}
@@ -248,7 +220,7 @@ export function ReportsDashboard() {
             </span>
           )}
         </div>
-        <ReportFeed schedules={schedules} onOpen={openReport} />
+        <ReportFeed onOpen={openReport} />
       </section>
         </>
       )}

@@ -43,7 +43,7 @@ describe("ScheduleCard", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("Monday–Friday at 12:00");
-    expect(text).toContain("America/Caracas");
+    expect(text).toContain("Caracas");
     expect(text).not.toContain("()");
     expect(text).not.toContain("5:00");
   });
