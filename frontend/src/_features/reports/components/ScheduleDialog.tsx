@@ -33,17 +33,18 @@ import {
   type Cadence,
 } from "@/src/_features/reports/lib/time";
 import { errorMessage } from "@/src/shared/api/client";
-import type { GitProviderId } from "@/src/shared/constants";
+import { ALLOW_ADD_REPOS, type GitProviderId } from "@/src/shared/constants";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   schedule?: ReportSchedule | null;
+  onConnectRepository?: () => void;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
-export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
+export function ScheduleDialog({ open, onOpenChange, schedule, onConnectRepository }: Props) {
   const { projects } = useProjects();
   const initialProject = projects[0];
   const [projectId, setProjectId] = useState(
@@ -132,7 +133,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
             {isEditing ? "Edit summary schedule" : "New summary schedule"}
           </DialogTitle>
           <DialogDescription>
-            Times use {timezone}. Daily reports run Monday–Friday.
+            Times use {timezone}. Weekday reports run Monday–Friday.
           </DialogDescription>
         </DialogHeader>
 
@@ -165,6 +166,17 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
               <p className="text-xs text-muted-foreground">
                 Connect a repository before creating a schedule.
               </p>
+            )}
+            {ALLOW_ADD_REPOS && onConnectRepository && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto justify-start p-0 text-xs"
+                onClick={onConnectRepository}
+              >
+                Connect repository
+              </Button>
             )}
           </div>
 
@@ -202,7 +214,7 @@ export function ScheduleDialog({ open, onOpenChange, schedule }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
+                <SelectItem value="daily">Weekdays (Mon–Fri)</SelectItem>
                 <SelectItem value="weekly">Weekly</SelectItem>
               </SelectContent>
             </Select>

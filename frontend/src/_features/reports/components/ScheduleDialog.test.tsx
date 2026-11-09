@@ -66,6 +66,20 @@ describe("ScheduleDialog", () => {
     mocks.onOpenChange.mockReset();
   });
 
+  it("labels the weekday cadence accurately", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <ScheduleDialog open onOpenChange={mocks.onOpenChange} />,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Cadence" }));
+
+    expect(
+      screen.getByRole("option", { name: "Weekdays (Mon–Fri)" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Daily" })).not.toBeInTheDocument();
+  });
+
   it("submits 12pm as local hour 12 with the browser timezone", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
