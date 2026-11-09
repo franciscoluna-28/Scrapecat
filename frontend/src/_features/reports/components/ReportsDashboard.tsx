@@ -29,7 +29,6 @@ import {
 } from "@/src/_features/reports/services/reports-api";
 import { queryKeys } from "@/src/shared/services/keys";
 import { errorMessage } from "@/src/shared/api/client";
-import { ALLOW_ADD_REPOS } from "@/src/shared/constants";
 
 export function ReportsDashboard() {
   const queryClient = useQueryClient();
@@ -150,11 +149,6 @@ export function ReportsDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {ALLOW_ADD_REPOS && (
-            <Button variant="outline" onClick={() => setConnectOpen(true)}>
-              Connect repository
-            </Button>
-          )}
           <Button onClick={openNew}>
             <Plus data-icon="inline-start" />
             New schedule
