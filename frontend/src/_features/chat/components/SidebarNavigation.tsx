@@ -8,6 +8,7 @@ import {
 } from "@/src/components/ui/sidebar";
 import { Key, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
 import { IS_DEMO } from "@/src/shared/constants";
+import { isChatRoute } from "@/src/_features/chat/hooks/chat-url";
 
 const NAV_ITEMS = [
   {
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
 export function SidebarNavigation() {
   const router = useRouter();
   const pathname = usePathname();
+  const chatsActive = isChatRoute(pathname);
 
   return (
     <>
@@ -54,7 +56,11 @@ export function SidebarNavigation() {
           (item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
-                isActive={pathname.startsWith(item.route)}
+                isActive={
+                  item.id === "chats"
+                    ? chatsActive
+                    : pathname.startsWith(item.route)
+                }
                 onClick={() => router.push(item.route)}
                 tooltip={item.label}
               >
