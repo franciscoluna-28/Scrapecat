@@ -52,6 +52,21 @@ export function useChatSessions(projectId?: string) {
   };
 }
 
+/** Recent chats across every project, newest first. */
+export function useRecentChatSessions() {
+  const { data, error, isLoading, isFetching } = useQuery({
+    queryKey: queryKeys.chat.sessions(),
+    queryFn: () => unwrap(apiClient.GET("/api/v1/chat/sessions")),
+  });
+
+  return {
+    sessions: data?.sessions ?? [],
+    isLoading,
+    isFetching,
+    error: error ?? null,
+  };
+}
+
 export function useChatMessages(sessionId?: string) {
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: queryKeys.chat.messages(sessionId!),
@@ -79,6 +94,7 @@ export function useCreateChatSession() {
       unwrap(apiClient.POST("/api/v1/chat/sessions", { body: { projectId } })),
     onSuccess: (session) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(session.projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessionsAll });
     },
   });
 }
@@ -95,6 +111,7 @@ export function useDeleteChatSession() {
     onSuccess: (_data, sessionId) => {
       queryClient.removeQueries({ queryKey: queryKeys.chat.messages(sessionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessionsAll });
     },
   });
 }

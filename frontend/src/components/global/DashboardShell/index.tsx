@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import LogoImage from "@/public/logo.png";
 import {
   Sidebar,
@@ -14,11 +15,15 @@ import {
   SidebarTrigger,
 } from "@/src/components/ui/sidebar";
 import { TooltipProvider } from "@/src/components/ui/tooltip";
-import { ChatSidebarContent } from "@/src/_features/chat/components/ChatSidebarContent";
+import { SidebarChatSection } from "@/src/_features/chat/components/SidebarChatSection";
+import { SidebarNavigation } from "@/src/_features/chat/components/SidebarNavigation";
 import { ScrollContainerProvider } from "@/src/components/global/ScrollContainer";
 import { BRAND } from "@/src/shared/constants";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isChatRoute = pathname.startsWith("/app/chat");
+
   return (
     <TooltipProvider delayDuration={0}>
       <SidebarProvider defaultOpen={true}>
@@ -41,7 +46,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
-            <ChatSidebarContent />
+            {isChatRoute && <SidebarChatSection />}
+            <div className={isChatRoute ? "mt-auto" : undefined}>
+              <SidebarNavigation />
+            </div>
           </SidebarContent>
         </Sidebar>
         <SidebarInset className="flex flex-col h-svh overflow-hidden">
