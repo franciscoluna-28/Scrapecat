@@ -100,12 +100,9 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
     }
   }, [messages.length, streamingContentLength, sessionKey, scrollToBottom, scrollContainerRef]);
 
-  // Project switching: clear all stale chat queries so old sessions don't bleed.
-  useEffect(() => {
-    return () => {
-      queryClient.removeQueries({ queryKey: queryKeys.chat.all });
-    };
-  }, [projectId, queryClient]);
+  // Chat queries are keyed per project/session, so switching projects already
+  // isolates history. Do not remove the shared sessions query here: it powers
+  // the recent-chats list and removing it mid-flight can leave it loading.
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
@@ -189,6 +186,7 @@ export function useAIChat({ projectId, sessionId, branch }: UseAIChatOptions) {
       dispatch({ type: "clear", sessionKey: streamKey });
       await queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(sid) });
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessionsAll });
     } catch (error) {
       dispatch({ type: "error", sessionKey: `${projectId}:${sid ?? ""}` });
       toast.error(errorMessage(error, "Failed to send message"));
