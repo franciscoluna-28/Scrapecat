@@ -3,6 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ScheduleCard } from "./ScheduleCard";
 import type { ReportSchedule } from "@/src/_features/reports/services/reports-api";
 
+// Pin the browser timezone so the cross-timezone label is deterministic.
+vi.mock("@/src/_features/reports/lib/time", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/src/_features/reports/lib/time")>();
+  return { ...actual, browserTimeZone: () => "UTC" };
+});
+
 function schedule(overrides: Partial<ReportSchedule> = {}): ReportSchedule {
   return {
     id: "11111111-1111-4111-8111-111111111111",

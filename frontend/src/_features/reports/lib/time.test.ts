@@ -106,6 +106,32 @@ describe("formatting", () => {
       summaryPreview("## Shipped\n\n- **Reports** and `schedules`"),
     ).toBe("Shipped - Reports and schedules");
   });
+
+  it("strips the generated branch and period header", () => {
+    expect(
+      summaryPreview(
+        "Engineering Summary — feat/reports: Period: Nov 7, 2026 — Nov 9, 2026\n\nNew capabilities shipped.",
+      ),
+    ).toBe("New capabilities shipped.");
+  });
+
+  it("keeps only the first sentence", () => {
+    expect(
+      summaryPreview("Reports now ship daily. Schedules can be paused."),
+    ).toBe("Reports now ship daily.");
+  });
+
+  it("leaves a quiet-period summary untouched", () => {
+    expect(
+      summaryPreview("No meaningful changes shipped in this period."),
+    ).toBe("No meaningful changes shipped in this period.");
+  });
+
+  it("truncates long previews with an ellipsis", () => {
+    const result = summaryPreview("word ".repeat(40), 20);
+    expect(result.endsWith("…")).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(21);
+  });
 });
 
 describe("next run", () => {

@@ -211,6 +211,22 @@ export function summaryPreview(summary: string, maxLength = 240): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (plain.length <= maxLength) return plain;
-  return `${plain.slice(0, maxLength).trimEnd()}…`;
+  // The model often restates the repository branch and period as a header.
+  // Drop that boilerplate so the preview shows the actual summary.
+  const date =
+    "(?:[A-Z][a-z]{2,8}\\.?\\s+\\d{1,2},\\s*\\d{4}|\\d{4}-\\d{2}-\\d{2})";
+  const periodHeader = new RegExp(
+    `^.*?\\bperiod\\b:?\\s*${date}\\s*(?:to|–|—|-)\\s*${date}[\\.;:]?\\s*`,
+    "i",
+  );
+  const withoutHeader = plain
+    .replace(periodHeader, "")
+    .replace(/^engineering summary\b[^:]*:\s*/i, "")
+    .trim();
+
+  const sentence = withoutHeader.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
+  const text = sentence || withoutHeader;
+
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trimEnd()}…`;
 }

@@ -52,18 +52,16 @@ export function ReportCard({ report, onOpen }: Props) {
 
           <p className="truncate text-xs text-muted-foreground">
             {formatPeriodDate(report.periodStart, report.periodEnd)} ·{" "}
-            {formatRelativeTime(report.createdAt)}
-          </p>
-
-          <p className="truncate text-xs text-muted-foreground">
-            {summaryPreview(report.summary, 80)}
+            {summaryPreview(report.summary, 100)}
           </p>
         </div>
 
-        <ChevronRight
-          className="size-4 shrink-0 text-muted-foreground"
-          aria-hidden
-        />
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          <span className="whitespace-nowrap">
+            {formatRelativeTime(report.createdAt)}
+          </span>
+          <ChevronRight className="size-4 shrink-0" aria-hidden />
+        </div>
       </div>
     </button>
   );

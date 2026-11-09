@@ -73,6 +73,11 @@ export function ScheduleCard({
       ? relative.toLowerCase()
       : `next ${relative}`;
 
+  const showTimezone = timezone !== browserTimeZone();
+  const cadenceDetail = showTimezone
+    ? `${cadence} · ${friendlyTimeZoneLabel(timezone)} · ${nextHint}`
+    : `${cadence} · ${nextHint}`;
+
   return (
     <div
       aria-busy={busy}
@@ -102,8 +107,11 @@ export function ScheduleCard({
               </span>
             </div>
 
-            <p className="truncate text-xs text-muted-foreground">
-              {cadence} · {friendlyTimeZoneLabel(timezone)} · {nextHint}
+            <p
+              className="truncate text-xs text-muted-foreground"
+              title={cadenceDetail}
+            >
+              {cadenceDetail}
             </p>
 
             {!schedule.timezone && (
