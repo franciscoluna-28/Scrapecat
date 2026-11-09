@@ -1,66 +1,31 @@
-import { spawn, execSync } from "child_process";
-import http from "http";
+import { execSync } from "child_process";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
-const OPENAPI_JSON_URL = "http://localhost:4000/docs/json";
+const tempDir = mkdtempSync(join(tmpdir(), "scrapecat-openapi-"));
+const specPath = join(tempDir, "openapi.json");
+const encryptionKey =
+  process.env.ENCRYPTION_KEY || Buffer.alloc(32).toString("base64");
 
-function waitForServer(url: string, maxRetries = 60): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let retries = 0;
-    const check = () => {
-      retries++;
-      http
-        .get(url, (res) => {
-          res.resume();
-          if (res.statusCode === 200) resolve();
-          else if (retries < maxRetries) setTimeout(check, 500);
-          else reject(new Error("Server did not start"));
-        })
-        .on("error", () => {
-          if (retries < maxRetries) setTimeout(check, 500);
-          else reject(new Error("Server did not start"));
-        });
-    };
-    check();
-  });
+try {
+  console.log("Generating OpenAPI spec...");
+  execSync(
+    `pnpm --filter @scrapecat/backend exec tsx scripts/generate-openapi.ts "${specPath}"`,
+    {
+      stdio: "inherit",
+      cwd: process.cwd(),
+      env: { ...process.env, ENCRYPTION_KEY: encryptionKey },
+    },
+  );
+
+  console.log("Generating types...");
+  execSync(
+    `pnpm --filter frontend exec openapi-typescript "${specPath}" -o ./src/shared/api/types.ts`,
+    { stdio: "inherit", cwd: process.cwd() },
+  );
+
+  console.log("Types generated successfully.");
+} finally {
+  rmSync(tempDir, { recursive: true, force: true });
 }
-
-async function main() {
-  console.log("Starting backend...");
-  const backend = spawn("pnpm", ["--filter", "@scrapecat/backend", "dev"], {
-    stdio: "ignore",
-    shell: true,
-    env: { ...process.env, PORT: "4000" },
-  });
-
-  const stopBackend = () => {
-    if (!backend.pid) return;
-    try {
-      if (process.platform === "win32") {
-        execSync(`taskkill /pid ${backend.pid} /T /F`, { stdio: "ignore" });
-      } else {
-        backend.kill();
-      }
-    } catch {
-      // already stopped
-    }
-  };
-
-  let exitCode = 0;
-  try {
-    await waitForServer(OPENAPI_JSON_URL);
-    console.log("Backend is ready. Generating types...");
-    execSync(
-      "pnpm --filter frontend exec openapi-typescript http://localhost:4000/docs/json -o ./src/shared/api/types.ts",
-      { stdio: "inherit", cwd: process.cwd() },
-    );
-    console.log("Types generated successfully.");
-  } catch (err) {
-    console.error("Failed to generate types:", err);
-    exitCode = 1;
-  } finally {
-    stopBackend();
-    process.exit(exitCode);
-  }
-}
-
-main();

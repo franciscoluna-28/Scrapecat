@@ -6,17 +6,45 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/src/components/ui/sidebar";
-import { Key, Settings } from "lucide-react";
+import { Key, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
 import { IS_DEMO } from "@/src/shared/constants";
+import { isChatRoute } from "@/src/_features/chat/hooks/chat-url";
 
 const NAV_ITEMS = [
-  { id: "credentials", label: "API Keys", icon: Key, route: "/app/api-keys" },
-  { id: "settings", label: "Settings", icon: Settings, route: "/app/settings" },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: LayoutDashboard,
+    route: "/app/dashboard",
+    demoHidden: true,
+  },
+  {
+    id: "chats",
+    label: "Chats",
+    icon: MessageSquare,
+    route: "/app/chat",
+    demoHidden: false,
+  },
+  {
+    id: "credentials",
+    label: "API Keys",
+    icon: Key,
+    route: "/app/api-keys",
+    demoHidden: true,
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: Settings,
+    route: "/app/settings",
+    demoHidden: false,
+  },
 ] as const;
 
 export function SidebarNavigation() {
   const router = useRouter();
   const pathname = usePathname();
+  const chatsActive = isChatRoute(pathname);
 
   return (
     <>
@@ -24,11 +52,15 @@ export function SidebarNavigation() {
         Navigation
       </p>
       <SidebarMenu className="gap-0">
-        {!IS_DEMO &&
-          NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => !(IS_DEMO && item.demoHidden)).map(
+          (item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
-                isActive={pathname.startsWith(item.route)}
+                isActive={
+                  item.id === "chats"
+                    ? chatsActive
+                    : pathname.startsWith(item.route)
+                }
                 onClick={() => router.push(item.route)}
                 tooltip={item.label}
               >
@@ -36,7 +68,8 @@ export function SidebarNavigation() {
                 <span>{item.label}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          ))}
+          ),
+        )}
         {IS_DEMO && (
           <SidebarMenuItem>
             <SidebarMenuButton

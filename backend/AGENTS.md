@@ -14,7 +14,7 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - Postgres integration tests: `pnpm test:integration` (requires a live DB — see `docs/testing.md`)
 - Retrieval eval: `pnpm eval` (optionally `--prepare` to ingest the golden-set branch; see `docs/evaluation.md`)
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
-- Codegen (frontend types): `pnpm codegen` from project root — starts backend, runs openapi-typescript, stops backend
+- Codegen (frontend types): `pnpm codegen` from project root — builds the Fastify app in-process, writes a temporary OpenAPI spec, and runs openapi-typescript; no backend server or database needed
 
 ## API layer (per-domain `routes.ts` + `src/app/register-routes.ts`)
 

@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
 import {
   Empty,
+  EmptyContent,
   EmptyHeader,
   EmptyTitle,
   EmptyDescription,
@@ -11,12 +15,22 @@ import {
 import { useAIChat } from "@/src/_features/chat/hooks/useAIChat";
 import { useChatProject } from "@/src/_features/chat/hooks/useChatProject";
 import { useAutoSendPrompt } from "@/src/_features/chat/hooks/useAutoSendPrompt";
+import { useProjects } from "@/src/_features/chat/services/projects-api";
+import { useActiveProjectStore } from "@/src/store/active-project";
 import { IS_DEMO, DEMO_PROJECTS } from "@/src/shared/constants";
+import { AddRepositoryDialog } from "./AddRepositoryDialog";
+import { NewChatDialog } from "./NewChatDialog";
 import { ChatMessages } from "./ChatMessages";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestions } from "./ChatSuggestions";
 
 export function Chat() {
+  const router = useRouter();
+  const { projects } = useProjects();
+  const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+
   const {
     projectId,
     sessionId,
@@ -41,6 +55,23 @@ export function Chat() {
   } = useAIChat({ projectId, sessionId, branch });
 
   useAutoSendPrompt({ projectId, isStreaming, messagesLoading, sendMessage });
+
+  const hasProjects = projects.length > 0;
+
+  const openProject = (projectId: string) => {
+    setLastProjectId(projectId);
+    setNewChatOpen(false);
+    setConnectOpen(false);
+    router.push(`/app/chat?project=${projectId}`);
+  };
+
+  const startChat = () => {
+    if (hasProjects) {
+      setNewChatOpen(true);
+    } else {
+      setConnectOpen(true);
+    }
+  };
 
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
@@ -78,9 +109,16 @@ export function Chat() {
               <EmptyHeader>
                 <EmptyTitle className="text-lg font-semibold">Welcome</EmptyTitle>
                 <EmptyDescription className="text-sm text-muted-foreground">
-                  Select or connect a repository from the sidebar to start asking questions about your code history.
+                  {hasProjects
+                    ? "Pick a project to start a chat, or connect a new repository."
+                    : "Connect a repository to start asking questions about its commits."}
                 </EmptyDescription>
               </EmptyHeader>
+              <EmptyContent>
+                <Button onClick={startChat}>
+                  {hasProjects ? "Start a chat" : "Connect a repository"}
+                </Button>
+              </EmptyContent>
             </Empty>
           </div>
         )
@@ -119,6 +157,21 @@ export function Chat() {
           </div>
         </div>
       )}
+
+      <NewChatDialog
+        open={newChatOpen}
+        onOpenChange={setNewChatOpen}
+        onSelectProject={openProject}
+        onConnectRepository={() => {
+          setNewChatOpen(false);
+          setConnectOpen(true);
+        }}
+      />
+      <AddRepositoryDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onProjectSelected={openProject}
+      />
     </div>
   );
 }

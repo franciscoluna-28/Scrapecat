@@ -2,6 +2,10 @@ import "dotenv/config.js";
 import { buildApp } from "@/build-app";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
+import {
+  startReportScheduler,
+  stopReportScheduler,
+} from "@/reports/scheduler";
 
 async function main() {
   const app = await buildApp();
@@ -12,6 +16,7 @@ async function main() {
       { host: env.HOST, port: env.PORT },
       `backend running at http://${env.HOST}:${env.PORT}`,
     );
+    startReportScheduler();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
@@ -23,6 +28,7 @@ async function main() {
     shuttingDown = true;
     logger.info({ signal }, "shutting down");
     try {
+      stopReportScheduler();
       await app.close();
       process.exit(0);
     } catch (err) {
