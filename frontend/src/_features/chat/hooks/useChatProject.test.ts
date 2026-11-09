@@ -110,14 +110,14 @@ describe("resolveActiveProjectId", () => {
     ).toBe("p2");
   });
 
-  it("falls back to the first project when there is no history", () => {
+  it("does not auto-select the first project when there is no history", () => {
     expect(
       resolveActiveProjectId({
         ...base,
         projectParam: null,
         lastProjectId: null,
       }),
-    ).toBe("p1");
+    ).toBeNull();
   });
 
   it("does not auto-select while loading, in demo mode, or with no projects", () => {

@@ -24,8 +24,9 @@ type ResolveActiveProjectIdOptions = {
 };
 
 /**
- * Falls back to the last-used (or first) project when the URL has no `project`
- * param, so `/app` works without a redirect effect.
+ * Resolves the active project from the URL. Falls back to the last-used project
+ * only when the URL has no `project` param (e.g. `/app/chat`), so a fresh visit
+ * never silently starts a chat against the first connected project.
  */
 export function resolveActiveProjectId({
   projectParam,
@@ -36,7 +37,7 @@ export function resolveActiveProjectId({
 }: ResolveActiveProjectIdOptions): string | null {
   if (projectParam) return projectParam;
   if (isDemo || projectsLoading) return null;
-  return projects.find((p) => p.id === lastProjectId)?.id ?? projects[0]?.id ?? null;
+  return projects.find((p) => p.id === lastProjectId)?.id ?? null;
 }
 
 /**
