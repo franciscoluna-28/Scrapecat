@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import type { Static } from "@sinclair/typebox";
-import { ModelsQuery } from "@/api/models/schemas";
+import { ModelsQuery } from "@/api/settings/schemas";
 import { env } from "@/shared/config/env";
 import {
   getCatalogModels,

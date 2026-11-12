@@ -15,8 +15,8 @@ vi.mock("@/shared/integrations/git-provider", () => ({
 const mockGetProjectByOwnerRepo = vi.fn();
 const mockListCommitsForProject = vi.fn();
 
-vi.mock("@/api/projects/stores/projects-store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/api/projects/stores/projects-store")>();
+vi.mock("@/api/repositories/stores/projects-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/repositories/stores/projects-store")>();
   return {
     ...actual,
     projectsStore: {

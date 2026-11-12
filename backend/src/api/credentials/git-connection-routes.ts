@@ -5,11 +5,11 @@ import {
   connectGitProvider,
   disconnectGitProvider,
   getGitProviderConnection,
-} from "@/api/gitConnections/services";
+} from "@/api/credentials/git-connections";
 import {
   ConnectGitProviderBody,
   GitProviderParams,
-} from "@/api/gitConnections/schemas";
+} from "@/api/credentials/schemas";
 
 export async function connectProvider(
   req: FastifyRequest,

@@ -8,8 +8,8 @@ import {
 import { retriever } from "@/rag/retrieval/retrieve";
 import { createTurnResolver, type TurnHistoryMessage } from "@/rag/answer/turn";
 import type { ChatMessageDTO } from "@/api/chat/schemas";
-import { projectsStore } from "@/api/projects/stores/projects-store";
-import { prepareProjectBranch } from "@/api/projects/services";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
+import { prepareProjectBranch } from "@/api/repositories/services";
 import type { IngestProgress } from "@/rag/indexing/ingest";
 
 export type ChatStreamOptions = {

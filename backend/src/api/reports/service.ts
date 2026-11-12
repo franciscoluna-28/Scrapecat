@@ -2,9 +2,9 @@ import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { type AIResponse, aiClient, resolveChatModel } from "@/rag/answer/ai";
-import { projectsStore } from "@/api/projects/stores/projects-store";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
-import { prepareProjectBranch } from "@/api/projects/services";
+import { prepareProjectBranch } from "@/api/repositories/services";
 import {
   createReportsStore,
   type ReportScheduleView,

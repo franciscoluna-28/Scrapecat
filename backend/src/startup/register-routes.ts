@@ -1,31 +1,30 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "@/shared/config/env";
-import { health, ready } from "@/api/health/routes";
-import { getMeta } from "@/api/meta/routes";
-import { listModels } from "@/api/models/routes";
+import { health, ready, getMeta } from "@/api/system/routes";
+import { listModels } from "@/api/settings/models";
 import {
   listRepositories,
   listBranches,
   listCommits,
   countCommits,
-} from "@/api/gitRepositories/routes";
+} from "@/api/repositories/discovery";
 import {
   listProjects,
   prepareBranch,
   createProject as createProjectRoute,
-} from "@/api/projects/routes";
+} from "@/api/repositories/routes";
 import {
   listKeys as listCredentials,
   addKey as addCredential,
   deleteKey as deleteCredential,
   verifyKey as verifyCredential,
 } from "@/api/credentials/routes";
-import { getSettingsRoute, updateSettingsRoute } from "@/api/settings/routes";
 import {
   connectProvider,
   getProviderConnection,
   disconnectProvider,
-} from "@/api/gitConnections/routes";
+} from "@/api/credentials/git-connection-routes";
+import { getSettingsRoute, updateSettingsRoute } from "@/api/settings/routes";
 import {
   createSession as createChatSession,
   listSessions as listChatSessions,
@@ -54,9 +53,17 @@ import {
   SendMessageBody,
   DeleteSessionResponse,
 } from "@/api/chat/schemas";
-import { HealthReadyResponse, HealthResponse } from "@/api/health/schemas";
-import { MetaResponse } from "@/api/meta/schemas";
-import { ModelsQuery, ModelsResponse } from "@/api/models/schemas";
+import {
+  HealthReadyResponse,
+  HealthResponse,
+  MetaResponse,
+} from "@/api/system/schemas";
+import {
+  AISettingsBody,
+  AISettingsGetResponse,
+  ModelsQuery,
+  ModelsResponse,
+} from "@/api/settings/schemas";
 import {
   RepoOwnerParams,
   BranchesQuery,
@@ -67,15 +74,13 @@ import {
   RepositoriesQuery,
   RepositoriesResponse,
   BranchesResponse,
-} from "@/api/gitRepositories/schemas";
-import {
   PrepareBranchBody,
   PrepareBranchResponse,
   ProjectIdParams,
   CreateProjectBody,
   CreateProjectResponse,
   ProjectsResponse,
-} from "@/api/projects/schemas";
+} from "@/api/repositories/schemas";
 import {
   AddCredentialBody,
   CredentialListResponse,
@@ -83,13 +88,10 @@ import {
   CredentialIdParams,
   VerifyCredentialBody,
   VerifyCredentialResponse,
-} from "@/api/credentials/schemas";
-import { AISettingsBody, AISettingsGetResponse } from "@/api/settings/schemas";
-import {
   GitProviderParams,
   ConnectGitProviderBody,
   GitConnectionResponse,
-} from "@/api/gitConnections/schemas";
+} from "@/api/credentials/schemas";
 import {
   CreateReportScheduleBody,
   UpdateReportScheduleBody,
@@ -105,11 +107,8 @@ import {
 
 export function registerRoutes(app: FastifyInstance) {
   registerSystemRoutes(app);
-  registerGitProviderRoutes(app);
-  registerModelRoutes(app);
-  registerRepositoryRoutes(app);
-  registerProjectRoutes(app);
   registerCredentialRoutes(app);
+  registerRepositoryRoutes(app);
   registerSettingsRoutes(app);
   registerChatRoutes(app);
   registerReportRoutes(app);
@@ -141,7 +140,42 @@ function registerSystemRoutes(app: FastifyInstance) {
   }, getMeta);
 }
 
-function registerGitProviderRoutes(app: FastifyInstance) {
+function registerCredentialRoutes(app: FastifyInstance) {
+  app.get("/api/v1/credentials", {
+    schema: {
+      description: "List stored credentials (key hints only, no full keys returned)",
+      tags: ["credentials"],
+      response: { 200: CredentialListResponse, 400: ErrorResponse },
+    },
+  }, listCredentials);
+
+  app.post("/api/v1/credentials", {
+    schema: {
+      description: "Store a new credential (API key encrypted at rest)",
+      tags: ["credentials"],
+      body: AddCredentialBody,
+      response: { 201: CredentialCreatedResponse, 400: ErrorResponse },
+    },
+  }, addCredential);
+
+  app.delete("/api/v1/credentials/:id", {
+    schema: {
+      description: "Delete a stored credential",
+      tags: ["credentials"],
+      params: CredentialIdParams,
+      response: { 204: {}, 404: ErrorResponse },
+    },
+  }, deleteCredential);
+
+  app.post("/api/v1/credentials/verify", {
+    schema: {
+      description: "Verify an API key against its provider",
+      tags: ["credentials"],
+      body: VerifyCredentialBody,
+      response: { 200: VerifyCredentialResponse, 400: ErrorResponse },
+    },
+  }, verifyCredential);
+
   app.post("/api/v1/git-providers/:provider/connection", {
     schema: {
       description: "Store a git provider token (connect an account)",
@@ -169,17 +203,6 @@ function registerGitProviderRoutes(app: FastifyInstance) {
       response: { 204: {}, 400: ErrorResponse, 404: ErrorResponse },
     },
   }, disconnectProvider);
-}
-
-function registerModelRoutes(app: FastifyInstance) {
-  app.get("/api/v1/models", {
-    schema: {
-      description: "List available AI models",
-      tags: ["models"],
-      querystring: ModelsQuery,
-      response: { 200: ModelsResponse, 400: ErrorResponse },
-    },
-  }, listModels);
 }
 
 function registerRepositoryRoutes(app: FastifyInstance) {
@@ -221,9 +244,7 @@ function registerRepositoryRoutes(app: FastifyInstance) {
       response: { 200: CommitsCountResponse, 400: ErrorResponse },
     },
   }, countCommits);
-}
 
-function registerProjectRoutes(app: FastifyInstance) {
   app.get("/api/v1/projects", {
     schema: {
       description: "List synced GitHub projects",
@@ -252,43 +273,6 @@ function registerProjectRoutes(app: FastifyInstance) {
   }, prepareBranch);
 }
 
-function registerCredentialRoutes(app: FastifyInstance) {
-  app.get("/api/v1/credentials", {
-    schema: {
-      description: "List stored credentials (key hints only, no full keys returned)",
-      tags: ["credentials"],
-      response: { 200: CredentialListResponse, 400: ErrorResponse },
-    },
-  }, listCredentials);
-
-  app.post("/api/v1/credentials", {
-    schema: {
-      description: "Store a new credential (API key encrypted at rest)",
-      tags: ["credentials"],
-      body: AddCredentialBody,
-      response: { 201: CredentialCreatedResponse, 400: ErrorResponse },
-    },
-  }, addCredential);
-
-  app.delete("/api/v1/credentials/:id", {
-    schema: {
-      description: "Delete a stored credential",
-      tags: ["credentials"],
-      params: CredentialIdParams,
-      response: { 204: {}, 404: ErrorResponse },
-    },
-  }, deleteCredential);
-
-  app.post("/api/v1/credentials/verify", {
-    schema: {
-      description: "Verify an API key against its provider",
-      tags: ["credentials"],
-      body: VerifyCredentialBody,
-      response: { 200: VerifyCredentialResponse, 400: ErrorResponse },
-    },
-  }, verifyCredential);
-}
-
 function registerSettingsRoutes(app: FastifyInstance) {
   app.get("/api/v1/settings/ai", {
     schema: {
@@ -306,6 +290,15 @@ function registerSettingsRoutes(app: FastifyInstance) {
       response: { 200: AISettingsGetResponse, 400: ErrorResponse, 500: ErrorResponse },
     },
   }, updateSettingsRoute);
+
+  app.get("/api/v1/models", {
+    schema: {
+      description: "List available AI models",
+      tags: ["models"],
+      querystring: ModelsQuery,
+      response: { 200: ModelsResponse, 400: ErrorResponse },
+    },
+  }, listModels);
 }
 
 function registerReportRoutes(app: FastifyInstance) {

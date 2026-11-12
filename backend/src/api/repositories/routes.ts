@@ -1,8 +1,8 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { env } from "@/shared/config/env";
-import { projectsStore } from "@/api/projects/stores/projects-store";
-import { listProjects as listProjectsService, prepareProjectBranch } from "@/api/projects/services";
-import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/api/projects/schemas";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
+import { listProjects as listProjectsService, prepareProjectBranch } from "@/api/repositories/services";
+import { CreateProjectBody, PrepareBranchBody, ProjectIdParams } from "@/api/repositories/schemas";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import type { Static } from "@sinclair/typebox";

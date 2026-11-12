@@ -7,9 +7,9 @@ import {
   type ContextMetricsSummary,
 } from "@/rag/eval/metrics";
 import { resolveEmbeddingSpace } from "@/rag/indexing/embeddings";
-import { prepareProjectBranch } from "@/api/projects/services";
+import { prepareProjectBranch } from "@/api/repositories/services";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
-import { projectsStore } from "@/api/projects/stores/projects-store";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
 
 type ProjectRow = NonNullable<
   Awaited<ReturnType<typeof projectsStore.getProjectByOwnerRepo>>

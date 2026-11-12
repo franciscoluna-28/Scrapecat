@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/api/health/services", () => ({ checkDatabase: vi.fn() }));
+vi.mock("@/api/system/services", () => ({ checkDatabase: vi.fn() }));
 
-import { ready } from "@/api/health/routes";
-import { checkDatabase } from "@/api/health/services";
+import { ready } from "@/api/system/routes";
+import { checkDatabase } from "@/api/system/services";
 
 const mockedCheckDatabase = vi.mocked(checkDatabase);
 

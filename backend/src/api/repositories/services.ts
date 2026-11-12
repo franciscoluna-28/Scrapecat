@@ -1,7 +1,7 @@
 import { env } from "@/shared/config/env";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
-import { projectsStore } from "@/api/projects/stores/projects-store";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";

@@ -10,7 +10,7 @@ import {
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { restrictDemoBranches } from "@/shared/demo-branches";
 import { githubApiClient } from "@/rag/github/github-api";
-import { projectsStore } from "@/api/projects/stores/projects-store";
+import { projectsStore } from "@/api/repositories/stores/projects-store";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import type { Static } from "@sinclair/typebox";
 import {
@@ -19,7 +19,7 @@ import {
   CommitsQuery,
   CommitsCountQuery,
   RepositoriesQuery,
-} from "@/api/gitRepositories/schemas";
+} from "@/api/repositories/schemas";
 
 type RepositoryWithProvider = Repository & { provider: GitProviderId };
 
