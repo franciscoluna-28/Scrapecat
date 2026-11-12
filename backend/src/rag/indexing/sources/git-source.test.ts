@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockEnsureArchive = vi.fn();
 const mockListCommitsInRange = vi.fn();
-const mockGetCommitChangedFiles = vi.fn();
+const mockGetCommitsChangedFiles = vi.fn();
 
 vi.mock("@/rag/git/archive-service", () => ({
   ensureArchive: (...args: unknown[]) => mockEnsureArchive(...args),
@@ -13,7 +13,7 @@ vi.mock("@/rag/git/git-reader", () => ({
 }));
 
 vi.mock("@/rag/git/git-diff", () => ({
-  getCommitChangedFiles: (...args: unknown[]) => mockGetCommitChangedFiles(...args),
+  getCommitsChangedFiles: (...args: unknown[]) => mockGetCommitsChangedFiles(...args),
 }));
 
 import { createGitCommitSource } from "@/rag/indexing/sources/git-source";
@@ -38,7 +38,7 @@ const commit = {
 beforeEach(() => {
   mockEnsureArchive.mockReset().mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
   mockListCommitsInRange.mockReset().mockResolvedValue([commit]);
-  mockGetCommitChangedFiles.mockReset().mockResolvedValue(DIFF);
+  mockGetCommitsChangedFiles.mockReset().mockResolvedValue(new Map([["a", DIFF]]));
 });
 
 describe("createGitCommitSource", () => {
@@ -65,10 +65,9 @@ describe("createGitCommitSource", () => {
     const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
 
     expect(skipped).toBe(0);
-    expect(mockGetCommitChangedFiles).toHaveBeenCalledWith({
+    expect(mockGetCommitsChangedFiles).toHaveBeenCalledWith({
       dir: "/repo",
-      parentSha: null,
-      commitSha: "a",
+      shas: ["a"],
     });
     expect(inputs).toEqual([
       {
@@ -98,7 +97,7 @@ describe("createGitCommitSource", () => {
   });
 
   it("skips empty commits and counts them", async () => {
-    mockGetCommitChangedFiles.mockResolvedValue({ filesChanged: 0, files: [] });
+    mockGetCommitsChangedFiles.mockResolvedValue(new Map([["a", { filesChanged: 0, files: [] }]]));
     const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
@@ -108,16 +107,14 @@ describe("createGitCommitSource", () => {
     expect(skipped).toBe(1);
   });
 
-  it("passes the first parent to the diff for non-root commits", async () => {
+  it("skips commits missing from the batched diff result", async () => {
+    mockGetCommitsChangedFiles.mockResolvedValue(new Map());
     const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
     await source.listCommits({});
 
-    await source.toChunkInputs([{ ...commit, parentSha: "p0" }], CTX);
+    const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
 
-    expect(mockGetCommitChangedFiles).toHaveBeenCalledWith({
-      dir: "/repo",
-      parentSha: "p0",
-      commitSha: "a",
-    });
+    expect(inputs).toEqual([]);
+    expect(skipped).toBe(1);
   });
 });

@@ -17,12 +17,13 @@ const MAX_OUTPUT_BYTES = 100 * 1024 * 1024;
 export async function runGit(opts: {
   cwd?: string;
   args: string[];
+  input?: string;
   timeoutMs?: number;
   label?: string;
   env?: Record<string, string>;
 }): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "git",
       opts.args,
       {
@@ -44,6 +45,12 @@ export async function runGit(opts: {
         resolve(stdout);
       },
     );
+    if (opts.input !== undefined) {
+      // The child can exit before consuming stdin (e.g. bad revision); a
+      // swallowed EPIPE must not surface as an unhandled stream error.
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(opts.input);
+    }
   });
 }
 
