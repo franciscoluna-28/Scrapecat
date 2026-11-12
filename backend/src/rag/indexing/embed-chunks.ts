@@ -1,6 +1,6 @@
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { contentHashOf, embeddingSource } from "@/shared/utils";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
 import {
   embedTexts,

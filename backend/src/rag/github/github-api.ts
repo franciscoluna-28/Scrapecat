@@ -1,4 +1,4 @@
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { createOctokit, type OctokitClient } from "@/shared/integrations/git-provider/octokit";
 import { commitUrl } from "@/shared/integrations/git-provider/urls";
 

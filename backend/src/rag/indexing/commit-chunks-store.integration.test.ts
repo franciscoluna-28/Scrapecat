@@ -7,7 +7,7 @@ import {
   commitChunksStore,
   type CommitChunkInput,
 } from "@/rag/indexing/commit-chunks-store";
-import { projectsStore } from "@/projects/stores/projects-store";
+import { projectsStore } from "@/api/projects/stores/projects-store";
 
 const enabled = process.env.DB_INTEGRATION === "1";
 const SPACE_A = { provider: "openrouter", model: "model-a" };

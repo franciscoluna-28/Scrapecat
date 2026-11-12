@@ -2,7 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import type { ModelDescriptor } from "@/shared/integrations/providers/catalog";
 import {
   PROVIDER_USER_AGENT,

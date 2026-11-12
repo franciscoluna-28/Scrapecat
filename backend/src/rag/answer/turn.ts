@@ -10,7 +10,7 @@ import {
   resolvePersona,
 } from "@/rag/context/prompts";
 import { retriever } from "@/rag/retrieval/retrieve";
-import { projectsStore } from "@/projects/stores/projects-store";
+import { projectsStore } from "@/api/projects/stores/projects-store";
 import type { IngestProgress } from "@/rag/indexing/ingest";
 
 export const HISTORY_LIMIT = 20;

@@ -1,4 +1,4 @@
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 
 /**
  * Single GitLab HTTP construction point (auth + timeout + retry), mirroring

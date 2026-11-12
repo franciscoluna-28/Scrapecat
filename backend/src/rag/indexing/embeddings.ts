@@ -1,7 +1,7 @@
 import OpenAI from "openai";
-import { env } from "@/config/env";
-import { resolveApiKey } from "@/credentials/services";
-import { getAISettings } from "@/settings/services";
+import { env } from "@/shared/config/env";
+import { resolveApiKey } from "@/api/credentials/services";
+import { getAISettings } from "@/api/settings/services";
 import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 import {
   getProviderConfig,

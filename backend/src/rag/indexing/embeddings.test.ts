@@ -15,11 +15,11 @@ vi.mock("openai", () => {
   return { default: MockOpenAI };
 });
 
-vi.mock("@/credentials/services", () => ({
+vi.mock("@/api/credentials/services", () => ({
   resolveApiKey: vi.fn(async () => "sk-test"),
 }));
 
-vi.mock("@/settings/services", () => ({
+vi.mock("@/api/settings/services", () => ({
   getAISettings: vi.fn(async () => ({
     chatProvider: "openrouter",
     chatModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -28,7 +28,7 @@ vi.mock("@/settings/services", () => ({
   })),
 }));
 
-vi.mock("@/config/env", () => ({
+vi.mock("@/shared/config/env", () => ({
   env: {
     OPENROUTER_API_KEY: "",
     OLLAMA_BASE_URL: "http://localhost:11434",
@@ -38,7 +38,7 @@ vi.mock("@/config/env", () => ({
 }));
 
 import { embedTexts } from "@/rag/indexing/embeddings";
-import { resolveApiKey } from "@/credentials/services";
+import { resolveApiKey } from "@/api/credentials/services";
 import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 
 describe("embedTexts", () => {

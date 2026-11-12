@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
 import { timed } from "@/shared/timing";
 import { getArchiveStore, type ArchiveKey } from "@/shared/storage";

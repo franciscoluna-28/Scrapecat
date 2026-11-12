@@ -1,4 +1,4 @@
-import type { env } from "@/config/env";
+import type { env } from "@/shared/config/env";
 
 export type Protocol =
   | "openai-chat"

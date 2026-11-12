@@ -1,8 +1,8 @@
 import { generateText, streamText } from "ai";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
-import { resolveApiKey } from "@/credentials/services";
-import { getAISettings } from "@/settings/services";
+import { resolveApiKey } from "@/api/credentials/services";
+import { getAISettings } from "@/api/settings/services";
 import {
   resolveModel,
   type ModelDescriptor,

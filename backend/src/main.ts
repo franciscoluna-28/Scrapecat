@@ -1,11 +1,11 @@
 import "dotenv/config.js";
 import { buildApp } from "@/build-app";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
 import {
   startReportScheduler,
   stopReportScheduler,
-} from "@/reports/scheduler";
+} from "@/api/reports/scheduler";
 
 async function main() {
   const app = await buildApp();

@@ -1,4 +1,4 @@
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { ingestCommits, type IngestProgress } from "@/rag/indexing/ingest";
 import { createGitCommitSource } from "@/rag/indexing/sources/git-source";
 import { createApiCommitSource } from "@/rag/indexing/sources/api-source";
