@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const mockListCommitsFromApi = vi.fn();
-const mockGetChangedFilesForShas = vi.fn();
-
-vi.mock("@/rag/github/github-api", () => ({
-  listCommitsFromApi: (...args: unknown[]) => mockListCommitsFromApi(...args),
-  getChangedFilesForShas: (...args: unknown[]) => mockGetChangedFilesForShas(...args),
-}));
-
 import { createApiCommitSource } from "@/rag/indexing/sources/api-source";
+import type { GithubApiClient } from "@/rag/github/github-api";
 
 const CTX = { owner: "o", repo: "r", branch: "main", projectId: "proj" };
 
@@ -20,24 +12,48 @@ const apiCommit = {
   url: "https://github.com/o/r/commit/a",
 };
 
-beforeEach(() => {
-  mockListCommitsFromApi.mockReset().mockResolvedValue([apiCommit]);
-  mockGetChangedFilesForShas.mockReset().mockResolvedValue(new Map());
-});
+function makeApi() {
+  return {
+    listCommits: vi.fn(),
+    getChangedFilesForShas: vi.fn(),
+  };
+}
+
+function makeSource(api: ReturnType<typeof makeApi>) {
+  return createApiCommitSource(
+    { gitProvider: "github", owner: "o", repo: "r", branch: "main" },
+    api as unknown as GithubApiClient,
+  );
+}
 
 describe("createApiCommitSource", () => {
-  it("lists commits via the API and uses the first commit as the tip", async () => {
-    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
+  let api: ReturnType<typeof makeApi>;
+
+  beforeEach(() => {
+    api = makeApi();
+    api.listCommits.mockResolvedValue([apiCommit]);
+    api.getChangedFilesForShas.mockResolvedValue(new Map());
+  });
+
+  it("lists commits via the client and uses the first commit as the tip", async () => {
+    const source = makeSource(api);
 
     const { commits, tipSha } = await source.listCommits({});
 
+    expect(api.listCommits).toHaveBeenCalledWith({
+      owner: "o",
+      repo: "r",
+      branch: "main",
+      since: undefined,
+      until: undefined,
+    });
     expect(commits).toEqual([apiCommit]);
     expect(tipSha).toBe("a");
   });
 
   it("returns an empty tip when there are no commits", async () => {
-    mockListCommitsFromApi.mockResolvedValue([]);
-    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
+    api.listCommits.mockResolvedValue([]);
+    const source = makeSource(api);
 
     const { commits, tipSha } = await source.listCommits({});
 
@@ -46,16 +62,16 @@ describe("createApiCommitSource", () => {
   });
 
   it("builds inputs from file scopes with the provider url and no validation", async () => {
-    mockGetChangedFilesForShas.mockResolvedValue(
+    api.getChangedFilesForShas.mockResolvedValue(
       new Map([["a", [{ filepath: "a.txt", status: "modified" }]]]),
     );
-    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
+    const source = makeSource(api);
     await source.listCommits({});
 
     const { inputs, skipped } = await source.toChunkInputs([apiCommit], CTX);
 
     expect(skipped).toBe(0);
-    expect(mockGetChangedFilesForShas).toHaveBeenCalledWith({
+    expect(api.getChangedFilesForShas).toHaveBeenCalledWith({
       owner: "o",
       repo: "r",
       shas: ["a"],
@@ -78,7 +94,7 @@ describe("createApiCommitSource", () => {
   });
 
   it("defaults filesChanged to [] when the file fetch misses a sha", async () => {
-    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
+    const source = makeSource(api);
     await source.listCommits({});
 
     const { inputs } = await source.toChunkInputs([apiCommit], CTX);
@@ -87,7 +103,7 @@ describe("createApiCommitSource", () => {
   });
 
   it("uses a single batch", () => {
-    const source = createApiCommitSource({ gitProvider: "github", owner: "o", repo: "r", branch: "main" });
+    const source = makeSource(api);
     expect(source.batchSize).toBe(Infinity);
   });
 });

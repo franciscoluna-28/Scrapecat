@@ -1,8 +1,11 @@
 import { timed } from "@/shared/timing";
 import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
-import { getChangedFilesForShas, listCommitsFromApi } from "@/rag/github/github-api";
+import {
+  githubApiClient,
+  type GithubApiClient,
+} from "@/rag/github/github-api";
 import { type CommitChunkInput } from "@/rag/indexing/commit-chunks-store";
-import type { CommitSource, SourceContext } from "@/rag/indexing/ingest";
+import type { CommitSource, SourceContext } from "@/rag/indexing/source";
 
 /**
  * Demo / serverless commit source: reads commits from the public GitHub REST
@@ -13,12 +16,15 @@ import type { CommitSource, SourceContext } from "@/rag/indexing/ingest";
  * whole window upserts once (matching the previous API path). No guardrail runs
  * here — demo chunks carry no `metadata.validation`.
  */
-export function createApiCommitSource(opts: {
-  gitProvider: GitProviderId;
-  owner: string;
-  repo: string;
-  branch: string;
-}): CommitSource {
+export function createApiCommitSource(
+  opts: {
+    gitProvider: GitProviderId;
+    owner: string;
+    repo: string;
+    branch: string;
+  },
+  api: GithubApiClient = githubApiClient,
+): CommitSource {
   const { gitProvider, owner, repo, branch } = opts;
   if (gitProvider !== "github") {
     throw new Error(`Demo mode does not support ${gitProvider} ingestion`);
@@ -29,7 +35,7 @@ export function createApiCommitSource(opts: {
 
     async listCommits({ since, until }) {
       const commits = await timed("ingestApi.listCommits", { owner, repo, branch }, () =>
-        listCommitsFromApi({ owner, repo, branch, since, until }),
+        api.listCommits({ owner, repo, branch, since, until }),
       );
       return { commits, tipSha: commits[0]?.sha ?? "" };
     },
@@ -38,7 +44,7 @@ export function createApiCommitSource(opts: {
       const filesBySha = await timed(
         "ingestApi.getChangedFiles",
         { owner, repo, branch, count: commits.length },
-        () => getChangedFilesForShas({ owner, repo, shas: commits.map((c) => c.sha) }),
+        () => api.getChangedFilesForShas({ owner, repo, shas: commits.map((c) => c.sha) }),
       );
 
       const inputs: CommitChunkInput[] = commits.map((c) => ({

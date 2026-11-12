@@ -9,7 +9,7 @@ import {
 } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { restrictDemoBranches } from "@/shared/demo-branches";
-import { listCommitsFromApi } from "@/rag/github/github-api";
+import { githubApiClient } from "@/rag/github/github-api";
 import { projectsStore } from "@/projects/stores/projects-store";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import type { Static } from "@sinclair/typebox";
@@ -217,7 +217,7 @@ export async function listCommits(
           owner,
           repo,
         ));
-      const commits = await listCommitsFromApi({
+      const commits = await githubApiClient.listCommits({
         owner,
         repo,
         branch: ref,
@@ -289,7 +289,7 @@ export async function countCommits(
           owner,
           repo,
         ));
-      const commits = await listCommitsFromApi({
+      const commits = await githubApiClient.listCommits({
         owner,
         repo,
         branch: ref,
