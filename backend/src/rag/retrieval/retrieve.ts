@@ -1,5 +1,10 @@
 import type { ChatCitation } from "@/db/schema";
-import { hasTemporalIntent, parseQueryWindow } from "@/rag/retrieval/date-window";
+import {
+  hasTemporalIntent,
+  isTemporalSummaryQuery,
+  parseQueryWindow,
+} from "@/rag/retrieval/date-window";
+import { reciprocalRankFusionScored } from "@/rag/retrieval/fusion";
 import {
   embedTexts,
   resolveEmbeddingSpace,
@@ -11,6 +16,12 @@ import {
 } from "@/rag/indexing/commit-chunks-store";
 
 export const RETRIEVAL_LIMIT = 20;
+
+/**
+ * Accuracy-first cap for window summaries. The temporal channel returns the
+ * whole window instead of top-k; the cap only protects the prompt token budget.
+ */
+export const TEMPORAL_CONTEXT_LIMIT = 200;
 
 /**
  * How far back to look when a relative query ("latest", "this week") returns
@@ -26,10 +37,39 @@ const DAY_MS = 86_400_000;
  * between a natural-language question and short commit subjects typically land
  * around 0.45–0.65 even when the commits are clearly on-topic, so a tight floor
  * throws away the whole candidate set (the model then reports "no commits").
- * Keep this generous: it only drops clearly-unrelated rows and lets the prompt
- * do the quality filtering.
  */
 export const MAX_COSINE_DISTANCE = 0.8;
+
+/**
+ * Above this distance a semantic candidate is weak evidence. If the lexical
+ * channel also finds nothing, the retriever abstains instead of returning
+ * irrelevant context. Tune from eval diagnostics, not intuition.
+ */
+export const ABSTAIN_COSINE_DISTANCE = 0.7;
+
+export type RetrievalMode = "hybrid" | "temporal";
+
+export type RetrievalTrace = {
+  mode: RetrievalMode;
+  abstained: boolean;
+  lexicalCandidates: number;
+  semanticCandidates: number;
+  semanticHits: number;
+  bestSemanticDistance: number | null;
+  fusedCandidates: number;
+  topFusedScore: number | null;
+  truncated: boolean;
+};
+
+export type RetrievalResult = {
+  citations: ChatCitation[];
+  trace: RetrievalTrace;
+};
+
+export type ScopeResult = RetrievalResult & {
+  startDate?: Date;
+  endDate?: Date;
+};
 
 type RetrieverDeps = {
   embed: typeof embedTexts;
@@ -45,9 +85,24 @@ const defaultDeps: RetrieverDeps = {
   latestCommitDate: commitChunksStore.getLatestCommitDate,
 };
 
+function emptyTrace(mode: RetrievalMode): RetrievalTrace {
+  return {
+    mode,
+    abstained: false,
+    lexicalCandidates: 0,
+    semanticCandidates: 0,
+    semanticHits: 0,
+    bestSemanticDistance: null,
+    fusedCandidates: 0,
+    topFusedScore: null,
+    truncated: false,
+  };
+}
+
 /**
- * RAG retrieval stage: semantic search with a keyword fallback, plus the
- * temporal window/recency handling for a chat turn.
+ * Retriever stage: semantic and lexical channels fused with RRF, temporal
+ * window summaries, and deterministic abstention when neither channel has
+ * enough evidence.
  */
 export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
   const deps = { ...defaultDeps, ...overrides };
@@ -80,6 +135,155 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
     };
   }
 
+  async function temporalRetrieve(opts: {
+    projectId: string;
+    branch?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<RetrievalResult> {
+    const rows = await deps.store.listCommitsInWindow({
+      projectId: opts.projectId,
+      branch: opts.branch,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      limit: TEMPORAL_CONTEXT_LIMIT + 1,
+    });
+    const truncated = rows.length > TEMPORAL_CONTEXT_LIMIT;
+    const kept = rows.slice(0, TEMPORAL_CONTEXT_LIMIT);
+    return {
+      citations: kept.map(toCitation),
+      trace: {
+        ...emptyTrace("temporal"),
+        abstained: kept.length === 0,
+        fusedCandidates: kept.length,
+        truncated,
+      },
+    };
+  }
+
+  async function retrieveDetailed(opts: {
+    projectId: string;
+    query: string;
+    limit?: number;
+    branch?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<RetrievalResult> {
+    if (
+      (opts.startDate || opts.endDate) &&
+      isTemporalSummaryQuery(opts.query)
+    ) {
+      return temporalRetrieve(opts);
+    }
+
+    const limit = opts.limit ?? RETRIEVAL_LIMIT;
+    const candidateLimit = Math.min(limit * 4, 200);
+
+    let activeSpace: EmbeddingSpace | null = null;
+    try {
+      activeSpace = await deps.resolveSpace();
+    } catch {
+      activeSpace = null;
+    }
+
+    let embeddedCount = 0;
+    if (activeSpace) {
+      try {
+        embeddedCount = await deps.store.countChunksForProject({
+          projectId: opts.projectId,
+          branch: opts.branch,
+          embeddingSpace: activeSpace,
+        });
+      } catch {
+        embeddedCount = 0;
+      }
+    }
+
+    const lexical = deps.store.lexicalSearchCommits({
+      projectId: opts.projectId,
+      query: opts.query,
+      limit: candidateLimit,
+      branch: opts.branch,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+    });
+
+    const semantic =
+      activeSpace && embeddedCount > 0
+        ? (async () => {
+            const [embedding] = await deps.embed(
+              [queryText(opts)],
+              activeSpace,
+            );
+            return deps.store.semanticSearchCommits({
+              projectId: opts.projectId,
+              embedding,
+              embeddingSpace: activeSpace,
+              limit: candidateLimit,
+              branch: opts.branch,
+              startDate: opts.startDate,
+              endDate: opts.endDate,
+            });
+          })()
+        : Promise.resolve<CommitSearchResult[]>([]);
+
+    const [lexicalResult, semanticResult] = await Promise.allSettled([
+      lexical,
+      semantic,
+    ]);
+
+    const lexicalRows =
+      lexicalResult.status === "fulfilled" ? lexicalResult.value : [];
+    const semanticRows =
+      semanticResult.status === "fulfilled" ? semanticResult.value : [];
+    const semanticHits = semanticRows.filter(
+      (row) => row.distance == null || row.distance <= MAX_COSINE_DISTANCE,
+    );
+    const semanticDistances = semanticRows
+      .map((row) => row.distance)
+      .filter((distance): distance is number => distance != null);
+    const bestSemanticDistance = semanticDistances.length
+      ? Math.min(...semanticDistances)
+      : null;
+
+    const hasLexical = lexicalRows.length > 0;
+    const hasSemantic =
+      bestSemanticDistance != null &&
+      bestSemanticDistance <= ABSTAIN_COSINE_DISTANCE;
+
+    if (!hasLexical && !hasSemantic) {
+      return {
+        citations: [],
+        trace: {
+          ...emptyTrace("hybrid"),
+          abstained: true,
+          lexicalCandidates: 0,
+          semanticCandidates: semanticRows.length,
+          semanticHits: semanticHits.length,
+          bestSemanticDistance,
+        },
+      };
+    }
+
+    const fused = reciprocalRankFusionScored(
+      [{ items: lexicalRows }, { items: semanticHits }],
+      (row) => row.commitSha,
+    );
+
+    return {
+      citations: fused.slice(0, limit).map((entry) => toCitation(entry.item)),
+      trace: {
+        ...emptyTrace("hybrid"),
+        lexicalCandidates: lexicalRows.length,
+        semanticCandidates: semanticRows.length,
+        semanticHits: semanticHits.length,
+        bestSemanticDistance,
+        fusedCandidates: fused.length,
+        topFusedScore: fused[0]?.score ?? null,
+      },
+    };
+  }
+
   async function retrieve(opts: {
     projectId: string;
     query: string;
@@ -88,65 +292,15 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
     startDate?: Date;
     endDate?: Date;
   }): Promise<ChatCitation[]> {
-    const limit = opts.limit ?? RETRIEVAL_LIMIT;
-    let space: EmbeddingSpace | null = null;
-    try {
-      space = await deps.resolveSpace();
-    } catch {
-      space = null;
-    }
-
-    const embeddedCount = space
-      ? await deps.store.countChunksForProject({
-          projectId: opts.projectId,
-          branch: opts.branch,
-          embeddingSpace: space,
-        })
-      : 0;
-
-    let rows: CommitSearchResult[] | null = null;
-    if (space && embeddedCount > 0) {
-      try {
-        const [embedding] = await deps.embed([queryText(opts)], space);
-        rows = await deps.store.semanticSearchCommits({
-          projectId: opts.projectId,
-          embedding,
-          embeddingSpace: space,
-          limit,
-          branch: opts.branch,
-          startDate: opts.startDate,
-          endDate: opts.endDate,
-        });
-      } catch {
-        rows = null;
-      }
-    }
-
-    if (!rows || rows.length === 0) {
-      rows = await deps.store.keywordSearchCommits({
-        projectId: opts.projectId,
-        query: opts.query,
-        limit: 10,
-        branch: opts.branch,
-        startDate: opts.startDate,
-        endDate: opts.endDate,
-      });
-    }
-
-    return rows
-      .filter((r) => r.distance == null || r.distance <= MAX_COSINE_DISTANCE)
-      .map(toCitation);
+    return (await retrieveDetailed(opts)).citations;
   }
 
-  async function resolveScope(opts: {
+  async function resolveScopeDetailed(opts: {
     projectId: string;
     query: string;
     branch?: string;
-  }): Promise<{
-    citations: ChatCitation[];
-    startDate?: Date;
-    endDate?: Date;
-  }> {
+    limit?: number;
+  }): Promise<ScopeResult> {
     const parsed = parseQueryWindow(opts.query);
     let startDate = parsed.startDate;
     let endDate = parsed.endDate;
@@ -165,34 +319,43 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
     }
 
     const retrieveWith = (window: { startDate?: Date; endDate?: Date }) =>
-      retrieve({
+      retrieveDetailed({
         projectId: opts.projectId,
         query: parsed.filteredQuery,
         branch: opts.branch,
+        limit: opts.limit,
         ...window,
       });
 
-    let citations = await retrieveWith({ startDate, endDate });
+    let result = await retrieveWith({ startDate, endDate });
 
-    if (citations.length === 0 && parsed.isRelative) {
+    if (result.citations.length === 0 && parsed.isRelative) {
       const latest = await deps.latestCommitDate({
         projectId: opts.projectId,
         branch: opts.branch,
       });
       if (latest) {
-        citations = await retrieveWith({
-          startDate: new Date(
-            latest.getTime() - RELATIVE_FALLBACK_DAYS * DAY_MS,
-          ),
-          endDate: latest,
-        });
+        startDate = new Date(
+          latest.getTime() - RELATIVE_FALLBACK_DAYS * DAY_MS,
+        );
+        endDate = latest;
+        result = await retrieveWith({ startDate, endDate });
       }
     }
 
-    return { citations, startDate, endDate };
+    return { ...result, startDate, endDate };
   }
 
-  return { retrieve, resolveScope };
+  async function resolveScope(opts: {
+    projectId: string;
+    query: string;
+    branch?: string;
+    limit?: number;
+  }): Promise<ScopeResult> {
+    return resolveScopeDetailed(opts);
+  }
+
+  return { retrieve, retrieveDetailed, resolveScope, resolveScopeDetailed };
 }
 
 export const retriever = createRetriever();

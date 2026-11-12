@@ -49,6 +49,17 @@ export function hasTemporalIntent(text: string): boolean {
   return TEMPORAL_KEYWORDS.test(text);
 }
 
+const SUMMARY_QUESTION = /\b(what|which|list|summari[sz]e|recap|overview|highlights?)\b/i;
+const CHANGE_VERB = /\b(ship|shipped|change[ds]?|land|landed|build|built|release[ds]?|work|worked|happen(?:ed)?|accomplish(?:ed)?|done)\b/i;
+
+/**
+ * A window-summary question ("what did we ship in October") asks for coverage
+ * of a date range, not the top few semantically similar commits.
+ */
+export function isTemporalSummaryQuery(text: string): boolean {
+  return SUMMARY_QUESTION.test(text) && CHANGE_VERB.test(text);
+}
+
 const DAY_MS = 86_400_000;
 
 function monthNumber(name: string): number | undefined {

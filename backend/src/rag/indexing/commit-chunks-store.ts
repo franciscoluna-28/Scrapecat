@@ -5,7 +5,6 @@ import {
   desc,
   eq,
   gte,
-  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -192,6 +191,44 @@ export function createCommitChunksStore(client: DbOrTx = db) {
         .orderBy(desc(commitChunks.committedAt));
     },
 
+    /**
+     * Temporal channel: every commit in a date window, newest first. Used when
+     * the question asks for a window summary ("what shipped in October") where
+     * recall matters more than semantic similarity.
+     */
+    async listCommitsInWindow(input: {
+      projectId: string;
+      branch?: string;
+      startDate?: Date;
+      endDate?: Date;
+      limit: number;
+    }): Promise<CommitSearchResult[]> {
+      const conditions = [eq(commitChunks.projectId, input.projectId)];
+      if (input.branch) conditions.push(eq(commitChunks.branch, input.branch));
+      if (input.startDate) conditions.push(gte(commitChunks.committedAt, input.startDate));
+      if (input.endDate) conditions.push(lte(commitChunks.committedAt, input.endDate));
+
+      const rows = await client
+        .select({
+          id: commitChunks.id,
+          commitSha: commitChunks.commitSha,
+          commitMessage: commitChunks.commitMessage,
+          author: commitChunks.author,
+          committedAt: commitChunks.committedAt,
+          metadata: commitChunks.metadata,
+        })
+        .from(commitChunks)
+        .where(and(...conditions))
+        .orderBy(desc(commitChunks.committedAt))
+        .limit(input.limit);
+
+      return rows.map((r) => ({
+        ...r,
+        metadata: r.metadata ?? {},
+        distance: null,
+      }));
+    },
+
     async listPendingChunks(projectId: string, space: EmbeddingSpace) {
       return client
         .select({
@@ -272,11 +309,12 @@ export function createCommitChunksStore(client: DbOrTx = db) {
     },
 
     /**
-     * Keyword fallback when no embeddings exist for a project (embedding
-     * disabled or not yet backfilled). Matches the commit message or any file
-     * path in scope.
+     * Lexical retrieval channel over the generated `search_vector` (commit
+     * message title + changed file paths). Ranks by text relevance, not
+     * recency, so it can be fused with the semantic channel instead of acting
+     * as a last-resort fallback.
      */
-    async keywordSearchCommits(input: {
+    async lexicalSearchCommits(input: {
       projectId: string;
       query: string;
       limit: number;
@@ -284,13 +322,14 @@ export function createCommitChunksStore(client: DbOrTx = db) {
       startDate?: Date;
       endDate?: Date;
     }): Promise<CommitSearchResult[]> {
-      const pattern = `%${input.query.replace(/[%_]/g, "")}%`;
+      const english = sql`websearch_to_tsquery('english', ${input.query})`;
+      const simple = sql`websearch_to_tsquery('simple', ${input.query})`;
+      const tsQuery = sql`(${english} || ${simple})`;
+      const rank = sql`(ts_rank_cd(${commitChunks.searchVector}, ${english}) + ts_rank_cd(${commitChunks.searchVector}, ${simple}))`;
+
       const conditions = [
         eq(commitChunks.projectId, input.projectId),
-        or(
-          ilike(commitChunks.commitMessage, pattern),
-          sql`${commitChunks.metadata}::text ILIKE ${pattern}`,
-        ),
+        sql`${commitChunks.searchVector} @@ ${tsQuery}`,
       ];
       if (input.branch) conditions.push(eq(commitChunks.branch, input.branch));
       if (input.startDate) conditions.push(gte(commitChunks.committedAt, input.startDate));
@@ -307,7 +346,7 @@ export function createCommitChunksStore(client: DbOrTx = db) {
         })
         .from(commitChunks)
         .where(and(...conditions))
-        .orderBy(desc(commitChunks.committedAt))
+        .orderBy(desc(rank), desc(commitChunks.committedAt))
         .limit(input.limit);
 
       return rows.map((r) => ({

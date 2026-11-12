@@ -106,6 +106,59 @@ describe.skipIf(!enabled)("commit chunk embedding space", () => {
     expect(await semantic(projectId, SPACE_A)).toHaveLength(1);
   });
 
+  it("finds chunks by message text with lexical search", async () => {
+    const { project } = await projectsStore.upsertProject({
+      providerProjectId: randomUUID(),
+      providerOwner: "owner",
+      repositoryName: `repo-${randomUUID()}`,
+      defaultBranch: "main",
+    });
+    projectId = project.id;
+
+    await upsertChunks([
+      {
+        projectId,
+        commitSha: "sha-stream",
+        branch: "main",
+        commitMessage: "add streaming heartbeat to the chat endpoint",
+        committedAt: new Date("2026-02-01T00:00:00.000Z"),
+      },
+      {
+        projectId,
+        commitSha: "sha-other",
+        branch: "main",
+        commitMessage: "fix report schedule timezone",
+        committedAt: new Date("2026-02-02T00:00:00.000Z"),
+      },
+    ]);
+
+    const hits = await commitChunksStore.lexicalSearchCommits({
+      projectId,
+      query: "streaming heartbeat",
+      limit: 10,
+    });
+    expect(hits.map((hit) => hit.commitSha)).toEqual(["sha-stream"]);
+
+    const outsideWindow = await commitChunksStore.lexicalSearchCommits({
+      projectId,
+      query: "streaming heartbeat",
+      limit: 10,
+      startDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    expect(outsideWindow).toEqual([]);
+
+    const window = await commitChunksStore.listCommitsInWindow({
+      projectId,
+      startDate: new Date("2026-02-01T00:00:00.000Z"),
+      endDate: new Date("2026-02-28T23:59:59.999Z"),
+      limit: 10,
+    });
+    expect(window.map((row) => row.commitSha)).toEqual([
+      "sha-other",
+      "sha-stream",
+    ]);
+  });
+
   async function upsertChunks(inputs: CommitChunkInput[]) {
     await commitChunksStore.upsertCommitChunks(inputs);
   }

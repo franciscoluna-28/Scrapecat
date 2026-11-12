@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { parseQueryWindow } from "@/rag/retrieval/date-window";
+import {
+  isTemporalSummaryQuery,
+  parseQueryWindow,
+} from "@/rag/retrieval/date-window";
 
 const NOW = new Date("2026-08-30T12:00:00.000Z");
+
+describe("isTemporalSummaryQuery", () => {
+  it("detects window-summary questions", () => {
+    expect(isTemporalSummaryQuery("What did we ship in October 2026?")).toBe(true);
+    expect(isTemporalSummaryQuery("What demo work landed in September?")).toBe(true);
+    expect(isTemporalSummaryQuery("Summarize this month's changes")).toBe(true);
+  });
+
+  it("does not treat a specific lookup as a window summary", () => {
+    expect(isTemporalSummaryQuery("When did we add GitLab support?")).toBe(false);
+    expect(isTemporalSummaryQuery("How do we check database readiness?")).toBe(false);
+  });
+});
 
 describe("parseQueryWindow", () => {
   it("filters from a month forward in Spanish", () => {

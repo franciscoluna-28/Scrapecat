@@ -1,0 +1,3 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE "commit_chunks" ADD COLUMN "search_vector" "tsvector" GENERATED ALWAYS AS (setweight(to_tsvector('english', coalesce(commit_message, '')), 'A') || setweight(to_tsvector('simple', coalesce(metadata->>'filesChanged', '')), 'B')) STORED;--> statement-breakpoint
+CREATE INDEX "commit_search_vector_gin_idx" ON "commit_chunks" USING gin ("search_vector");
