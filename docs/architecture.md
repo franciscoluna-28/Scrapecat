@@ -25,6 +25,21 @@ flowchart TB
     INFRA -.->|future| EXT["Bitbucket"]
 ```
 
+## Backend layout
+
+The backend is grouped by tier (see `backend/AGENTS.md` → "API layer"):
+
+- `src/api/` — HTTP domains: `chat`, `credentials`, `repositories`,
+  `settings`, `reports`, `system`. Each owns its `routes.ts`, `schemas.ts`,
+  services, stores, and colocated tests.
+- `src/rag/` — the retrieval/indexing pipeline: `answer`, `context`,
+  `retrieval`, `indexing`, `git`, `github`, `eval`.
+- `src/shared/` — cross-cutting infrastructure: `integrations/`, `storage/`,
+  `queue/`, `config/`, `utils/`.
+- `src/startup/` — server composition (`create-server.ts`,
+  `register-routes.ts`); `src/build-app.ts` is the public entrypoint.
+- `src/db/` — DB client, schema, and migrations.
+
 ## RAG pipeline
 
 `POST /api/v1/chat/sessions/:id/messages` ingests the branch if needed, then
@@ -94,7 +109,7 @@ flowchart TD
 
 ### Why native git (not a JS git library)
 
-`src/repositories/git.ts` shells out to the system `git` binary with `execFile`,
+`src/rag/git/git.ts` shells out to the system `git` binary with `execFile`,
 baked into the image (`backend/Dockerfile.dev`). Do **not** replace it with
 `isomorphic-git`, `nodegit`, etc.:
 
@@ -138,8 +153,8 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
 `defaultAISettings()` (env defaults). Chat calls go through
 `resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
-`src/chat/ai.ts`; embeddings through `embedTexts()` in
-`src/projects/embeddings.ts`. Each `commit_chunks` row stores its embedding
+`src/rag/answer/ai.ts`; embeddings through `embedTexts()` in
+`src/rag/indexing/embeddings.ts`. Each `commit_chunks` row stores its embedding
 provider/model, and retrieval only searches vectors in the current space;
 changing the embedding model enqueues a background reindex.
 
@@ -172,13 +187,13 @@ flowchart LR
   TURN --> DB[("Postgres read model")]
 ```
 
-- `src/chat/turn.ts` owns project lookup, branch selection, retrieval
+- `src/rag/answer/turn.ts` owns project lookup, branch selection, retrieval
   (`resolveScope` or an explicit window), model resolution, and prompt
   assembly. It never creates sessions, writes messages, or touches Fastify/SSE.
-- `src/chat/services.ts` is the web-only facade: sessions, history, streaming,
+- `src/api/chat/services.ts` is the web-only facade: sessions, history, streaming,
   and persistence. It passes `prepareProjectBranch` into the turn resolver so
   the web chat can ingest on demand.
-- `src/chat/answer.ts` is the stateless one-shot path. It calls the same turn
+- `src/rag/answer/answer.ts` is the stateless one-shot path. It calls the same turn
   resolver and `aiClient.generate()`, with no session or message writes. MCP
   tools can omit the prepare callback, keeping them read-only over indexed
   commits.
