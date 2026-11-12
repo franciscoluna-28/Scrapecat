@@ -23,20 +23,25 @@ function makeDataset(cases?: unknown[]) {
       repositoryName: "repo",
       branch: "dev",
     },
-    cases: cases ?? [
-      {
-        id: "one",
-        query: "what changed?",
-        relevantShas: ["abc"],
-      },
-    ],
+    cases: cases ?? [{ id: "one", query: "what changed?", relevantShas: ["abc"] }],
   });
 }
+
+const trace = {
+  mode: "hybrid" as const,
+  abstained: false,
+  lexicalCandidates: 1,
+  semanticCandidates: 1,
+  semanticHits: 1,
+  bestSemanticDistance: 0.2,
+  fusedCandidates: 1,
+  topFusedScore: 0.03,
+  truncated: false,
+};
 
 function makeDeps(overrides: Record<string, unknown> = {}) {
   return {
     projects: {
-      getProjectById: vi.fn(async () => project),
       getProjectByOwnerRepo: vi.fn(async () => project),
       upsertProject: vi.fn(async () => ({ project, created: true })),
     },
@@ -57,30 +62,32 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       model: "openai/text-embedding-3-small",
     })),
     retriever: {
-      resolveScope: vi.fn(async () => ({ citations: [{ commitSha: "abc" }] })),
-      retrieve: vi.fn(async () => [{ commitSha: "abc" }]),
+      resolveScopeDetailed: vi.fn(async () => ({
+        citations: [{ commitSha: "abc" }],
+        trace,
+      })),
+      retrieveDetailed: vi.fn(async () => ({
+        citations: [{ commitSha: "abc" }],
+        trace,
+      })),
     },
     ...overrides,
   };
 }
 
 describe("evalService.run", () => {
-  it("prepares the branch when requested and returns a report", async () => {
+  it("prepares the branch and scores a hit", async () => {
     const deps = makeDeps();
     const service = createEvalService(deps as never);
 
-    const result = await service.run({
-      dataset: makeDataset(),
-      prepare: true,
-      allowMissing: false,
-    });
+    const result = await service.run({ dataset: makeDataset(), prepare: true });
 
     expect(deps.prepareBranch).toHaveBeenCalledWith("project-1", "dev");
-    expect(result.report.summary.meanRecall).toBe(1);
+    expect(result.report.summary.meanContextRecall).toBe(1);
     expect(result.report.cases[0].passed).toBe(true);
   });
 
-  it("fails when judged SHAs are missing", async () => {
+  it("fails when judged SHAs are not indexed", async () => {
     const deps = makeDeps({
       chunks: {
         getChunksByShas: vi.fn(async () => new Map()),
@@ -90,61 +97,19 @@ describe("evalService.run", () => {
     const service = createEvalService(deps as never);
 
     await expect(
-      service.run({
-        dataset: makeDataset(),
-        prepare: false,
-        allowMissing: false,
-      }),
+      service.run({ dataset: makeDataset(), prepare: false }),
     ).rejects.toThrow(/not indexed/);
   });
 
-  it("warns instead of failing when missing SHAs are allowed", async () => {
-    const deps = makeDeps({
-      chunks: {
-        getChunksByShas: vi.fn(async () => new Map()),
-        countChunksForProject: vi.fn(async () => 0),
-      },
-    });
-    const service = createEvalService(deps as never);
-
-    const result = await service.run({
-      dataset: makeDataset(),
-      prepare: false,
-      allowMissing: true,
-    });
-
-    expect(result.check.missingShas).toEqual(["abc"]);
-    expect(result.check.warnings.join("\n")).toMatch(/not indexed/);
-  });
-
-  it("uses resolveScope for cases without an explicit window", async () => {
-    const deps = makeDeps();
-    const service = createEvalService(deps as never);
-
-    const result = await service.run({
-      dataset: makeDataset(),
-      prepare: false,
-      allowMissing: false,
-      topK: 5,
-    });
-
-    expect(deps.retriever.resolveScope).toHaveBeenCalledWith({
-      projectId: "project-1",
-      query: "what changed?",
-      branch: "dev",
-    });
-    expect(deps.retriever.retrieve).not.toHaveBeenCalled();
-    expect(result.report.summary.meanRecall).toBe(1);
-  });
-
-  it("uses retrieve with parsed dates for explicit windows", async () => {
+  it("uses resolveScopeDetailed without a window and retrieveDetailed with one", async () => {
     const deps = makeDeps();
     const service = createEvalService(deps as never);
 
     await service.run({
       dataset: makeDataset([
+        { id: "plain", query: "what changed?", relevantShas: ["abc"] },
         {
-          id: "one",
+          id: "windowed",
           query: "what changed in october?",
           relevantShas: ["abc"],
           window: {
@@ -154,13 +119,18 @@ describe("evalService.run", () => {
         },
       ]),
       prepare: false,
-      allowMissing: false,
       topK: 5,
     });
 
-    expect(deps.retriever.retrieve).toHaveBeenCalledWith(
+    expect(deps.retriever.resolveScopeDetailed).toHaveBeenCalledTimes(1);
+    expect(deps.retriever.resolveScopeDetailed).toHaveBeenCalledWith({
+      projectId: "project-1",
+      query: "what changed?",
+      branch: "dev",
+      limit: 5,
+    });
+    expect(deps.retriever.retrieveDetailed).toHaveBeenCalledWith(
       expect.objectContaining({
-        projectId: "project-1",
         limit: 5,
         startDate: new Date("2026-10-01T00:00:00.000Z"),
         endDate: new Date("2026-10-31T23:59:59.999Z"),
@@ -177,7 +147,6 @@ describe("evalService.run", () => {
         { id: "none", query: "billing system?", category: "negative" },
       ]),
       prepare: false,
-      allowMissing: false,
     });
 
     expect(result.report.cases[0].metrics).toBeNull();
@@ -188,18 +157,13 @@ describe("evalService.run", () => {
   it("creates the project when preparing an unknown owner/repo", async () => {
     const deps = makeDeps({
       projects: {
-        getProjectById: vi.fn(async () => project),
         getProjectByOwnerRepo: vi.fn(async () => null),
         upsertProject: vi.fn(async () => ({ project, created: true })),
       },
     });
     const service = createEvalService(deps as never);
 
-    await service.run({
-      dataset: makeDataset(),
-      prepare: true,
-      allowMissing: false,
-    });
+    await service.run({ dataset: makeDataset(), prepare: true });
 
     expect(deps.projects.upsertProject).toHaveBeenCalledWith(
       expect.objectContaining({

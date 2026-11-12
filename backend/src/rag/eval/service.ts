@@ -1,10 +1,10 @@
-import { retriever } from "@/rag/retrieval/retrieve";
+import { retriever, type RetrievalTrace } from "@/rag/retrieval/retrieve";
 import type { GoldenCase, GoldenDataset } from "@/rag/eval/golden";
 import {
   computeMetrics,
   summarizeMetrics,
-  type MetricsSummary,
-  type RetrievalMetrics,
+  type ContextMetrics,
+  type ContextMetricsSummary,
 } from "@/rag/eval/metrics";
 import { resolveEmbeddingSpace } from "@/rag/indexing/embeddings";
 import { prepareProjectBranch } from "@/projects/services";
@@ -12,27 +12,31 @@ import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { projectsStore } from "@/projects/stores/projects-store";
 
 type ProjectRow = NonNullable<
-  Awaited<ReturnType<typeof projectsStore.getProjectById>>
+  Awaited<ReturnType<typeof projectsStore.getProjectByOwnerRepo>>
 >;
 
 type PrepareResult = Awaited<ReturnType<typeof prepareProjectBranch>>;
 
-export type EvalCitation = { commitSha: string };
+export type EvalRetrieverResult = {
+  citations: { commitSha: string }[];
+  trace: RetrievalTrace;
+};
 
 export type EvalRetriever = {
-  resolveScope(opts: {
+  resolveScopeDetailed(opts: {
     projectId: string;
     query: string;
     branch?: string;
-  }): Promise<{ citations: EvalCitation[] }>;
-  retrieve(opts: {
+    limit?: number;
+  }): Promise<EvalRetrieverResult>;
+  retrieveDetailed(opts: {
     projectId: string;
     query: string;
     branch?: string;
     limit?: number;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<EvalCitation[]>;
+  }): Promise<EvalRetrieverResult>;
 };
 
 export type GoldenCaseResult = {
@@ -41,7 +45,10 @@ export type GoldenCaseResult = {
   category: GoldenCase["category"];
   expected: string[];
   retrieved: string[];
-  metrics: RetrievalMetrics | null;
+  relevantRanks: Record<string, number | null>;
+  missingShas: string[];
+  trace: RetrievalTrace;
+  metrics: ContextMetrics | null;
   passed: boolean;
 };
 
@@ -50,15 +57,12 @@ export type EvalReport = {
   branch: string;
   topK: number;
   cases: GoldenCaseResult[];
-  summary: MetricsSummary;
+  summary: ContextMetricsSummary;
   negativeAccuracy: number;
 };
 
 type EvalServiceDeps = {
-  projects: Pick<
-    typeof projectsStore,
-    "getProjectById" | "getProjectByOwnerRepo" | "upsertProject"
-  >;
+  projects: Pick<typeof projectsStore, "getProjectByOwnerRepo" | "upsertProject">;
   chunks: Pick<
     typeof commitChunksStore,
     "getChunksByShas" | "countChunksForProject"
@@ -88,18 +92,18 @@ export type EvalServiceResult = {
   report: EvalReport;
 };
 
-function parseWindowDate(value: string, field: string, caseId: string): Date {
+function parseWindowDate(value: string, caseId: string): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Error(`case "${caseId}" has an invalid ${field}: ${value}`);
+    throw new Error(`case "${caseId}" has an invalid window date: ${value}`);
   }
   return date;
 }
 
 /**
  * Golden-set evaluation: resolve/ingest the dataset project, validate its
- * labels against the read model, score the retriever, and aggregate the
- * metrics. CLI concerns (arguments, formatting) stay in the script.
+ * labels against the read model, score the retriever, and aggregate metrics.
+ * CLI concerns (arguments, formatting) stay in the script.
  */
 export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
   const deps = { ...defaultDeps, ...overrides };
@@ -109,36 +113,29 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
     branch: string;
     topK: number;
     goldenCase: GoldenCase;
-  }): Promise<string[]> {
+  }): Promise<EvalRetrieverResult> {
     const { projectId, branch, topK, goldenCase } = input;
 
     if (goldenCase.window) {
-      const startDate = goldenCase.window.startDate
-        ? parseWindowDate(goldenCase.window.startDate, "startDate", goldenCase.id)
-        : undefined;
-      const endDate = goldenCase.window.endDate
-        ? parseWindowDate(goldenCase.window.endDate, "endDate", goldenCase.id)
-        : undefined;
-
-      const citations = await deps.retriever.retrieve({
+      const { startDate, endDate } = goldenCase.window;
+      return deps.retriever.retrieveDetailed({
         projectId,
         query: goldenCase.query,
         branch,
         limit: topK,
-        ...(startDate ? { startDate } : {}),
-        ...(endDate ? { endDate } : {}),
+        ...(startDate ? { startDate: parseWindowDate(startDate, goldenCase.id) } : {}),
+        ...(endDate ? { endDate: parseWindowDate(endDate, goldenCase.id) } : {}),
       });
-      return citations.map((citation) => citation.commitSha);
     }
 
-    // No explicit window: use the same path as production chat, including query
-    // date parsing and the relative-recency fallback.
-    const scope = await deps.retriever.resolveScope({
+    // No explicit window: same path as production chat, including query date
+    // parsing and the relative-recency fallback.
+    return deps.retriever.resolveScopeDetailed({
       projectId,
       query: goldenCase.query,
       branch,
+      limit: topK,
     });
-    return scope.citations.map((citation) => citation.commitSha);
   }
 
   async function scoreDataset(input: {
@@ -151,13 +148,17 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
     const cases: GoldenCaseResult[] = [];
 
     for (const goldenCase of dataset.cases) {
-      const retrieved = await retrieveForCase({
+      const { citations, trace } = await retrieveForCase({
         projectId,
         branch,
         topK,
         goldenCase,
       });
-      const topKRetrieved = retrieved.slice(0, topK);
+      const retrieved = citations.map((citation) => citation.commitSha);
+      // A temporal summary returns the whole window, not a top-k slice.
+      const scored =
+        trace.mode === "temporal" ? retrieved : retrieved.slice(0, topK);
+      const effectiveK = trace.mode === "temporal" ? scored.length : topK;
 
       if (goldenCase.category === "negative") {
         cases.push({
@@ -165,91 +166,85 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
           query: goldenCase.query,
           category: goldenCase.category,
           expected: [],
-          retrieved: topKRetrieved,
+          retrieved: scored,
+          relevantRanks: {},
+          missingShas: [],
+          trace,
           metrics: null,
-          passed: topKRetrieved.length === 0,
+          passed: scored.length === 0,
         });
         continue;
       }
 
-      const metrics = computeMetrics(
-        topKRetrieved,
-        goldenCase.relevantShas,
-        topK,
-      );
+      const rankBySha = new Map(scored.map((sha, index) => [sha, index + 1]));
+      const metrics = computeMetrics(scored, goldenCase.relevantShas, effectiveK);
       cases.push({
         id: goldenCase.id,
         query: goldenCase.query,
         category: goldenCase.category,
         expected: goldenCase.relevantShas,
-        retrieved: topKRetrieved,
+        retrieved: scored,
+        relevantRanks: Object.fromEntries(
+          goldenCase.relevantShas.map((sha) => [sha, rankBySha.get(sha) ?? null]),
+        ),
+        missingShas: goldenCase.relevantShas.filter((sha) => !rankBySha.has(sha)),
+        trace,
         metrics,
         passed: metrics.hit,
       });
     }
 
-    const scored = cases
+    const scoredMetrics = cases
       .map((result) => result.metrics)
-      .filter((metrics): metrics is RetrievalMetrics => metrics !== null);
-    const negative = cases.filter((result) => result.category === "negative");
+      .filter((metrics): metrics is ContextMetrics => metrics !== null);
+    const negatives = cases.filter((result) => result.category === "negative");
+    const negativeAccuracy =
+      negatives.length === 0
+        ? 1
+        : negatives.filter((result) => result.passed).length / negatives.length;
 
     return {
       dataset: dataset.name,
       branch,
       topK,
       cases,
-      summary: summarizeMetrics(scored),
-      negativeAccuracy:
-        negative.length === 0
-          ? 1
-          : negative.filter((result) => result.passed).length / negative.length,
+      summary: summarizeMetrics(scoredMetrics),
+      negativeAccuracy,
     };
   }
 
   async function resolveProject(
     dataset: GoldenDataset,
-    options: { projectId?: string; prepare: boolean },
-  ): Promise<{ project: ProjectRow; prepared?: PrepareResult }> {
-    let project: ProjectRow | null = null;
+    prepare: boolean,
+  ): Promise<ProjectRow> {
+    const ownerRepo = {
+      gitProvider: dataset.project.gitProvider,
+      providerOwner: dataset.project.providerOwner,
+      repositoryName: dataset.project.repositoryName,
+    };
+    const existing = await deps.projects.getProjectByOwnerRepo(ownerRepo);
+    if (existing) return existing;
 
-    if (options.projectId) {
-      project = await deps.projects.getProjectById(options.projectId);
-      if (!project) throw new Error(`Project ${options.projectId} not found`);
-    } else {
-      project = await deps.projects.getProjectByOwnerRepo({
-        gitProvider: dataset.project.gitProvider,
-        providerOwner: dataset.project.providerOwner,
-        repositoryName: dataset.project.repositoryName,
-      });
-
-      if (!project) {
-        if (!options.prepare) {
-          throw new Error(
-            `Project ${dataset.project.providerOwner}/${dataset.project.repositoryName} is not indexed. ` +
-              "Run with --prepare to ingest it first.",
-          );
-        }
-        const { project: created } = await deps.projects.upsertProject({
-          gitProvider: dataset.project.gitProvider,
-          providerProjectId: `${dataset.project.providerOwner}/${dataset.project.repositoryName}`,
-          providerOwner: dataset.project.providerOwner,
-          repositoryName: dataset.project.repositoryName,
-          defaultBranch: dataset.project.branch,
-        });
-        project = created;
-      }
+    if (!prepare) {
+      throw new Error(
+        `Project ${dataset.project.providerOwner}/${dataset.project.repositoryName} is not indexed. ` +
+          "Run with --prepare to ingest it first.",
+      );
     }
 
-    if (!options.prepare) return { project };
-
-    const prepared = await deps.prepareBranch(project.id, dataset.project.branch);
-    return { project, prepared };
+    const { project } = await deps.projects.upsertProject({
+      gitProvider: dataset.project.gitProvider,
+      providerProjectId: `${dataset.project.providerOwner}/${dataset.project.repositoryName}`,
+      providerOwner: dataset.project.providerOwner,
+      repositoryName: dataset.project.repositoryName,
+      defaultBranch: dataset.project.branch,
+    });
+    return project;
   }
 
   async function checkDataset(
     dataset: GoldenDataset,
     projectId: string,
-    options: { allowMissing: boolean },
   ): Promise<DatasetCheck> {
     const judged = [...new Set(dataset.cases.flatMap((c) => c.relevantShas))];
     const found = await deps.chunks.getChunksByShas({
@@ -258,16 +253,14 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
       branch: dataset.project.branch,
     });
     const missingShas = judged.filter((sha) => !found.has(sha));
-    const warnings: string[] = [];
-
     if (missingShas.length > 0) {
-      const message = `${missingShas.length} judged SHA(s) are not indexed for ${dataset.project.branch}: ${missingShas.join(", ")}`;
-      if (!options.allowMissing) {
-        throw new Error(`${message}\nRun with --prepare, or pass --allow-missing.`);
-      }
-      warnings.push(`${message} (continuing because --allow-missing is set)`);
+      throw new Error(
+        `${missingShas.length} judged SHA(s) are not indexed for ${dataset.project.branch}: ${missingShas.join(", ")}\n` +
+          "Run with --prepare to index the branch first.",
+      );
     }
 
+    const warnings: string[] = [];
     try {
       const space = await deps.resolveSpace();
       if (
@@ -277,7 +270,7 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
       ) {
         warnings.push(
           `Embedding space mismatch: dataset pins ${dataset.embeddingSpace.provider}/${dataset.embeddingSpace.model}, ` +
-            `active space is ${space.provider}/${space.model}. Metrics will not be comparable.`,
+            `active is ${space.provider}/${space.model}. Metrics are not comparable.`,
         );
       }
 
@@ -288,7 +281,7 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
       });
       if (embedded === 0) {
         warnings.push(
-          "No embeddings in the active space; retrieval will use keyword fallback.",
+          "No embeddings in the active space; the retriever will use its lexical channel only.",
         );
       }
     } catch (error) {
@@ -300,23 +293,15 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
 
   async function run(input: {
     dataset: GoldenDataset;
-    projectId?: string;
     prepare: boolean;
-    allowMissing: boolean;
     topK?: number;
   }): Promise<EvalServiceResult> {
-    const { dataset } = input;
-    const { project, prepared } = await resolveProject(dataset, input);
-    const check = await checkDataset(dataset, project.id, {
-      allowMissing: input.allowMissing,
-    });
-
-    if (prepared && prepared.branch !== dataset.project.branch) {
-      check.warnings.push(
-        `Prepared branch ${prepared.branch} differs from dataset branch ${dataset.project.branch}.`,
-      );
-    }
-
+    const { dataset, prepare } = input;
+    const project = await resolveProject(dataset, prepare);
+    const prepared = prepare
+      ? await deps.prepareBranch(project.id, dataset.project.branch)
+      : undefined;
+    const check = await checkDataset(dataset, project.id);
     const report = await scoreDataset({
       dataset,
       projectId: project.id,
