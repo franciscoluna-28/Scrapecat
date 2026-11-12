@@ -1,16 +1,16 @@
 import type { ChatCitation } from "@/db/schema";
-import { aiClient, resolveChatModel } from "@/chat/ai";
+import { aiClient, resolveChatModel } from "@/rag/answer/ai";
 import {
   chatStore,
   type ChatMessageRow,
   type ChatSessionRow,
 } from "@/chat/chat-store";
-import { retriever } from "@/chat/retrieval";
-import { createTurnResolver, type TurnHistoryMessage } from "@/chat/turn";
+import { retriever } from "@/rag/retrieval/retrieve";
+import { createTurnResolver, type TurnHistoryMessage } from "@/rag/answer/turn";
 import type { ChatMessageDTO } from "@/chat/schemas";
 import { projectsStore } from "@/projects/stores/projects-store";
 import { prepareProjectBranch } from "@/projects/services";
-import type { IngestProgress } from "@/repositories/ingest";
+import type { IngestProgress } from "@/rag/indexing/ingest";
 
 export type ChatStreamOptions = {
   sessionId: string;

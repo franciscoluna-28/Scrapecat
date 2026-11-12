@@ -7,7 +7,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { fastifyRequestContext } from "@fastify/request-context";
 import { env } from "@/config/env";
-import { sweepStaleJobScratch } from "@/repositories/archive-service";
+import { sweepStaleJobScratch } from "@/rag/git/archive-service";
 import { shutdownJobQueue } from "@/shared/queue";
 
 /**

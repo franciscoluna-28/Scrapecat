@@ -1,9 +1,9 @@
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
-import { type AIResponse, aiClient, resolveChatModel } from "@/chat/ai";
+import { type AIResponse, aiClient, resolveChatModel } from "@/rag/answer/ai";
 import { projectsStore } from "@/projects/stores/projects-store";
-import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { prepareProjectBranch } from "@/projects/services";
 import {
   createReportsStore,

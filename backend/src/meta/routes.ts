@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { projectsStore } from "@/projects/stores/projects-store";
-import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 
 export async function getMeta(_req: FastifyRequest, reply: FastifyReply) {
   const projects = await projectsStore.listProjects();

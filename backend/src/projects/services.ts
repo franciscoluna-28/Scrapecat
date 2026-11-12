@@ -1,6 +1,6 @@
 import { env } from "@/config/env";
-import type { IngestProgress, IngestResult } from "@/repositories/ingest";
-import { commitChunksStore } from "@/projects/stores/commit-chunks-store";
+import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
+import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { projectsStore } from "@/projects/stores/projects-store";
 import { isDemoBranchAllowed } from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
@@ -8,9 +8,9 @@ import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { getJobQueue } from "@/shared/queue";
 import { JOB_NAMES, ingestBranchJobId } from "@/shared/queue/jobs";
-import { PROJECT_LOG_MESSAGES } from "@/projects/log-events";
+import { PROJECT_LOG_MESSAGES } from "@/rag/indexing/log-events";
 import { requestContext } from "@fastify/request-context";
-import "@/projects/jobs";
+import "@/rag/indexing/jobs";
 
 export async function listProjects() {
   const rows = await projectsStore.listProjectsWithIndexedBranches();

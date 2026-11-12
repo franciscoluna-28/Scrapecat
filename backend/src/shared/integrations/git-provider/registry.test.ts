@@ -4,7 +4,7 @@ import {
   type GitProviderId,
 } from "@/shared/integrations/git-provider/registry";
 import { commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
-import { authArgs } from "@/repositories/git";
+import { authArgs } from "@/rag/git/git";
 
 describe("git provider registry", () => {
   it("builds provider-aware commit and clone urls", () => {

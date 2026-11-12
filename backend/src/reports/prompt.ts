@@ -1,8 +1,8 @@
-import type { AIMessage } from "@/chat/ai";
+import type { AIMessage } from "@/rag/answer/ai";
 import {
   buildSystemPrompt,
   formatCitationForPrompt,
-} from "@/chat/prompts";
+} from "@/rag/context/prompts";
 import type { ChatCitation } from "@/db/schema";
 
 export const REPORT_PROMPT_COMMIT_LIMIT = 200;

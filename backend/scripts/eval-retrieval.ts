@@ -2,9 +2,9 @@ import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RETRIEVAL_LIMIT } from "@/chat/retrieval";
-import { loadGoldenDataset } from "@/eval/golden";
-import { evalService, type EvalReport } from "@/eval/service";
+import { RETRIEVAL_LIMIT } from "@/rag/retrieval/retrieve";
+import { loadGoldenDataset } from "@/rag/eval/golden";
+import { evalService, type EvalReport } from "@/rag/eval/service";
 
 type Options = {
   dataset: string;

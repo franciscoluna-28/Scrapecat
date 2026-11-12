@@ -26,8 +26,8 @@ vi.mock("@/projects/stores/projects-store", async (importOriginal) => {
   };
 });
 
-vi.mock("@/projects/stores/commit-chunks-store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/projects/stores/commit-chunks-store")>();
+vi.mock("@/rag/indexing/commit-chunks-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/rag/indexing/commit-chunks-store")>();
   return {
     ...actual,
     commitChunksStore: {

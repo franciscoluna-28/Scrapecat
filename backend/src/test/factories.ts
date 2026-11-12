@@ -3,8 +3,8 @@ import type { ChatCitation } from "@/db/schema";
 import type {
   CommitChunkInput,
   CommitSearchResult,
-} from "@/projects/stores/commit-chunks-store";
-import type { SourceCommit } from "@/repositories/ingest";
+} from "@/rag/indexing/commit-chunks-store";
+import type { SourceCommit } from "@/rag/indexing/ingest";
 import type { AISettingsInput } from "@/settings/schemas";
 import type { AISettings } from "@/settings/services";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
