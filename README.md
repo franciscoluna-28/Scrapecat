@@ -87,17 +87,27 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
 **Setup:**
 
 1. Install Ollama from [ollama.com](https://ollama.com/download)
-2. Pull the required models:
+2. Pull the tested defaults for this project:
    ```bash
-   ollama pull llama3.2:1b    # Chat model (1.3GB, 1.2B params)
-   ollama pull nomic-embed-text  # Embedding model (274MB)
+   ollama pull llama3.2:1b        # Chat: 1.2B params, ~1.3 GB
+   ollama pull nomic-embed-text   # Embeddings: 768 dims, ~274 MB
    ```
-3. Verify Ollama is running: `curl http://localhost:11434/api/tags`
+3. Verify Ollama is running and sees both models:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ollama list
+   ```
 4. In a chat, open the model selector and choose `Ollama (Local)` → `llama3.2:1b`
 5. In **Settings** (`/settings`), set **Embedding Provider** to `Ollama (Local)` → `nomic-embed-text`
 6. No API key is needed. Set `OLLAMA_BASE_URL` only if Ollama is not on the default port
 
 **Available models are fetched automatically** from your local Ollama instance — only installed models appear in the dropdown.
+
+**Verified local setup:** `llama3.2:1b` handles chat and `nomic-embed-text` returns 768-dimensional embeddings, matching the `vector(768)` column. Quick check:
+
+```bash
+ollama run llama3.2:1b "Reply with exactly: Scrapecat local support ready"
+```
 
 > **Docker users:** The backend connects to Ollama via `host.docker.internal`. Both compose files set this, so no extra config is needed when Ollama runs on the host.
 
