@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createServer } from "@/app/create-server";
-import { registerRoutes } from "@/app/register-routes";
+import { createServer } from "@/startup/create-server";
+import { registerRoutes } from "@/startup/register-routes";
 import { buildApp } from "@/build-app";
 
 const ROUTES = [

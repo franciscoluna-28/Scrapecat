@@ -126,9 +126,13 @@ export function GitProviderConnectForm({
             className="shrink-0"
             disabled={!token.trim() || connect.isPending}
             onClick={async () => {
-              await connect.mutateAsync(token.trim());
-              setToken("");
-              onConnected?.();
+              try {
+                await connect.mutateAsync(token.trim());
+                setToken("");
+                onConnected?.();
+              } catch {
+                return;
+              }
             }}
           >
             {connect.isPending ? "Connecting…" : "Connect"}
@@ -147,7 +151,7 @@ export function GitProviderConnectForm({
         </a>
 
         {connect.isError && (
-          <p className="text-xs text-destructive">{(connect.error as Error).message}</p>
+          <p className="text-xs text-destructive">{connect.error.message}</p>
         )}
       </div>
     );
@@ -188,16 +192,20 @@ export function GitProviderConnectForm({
       </div>
 
       {connect.isError && (
-        <p className="text-xs text-destructive">{(connect.error as Error).message}</p>
+        <p className="text-xs text-destructive">{connect.error.message}</p>
       )}
 
       <Button
         className="w-full"
         disabled={!token.trim() || connect.isPending}
         onClick={async () => {
-          await connect.mutateAsync(token.trim());
-          setToken("");
-          onConnected?.();
+          try {
+            await connect.mutateAsync(token.trim());
+            setToken("");
+            onConnected?.();
+          } catch {
+            return;
+          }
         }}
       >
         {connect.isPending ? "Connecting…" : `Connect ${meta.label}`}

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
 import { packDirectory, unpackArchive } from "./tar-archive";
 import type { ArchiveKey, ArchiveStore } from "./archive-store";

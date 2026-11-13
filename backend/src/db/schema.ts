@@ -1,9 +1,12 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
   customType,
   index,
   jsonb,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -45,6 +48,12 @@ export const vector = customType<{ data: number[]; driverData: string }>({
       .replace(/^\[|\]$/g, "")
       .split(",")
       .map(Number);
+  },
+});
+
+export const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
   },
 });
 
@@ -109,6 +118,9 @@ export const commitChunks = pgTable(
     metadata: jsonb("metadata")
       .$type<CommitChunkMetadata>()
       .default({}),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`setweight(to_tsvector('english', coalesce(commit_message, '')), 'A') || setweight(to_tsvector('simple', coalesce(metadata->>'filesChanged', '')), 'B')`,
+    ),
     committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -123,6 +135,15 @@ export const commitChunks = pgTable(
       embeddingIdx: index("commit_embedding_hnsw_idx").using(
         "hnsw",
         table.embedding.op("vector_cosine_ops"),
+      ),
+      searchVectorIdx: index("commit_search_vector_gin_idx").using(
+        "gin",
+        table.searchVector,
+      ),
+      windowIdx: index("commit_project_branch_committed_at_idx").on(
+        table.projectId,
+        table.branch,
+        table.committedAt,
       ),
     };
   },
@@ -182,10 +203,17 @@ export const chatMessages = pgTable(
     citations: jsonb("citations")
       .$type<ChatCitation[]>()
       .default([]),
+    // Client-generated id for the logical turn. Unique per (session, role) so a
+    // retried send can be deduped with ON CONFLICT DO NOTHING instead of
+    // creating a second turn.
+    clientMessageId: text("client_message_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     sessionIdIdx: index("chat_messages_session_id_idx").on(table.sessionId),
+    clientMessageIdIdx: uniqueIndex("chat_messages_client_id_idx")
+      .on(table.sessionId, table.role, table.clientMessageId)
+      .where(sql`${table.clientMessageId} is not null`),
   }),
 );
 
@@ -198,4 +226,65 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const reportSchedules = pgTable(
+  "report_schedules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    cadence: text("cadence").default("daily").notNull(),
+    dayOfWeek: smallint("day_of_week").default(5).notNull(),
+    hour: smallint("hour_local").default(9).notNull(),
+    timezone: text("timezone").default("UTC").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastStatus: text("last_status").default("idle").notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectBranchIdx: uniqueIndex("report_schedules_project_branch_idx").on(
+      table.projectId,
+      table.branch,
+    ),
+    dueIdx: index("report_schedules_due_idx").on(table.enabled, table.nextRunAt),
+  }),
+);
+
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    summary: text("summary").notNull(),
+    sourceCommits: jsonb("source_commits")
+      .$type<ChatCitation[]>()
+      .default([])
+      .notNull(),
+    provider: text("provider"),
+    model: text("model"),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectBranchCreatedIdx: index("reports_project_branch_created_idx").on(
+      table.projectId,
+      table.branch,
+      table.createdAt,
+    ),
+    createdIdx: index("reports_created_idx").on(table.createdAt),
+  }),
+);
+
+export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
+export type ReportRow = typeof reports.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

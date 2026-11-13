@@ -1,7 +1,7 @@
 import "dotenv/config.js";
 import { db } from "@/db/client";
 import { commitChunks } from "@/db/schema";
-import { embedNewChunks } from "@/projects/embed-chunks";
+import { embedNewChunks } from "@/rag/indexing/embed-chunks";
 
 async function main() {
   const projects = await db

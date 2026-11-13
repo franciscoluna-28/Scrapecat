@@ -1,4 +1,4 @@
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { createFsArchiveStore } from "./fs-archive-store";
 import { createMemoryArchiveStore } from "./memory-archive-store";
 import { createS3ArchiveStore } from "./s3-archive-store";

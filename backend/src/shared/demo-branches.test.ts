@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { restrictDemoBranches, isDemoBranchAllowed } from "@/shared/demo-branches";
+import {
+  restrictDemoBranches,
+  isDemoBranchAllowed,
+  isDemoTrunkBranch,
+} from "@/shared/demo-branches";
 
 describe("restrictDemoBranches", () => {
   it("keeps only trunk branches", () => {
@@ -28,5 +32,13 @@ describe("isDemoBranchAllowed", () => {
   it("rejects non-trunk branches", () => {
     expect(isDemoBranchAllowed("dev", "main")).toBe(false);
     expect(isDemoBranchAllowed("feat/x", "main")).toBe(false);
+  });
+});
+
+describe("isDemoTrunkBranch", () => {
+  it("recognizes only main and master", () => {
+    expect(isDemoTrunkBranch("main")).toBe(true);
+    expect(isDemoTrunkBranch("master")).toBe(true);
+    expect(isDemoTrunkBranch("dev")).toBe(false);
   });
 });

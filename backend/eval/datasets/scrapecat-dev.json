@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "name": "scrapecat-dev",
+  "project": {
+    "gitProvider": "github",
+    "providerOwner": "franciscoluna-28",
+    "repositoryName": "scrapecat",
+    "branch": "dev"
+  },
+  "embeddingSpace": {
+    "provider": "openrouter",
+    "model": "openai/text-embedding-3-small"
+  },
+  "cases": [
+    {
+      "id": "gitlab-support",
+      "query": "When did we add support for GitLab repositories?",
+      "category": "semantic",
+      "relevantShas": [
+        "33f80b55b9e9ec072e2e230ef5661bb2ed754998",
+        "c8a5afe02bf9c8e1e596ffbdfa9fcf2566f659b6",
+        "6504c84a5a596fd82c40c06f29947e65e91c48b4"
+      ]
+    },
+    {
+      "id": "opencode-go-provider",
+      "query": "When did we add the OpenCode Go chat provider?",
+      "category": "semantic",
+      "relevantShas": ["f5d32f408f38320a21871b7ddae6f73c2c410a26"]
+    },
+    {
+      "id": "ai-protocols",
+      "query": "How does one provider serve models with different API protocols?",
+      "category": "semantic",
+      "relevantShas": ["ceda0adea4de6eef77bdb3a309c83e07f9ce47a0"]
+    },
+    {
+      "id": "production-docker",
+      "query": "When did we add production Docker images?",
+      "category": "semantic",
+      "relevantShas": [
+        "0ccbe8c049087ce51805adb1c916ae4de9ab774a",
+        "9bb5ed58b026500e3775652bf0abc63d1a20f239"
+      ]
+    },
+    {
+      "id": "session-ownership",
+      "query": "How do we stop one visitor from reading another visitor's chat?",
+      "category": "semantic",
+      "relevantShas": ["cf3c6fde385184b4f935ec0f7e04af1d4a242c74"]
+    },
+    {
+      "id": "embedding-model-change",
+      "query": "How do we handle switching the embedding model?",
+      "category": "semantic",
+      "relevantShas": [
+        "ce13e4c572d7b1791685f5492fbacef28d0c2a16",
+        "2d4992e78656a19b0029c0752da29e5542f4f2f8"
+      ]
+    },
+    {
+      "id": "citation-cards",
+      "query": "How are cited commits displayed in the chat?",
+      "category": "semantic",
+      "relevantShas": [
+        "e7d05b823e9a2ae0d7dcd3efe0bd49ca5170cb3b",
+        "905955d4696c68394da2a48e13fc0617ee4194f5",
+        "7ca472909c5e602a59ba6101bb5865a2a8225840"
+      ]
+    },
+    {
+      "id": "embedding-failure-resilience",
+      "query": "What happens if embeddings fail during ingestion?",
+      "category": "semantic",
+      "relevantShas": ["d1ff4da477eb5e523cc174e52ffeb7b45018216f"]
+    },
+    {
+      "id": "keyword-readiness-probe",
+      "query": "readiness probe",
+      "category": "keyword",
+      "relevantShas": ["c53b633357ae4a0801e423118859217338a63281"]
+    },
+    {
+      "id": "keyword-graceful-shutdown",
+      "query": "graceful shutdown",
+      "category": "keyword",
+      "relevantShas": ["507be692d5f6c41c238ae02191efc15198fdba04"]
+    },
+    {
+      "id": "keyword-gitlab-adapter",
+      "query": "gitlab provider adapter",
+      "category": "keyword",
+      "relevantShas": ["33f80b55b9e9ec072e2e230ef5661bb2ed754998"]
+    },
+    {
+      "id": "temporal-october-2026",
+      "query": "What did we ship in October 2026?",
+      "category": "temporal",
+      "relevantShas": [
+        "eb8f9e4e4050e54340016a07cd020c78448b6b1f",
+        "8a4feb4336ca61217e1a1fb33f10f57d821cf686",
+        "3a55296db966e7236ca3842e7ffdbe0b2a65200f",
+        "f5d32f408f38320a21871b7ddae6f73c2c410a26",
+        "33f80b55b9e9ec072e2e230ef5661bb2ed754998",
+        "ce13e4c572d7b1791685f5492fbacef28d0c2a16",
+        "2fe8aff1e342f6a73984bd730d32f9dfb128185c",
+        "c53b633357ae4a0801e423118859217338a63281"
+      ]
+    },
+    {
+      "id": "temporal-september-2026-demo",
+      "query": "What demo work landed in September 2026?",
+      "category": "temporal",
+      "relevantShas": [
+        "8fccee9bb37f6f4f38663958618d9f5beac311e2",
+        "6f1d8e8c285bd5569ad51e6ba953a5698e395b2f",
+        "29305e4ec4cc932bccf3b0cb3e31e83fc9a6c9da",
+        "508493184827acd2c27a629b122a41576212a964",
+        "258d00689c9e7c9a2ffb69cfebdc329f154837aa"
+      ]
+    },
+    {
+      "id": "negative-kubernetes",
+      "query": "Which Kubernetes autoscaling settings did we tune?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-billing",
+      "query": "What did we change in the billing and payments system?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-mobile-app",
+      "query": "What changed in the iOS and Android mobile apps?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-push-notifications",
+      "query": "How did we tune mobile push notification delivery?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-salesforce",
+      "query": "How does the Salesforce CRM sync work?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-gdpr-export",
+      "query": "How do users export or delete their data under GDPR?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-email-marketing",
+      "query": "Which email marketing campaigns did we launch?",
+      "category": "negative",
+      "relevantShas": []
+    },
+    {
+      "id": "negative-pricing-tiers",
+      "query": "What changed in the pricing tiers and subscription plans?",
+      "category": "negative",
+      "relevantShas": []
+    }
+  ]
+}

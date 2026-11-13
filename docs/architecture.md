@@ -25,6 +25,21 @@ flowchart TB
     INFRA -.->|future| EXT["Bitbucket"]
 ```
 
+## Backend layout
+
+The backend is grouped by tier (see `backend/AGENTS.md` → "API layer"):
+
+- `src/api/` — HTTP domains: `chat`, `credentials`, `repositories`,
+  `settings`, `reports`, `system`. Each owns its `routes.ts`, `schemas.ts`,
+  services, stores, and colocated tests.
+- `src/rag/` — the retrieval/indexing pipeline: `answer`, `context`,
+  `retrieval`, `indexing`, `git`, `github`, `eval`.
+- `src/shared/` — cross-cutting infrastructure: `integrations/`, `storage/`,
+  `queue/`, `config/`, `utils/`.
+- `src/startup/` — server composition (`create-server.ts`,
+  `register-routes.ts`); `src/build-app.ts` is the public entrypoint.
+- `src/db/` — DB client, schema, and migrations.
+
 ## RAG pipeline
 
 `POST /api/v1/chat/sessions/:id/messages` ingests the branch if needed, then
@@ -54,6 +69,8 @@ sequenceDiagram
 - **Date windows** ("last 30 days", "since June") are parsed into metadata
   filters; temporal keywords with no explicit date anchor on the latest commit.
 - **Grounding** is the commit message plus file scope — see [`embeddings.md`](embeddings.md).
+- **Quality** is measured with golden-set retrieval evals (`pnpm eval`) — see
+  [`evaluation.md`](evaluation.md).
 
 ## Commit ingestion
 
@@ -92,7 +109,7 @@ flowchart TD
 
 ### Why native git (not a JS git library)
 
-`src/repositories/git.ts` shells out to the system `git` binary with `execFile`,
+`src/rag/git/git.ts` shells out to the system `git` binary with `execFile`,
 baked into the image (`backend/Dockerfile.dev`). Do **not** replace it with
 `isomorphic-git`, `nodegit`, etc.:
 
@@ -136,8 +153,8 @@ Two roles, each with a provider + model setting stored in `app_settings`:
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
 `defaultAISettings()` (env defaults). Chat calls go through
 `resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
-`src/chat/ai.ts`; embeddings through `embedTexts()` in
-`src/projects/embeddings.ts`. Each `commit_chunks` row stores its embedding
+`src/rag/answer/ai.ts`; embeddings through `embedTexts()` in
+`src/rag/indexing/embeddings.ts`. Each `commit_chunks` row stores its embedding
 provider/model, and retrieval only searches vectors in the current space;
 changing the embedding model enqueues a background reindex.
 
@@ -146,15 +163,53 @@ Chat model ids are resolved through the provider catalog
 transport protocol (`openai-chat`, `openai-responses`, `anthropic-messages`, or
 `google-generative`). `protocols.ts` is the only module that imports model SDKs;
 `createAIClient()` hands it the registry config, catalog entry, and key. The
-client factory and `createChatService()` are the DI seams — tests inject fake
-SDK functions or fake turn dependencies instead of mocking the whole call path.
+client factory, `createTurnResolver()`, `createChatService()`, and
+`createAnswerService()` are the DI seams — tests inject fake SDK functions or
+fake turn dependencies instead of mocking the whole call path.
 The RAG stages are explicit: `createRetriever()` owns `retriever.resolveScope()`
 (query window + semantic/keyword search), prompt assembly stays pure, and
-`chatService` composes them with `aiClient.stream()`.
+`turnResolver` composes project/branch/retrieval/model/prompt for both the web
+chat (`chatService` + `aiClient.stream()`) and the stateless MCP/CLI path
+(`answerService` + `aiClient.generate()`).
+
+## Multiple clients (web chat and MCP)
+
+Scrapecat has two front doors over one RAG pipeline: the stateful Next.js chat
+and a stateless MCP/CLI path. They must not reimplement retrieval, prompts, or
+model resolution, so the turn is split into a shared core and thin clients:
+
+```mermaid
+flowchart LR
+  WEB["Next.js web chat"] --> SVC["chatService<br/>sessions + SSE + persistence"]
+  MCP["MCP server / CLI"] --> ANSWER["answerService<br/>stateless one-shot"]
+  SVC --> TURN["turnResolver<br/>project + branch + retrieval + model + prompt"]
+  ANSWER --> TURN
+  TURN --> DB[("Postgres read model")]
+```
+
+- `src/rag/answer/turn.ts` owns project lookup, branch selection, retrieval
+  (`resolveScope` or an explicit window), model resolution, and prompt
+  assembly. It never creates sessions, writes messages, or touches Fastify/SSE.
+- `src/api/chat/services.ts` is the web-only facade: sessions, history, streaming,
+  and persistence. It passes `prepareProjectBranch` into the turn resolver so
+  the web chat can ingest on demand.
+- `src/rag/answer/answer.ts` is the stateless one-shot path. It calls the same turn
+  resolver and `aiClient.generate()`, with no session or message writes. MCP
+  tools can omit the prepare callback, keeping them read-only over indexed
+  commits.
+- `search_commits` (future MCP tool) uses the retriever directly;
+  `summarize_period` uses `answerService`.
+
+Rule of thumb: a change that affects both clients (persona, retrieval, prompt,
+model selection) belongs in `turn.ts` and must be covered by the turn tests.
+Transport and persistence concerns stay in `services.ts`, `routes.ts`, or the
+MCP adapters.
 
 ## Tech debt
 
-Every shortcut below is intentional and tracked, not accidental.
+Every shortcut below is intentional and tracked, not accidental. Frontend-only
+debt is tracked separately in
+[`frontend-tech-debt.md`](./frontend-tech-debt.md).
 
 ### Git provider coupling
 
@@ -167,6 +222,22 @@ adapter. Connection routes are provider-generic
 call-site sweep — GitLab (`GitlabAdapter` + a thin `fetch` client, self-hosted
 via `GITLAB_HOST`) was exactly that. Full DI is deliberately unused: the
 registry/factory is the seam and is enough for one adapter per provider.
+
+### GitLab removal (planned)
+
+GitLab support is being removed. Adoption was poor, GitHub is the only provider
+the product needs, and GitHub's native features keep improving. The second
+adapter costs more than it returns: it adds a provider registry entry, a separate
+REST client, token and host env vars, `git_provider`/`credential_provider` enum
+values, discovery fanout, clone/auth branches, and frontend provider selection
+and URL parsing.
+
+The removal covers the backend adapter/client and tests, GitLab env vars, DB enum
+values (with a preflight so existing GitLab rows are handled explicitly), the
+provider-generic discovery and connection surfaces, and the frontend provider
+picker, icon, metadata, and URL parsing. After it lands, the remaining git
+provider code collapses to a single GitHub module. Tracked as P2-10 in the
+backlog.
 
 ### Database coupling
 
@@ -236,17 +307,33 @@ message by design (this is commit/PR review, not code review). Revisit only if
 message-based retrieval proves insufficient — the `embed:backfill` script already
 handles one-time re-embedding.
 
+### Idempotency is a natural key, not a layer
+
+There is no generic request-idempotency middleware. Projects, credentials, and
+git connections already upsert on their natural keys (`(git_provider,
+provider_project_id)` and `provider`), so retries are harmless. The only
+duplicate-write sharp edge was chat turns, where a retried send could add a
+second user/assistant pair and call the model again. That is solved with one
+nullable `chat_messages.client_message_id` column, a partial unique index on
+`(session_id, role, client_message_id)`, and `ON CONFLICT DO NOTHING`: the
+frontend generates one id per logical send, the backend dedupes and replays a
+completed turn. No separate key table, hashing, locks, TTLs, or status machine.
+
+A generic `idempotency_keys` design was considered and rejected as
+overengineering for this app — it adds infrastructure for cases that natural
+keys already cover.
+
 ## What needs to happen
 
 Decouple in phases, no big-bang rewrites:
 
-1. **Git provider interface** — done: the registry/factory returns the interface,
-   and provider-generic connection routes own auth.
+1. **Git provider interface** — GitHub-only. GitLab support is being removed
+   (see Tech debt → GitLab removal); the registry/factory collapses to one
+   adapter.
 2. **Data access layer** — per-domain stores (already largely in place); vector
    search infrastructure is ready.
-3. **Next provider** — GitLab is done (gitlab.com by default, `GITLAB_HOST` for
-   self-hosted). Demo ingestion remains GitHub-only; a Bitbucket adapter would
-   follow the same registry/adapter pattern.
+3. **Provider scope** — GitHub is the product. Bitbucket or any additional
+   provider is deferred until adoption justifies a second adapter.
 
 Full DI is not on the roadmap: the factory is the seam, and injecting services
 would add ceremony without a second consumer. Each future migration: implement

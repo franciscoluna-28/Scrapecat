@@ -15,6 +15,7 @@ function repo(
     private: false,
     updated_at: "2024-01-01T00:00:00Z",
     owner: { login: "owner" },
+    description: null,
     default_branch: "main",
     ...overrides,
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Copy } from "lucide-react";
 import {
@@ -16,7 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/src/compo
 import { CommitCitationCard } from "./CommitCitationCard";
 import { cn } from "@/src/shared/lib/utils";
 
-export function MessageView({
+export const MessageView = memo(function MessageView({
   message,
   streaming,
   awaitingResponse,
@@ -93,4 +93,4 @@ export function MessageView({
       )}
     </Message>
   );
-}
+});

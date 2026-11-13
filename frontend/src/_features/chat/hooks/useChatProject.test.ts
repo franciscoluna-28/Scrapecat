@@ -110,14 +110,14 @@ describe("resolveActiveProjectId", () => {
     ).toBe("p2");
   });
 
-  it("falls back to the first project when there is no history", () => {
+  it("does not auto-select the first project when there is no history", () => {
     expect(
       resolveActiveProjectId({
         ...base,
         projectParam: null,
         lastProjectId: null,
       }),
-    ).toBe("p1");
+    ).toBeNull();
   });
 
   it("does not auto-select while loading, in demo mode, or with no projects", () => {
@@ -149,6 +149,15 @@ describe("resolveActiveProjectId", () => {
 });
 
 describe("useChatProject", () => {
+  it("uses the URL project and session as the source of truth", () => {
+    useActiveProjectStore.setState({ lastProjectId: "p1" });
+    mocks.searchParams = new URLSearchParams("project=p2&session=s1");
+    const { result } = renderHook(() => useChatProject());
+
+    expect(result.current.projectId).toBe("p2");
+    expect(result.current.sessionId).toBe("s1");
+  });
+
   it("derives the active project and branch without a navigation effect", () => {
     useActiveProjectStore.setState({ lastProjectId: "p2" });
     const { result } = renderHook(() => useChatProject());
@@ -201,6 +210,8 @@ describe("useChatProject", () => {
     expect(useActiveProjectStore.getState().lastProjectId).toBe(
       "demo-project-id",
     );
-    expect(mocks.push).toHaveBeenCalledWith("/app?project=demo-project-id");
+    expect(mocks.push).toHaveBeenCalledWith(
+      "/app/chat?project=demo-project-id",
+    );
   });
 });

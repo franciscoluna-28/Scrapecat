@@ -71,5 +71,13 @@ export function parseRepoUrl(input: string): ParsedRepoUrl | null {
   const owner = repoPath.slice(0, -1).join("/");
   if (!owner || !repo) return null;
 
+  const safeSegment = /^[A-Za-z0-9._-]+$/;
+  const ownerSafe = owner
+    .split("/")
+    .every((segment) => safeSegment.test(segment) && segment !== "." && segment !== "..");
+  if (!ownerSafe || !safeSegment.test(repo) || repo === "." || repo === "..") {
+    return null;
+  }
+
   return provider ? { owner, repo, provider } : { owner, repo };
 }

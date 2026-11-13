@@ -1,4 +1,4 @@
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 import { GithubAdapter } from "@/shared/integrations/git-provider/github-adapter";
 import { GitlabAdapter } from "@/shared/integrations/git-provider/gitlab-adapter";
 import { normalizeGitlabHost } from "@/shared/integrations/git-provider/gitlab-client";

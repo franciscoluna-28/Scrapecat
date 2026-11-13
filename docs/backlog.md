@@ -10,14 +10,14 @@ not just value — see rationale per item.
 
 ## P0 — Foundation / unblockers
 
-All P0 items are complete — see [Done](#done--completed).
+None open. P0-1–P0-4 are complete — see [Done](#done--completed).
 
 ## P1 — Highest-value product work
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P1-3 | **RAG evaluation harness** | quality | No golden-set eval exists, so retrieval quality is unfalsifiable. Build before any retrieval change (P2-2) so improvements are measurable, not vibes. |
-| P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. Gated on P1-3. |
+| P1-4 | **Reranking / hybrid scoring** | retrieval | Retrieval is vector + keyword fallback only. A rerank (or hybrid score fusion) stage is the single biggest lever on answer quality. P1-3 is done, so this can now be measured. |
+| P1-5 | **In-app daily summaries** | product | The daily push: scheduled, in-app reports of what shipped for the selected repositories, grounded in commits with citations. Turns Scrapecat from a pull-only chat into a habit. In-app only in v1; see [`vision.md`](../vision.md). |
 
 ## P2 — Roadmap items (larger scope)
 
@@ -25,17 +25,21 @@ All P0 items are complete — see [Done](#done--completed).
 |---|---|---|---|
 | P2-2 | **Scheduled / webhook re-ingest** | ingestion | Ingestion is on-demand per chat, so "what did engineering do today?" depends on someone opening the app. A GitHub webhook or cron re-ingest is what makes the core promise actually true. |
 | P2-3 | **Orphaned archive cleanup on delete** | storage | Deleting a project cascades in Postgres but orphans its S3 object / fs clone (`AGENTS.md:82`). Regenerable but silently leaks. Add a delete hook. |
-| P2-4 | **Per-instance GitLab hosts** | integrations | `GITLAB_HOST` is a server-wide setting. Multi-tenant/self-hosted-per-project needs the host stored alongside the project/credential (the credentials table is keyed by provider only, so two instances would collide). |
 
 ### Engineering hygiene / refactors
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-5 | **Chat-session ownership guard** | chat | Session load + `anonymousId` check is duplicated in `chat/routes.ts:69-75,97-103`, and `getMessages` (`51-63`) skips it. Add a `preHandler` + `req.chatSession` decorator: one lookup, 404/403 in one place, and read/delete/stream agree on access. |
-| P2-6 | **SSE reply plugin** | chat | `chat/routes.ts:105-148` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
-| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 (`projects`, `gitRepositories`, `credentials`, `settings`, `gitConnections`, `chat` routes). Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`create-server.ts:47`), log via the shared pino logger, and let handlers throw. |
-| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `credentials/routes.ts:19-20,33-35,54-56`, `gitConnections/routes.ts:31-35,72-76`, and `projects/routes.ts:58-60`; `unsupportedInDemo` is at `gitRepositories/routes.ts:44-49`. Extract `preHandler` guards applied in `register-routes.ts`. |
-| P2-9 | **Provider-param guard** | backend | `unimplementedProvider` is re-applied in each `gitConnections` handler (`18-25,40,57,80`) and credential providers are validated inside services. Validate `:provider` once via a `preHandler` / TypeBox union. |
+| P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete repeat the session lookup + `canAccessSession` check (`src/api/chat/routes.ts:56-90,98-106`). Add a `preHandler` + `req.chatSession` decorator so one lookup serves all session routes. Authorization behavior itself is already fixed by P2-5a. |
+| P2-6 | **SSE reply plugin** | chat | `src/api/chat/routes.ts:108-153` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
+| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `repositories`, `credentials`, `settings`, and `chat` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`src/startup/create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
+| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `src/api/credentials/routes.ts:20,33,54`, `src/api/credentials/git-connection-routes.ts:31,72`, and `src/api/repositories/routes.ts:42`; `unsupportedInDemo` is at `src/api/repositories/discovery.ts:44-49,109,168,212,284`. Extract `preHandler` guards applied in `src/startup/register-routes.ts`. |
+| P2-9 | **Credential provider body validation** | backend | `AddCredentialBody` / `VerifyCredentialBody` still accept any string and reject unsupported providers inside `src/api/credentials/services.ts:39-43`. Derive a `CredentialProviderSchema` from `PROVIDER_REGISTRY` and validate at the route boundary; keep the service check as defense in depth. Git `:provider` validation is done (P2-9a). |
+| P2-10 | **Remove GitLab provider support** | integrations | Poor adoption, and GitHub is the only provider the product needs while GitHub's native features keep improving. A second adapter costs a REST client, `GITLAB_TOKEN`/`GITLAB_HOST`, `git_provider`/`credential_provider` enum values, discovery fanout, clone/auth branches, and frontend provider selection/URL parsing. Remove it, then collapse the remaining git-provider registry/interface to GitHub-only. See `architecture.md` → Tech debt → "GitLab removal (planned)". |
+
+Frontend-specific debt (chat streaming/state, API error boundary, project
+identity duplication, vendored UI, config drift, RSC boundary, test gaps) is
+tracked in [`frontend-tech-debt.md`](./frontend-tech-debt.md).
 
 ## P3 — Deferred / strategic
 
@@ -56,7 +60,6 @@ Known limits that only bite past a single trusted deployment:
 |---|---|---|
 | **No multi-tenant identity** | Intentional for open-source self-hosted; chat sessions and demo writes are already authorization-scoped, but there is no account/tenant isolation | P3-2 |
 | **In-process queue only** | A crash or redeploy drops queued ingests, and workers cannot scale horizontally | P3-8 |
-| **One GitLab host per backend** | A single `GITLAB_HOST` cannot serve multiple self-hosted instances | P2-4 |
 | **No project-delete / archive cleanup** | Storage grows unbounded as projects are added and removed | P2-3 |
 | **Unbounded pending-embedding reads** | Memory scales with the whole backlog, not the batch size | P3-6 |
 | **No ingest transactions** | Partial writes become unsafe once ingests run concurrently across tenants | P3-1 |
@@ -66,18 +69,22 @@ Known limits that only bite past a single trusted deployment:
 **Stability comes before feature work.** CI, bounded provider calls, graceful
 shutdown, readiness, and UI error boundaries are prerequisites for asking anyone
 to run the tool. Production images are available for self-hosted clients (P3-7);
-the serverless Vercel path is unchanged. Only after stability does retrieval
-quality (P1-3 → P1-4) become the priority.
+the serverless Vercel path is unchanged. Retrieval quality is now measurable
+(P1-3), so reranking (P1-4) is the next product item.
 
-Eval harness + reranking → providers → next provider (Bitbucket would follow the
-same adapter pattern).
-External integrations and auth stay deferred until retrieval quality is
-measurable and the platform is multi-tenant-ready. See `docs/architecture.md`
-("Tech debt" / "What needs to happen") for the underlying structural debt.
+Reranking → Summary (see [`vision.md`](../vision.md)) → ingestion hardening.
+Provider expansion is deferred; GitLab is being removed (P2-10) so the product
+stays GitHub-only. External integrations and auth stay deferred until retrieval
+quality is measurable and the platform is multi-tenant-ready. See
+`docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
+structural debt.
 
 The Fastify refactors (P2-5–P2-9) are independent and can land between product
-items; P2-5 should be first because it also aligns chat read authorization with
-delete/stream.
+items. P2-6 is a good first follow-up: it is self-contained and reusable for
+future streaming endpoints. P2-7 is the broadest cleanup, P2-8 and the
+remaining credential-body part of P2-9 are narrow guard extractions, and P2-5 is
+now only a dedupe refactor because its authorization half (P2-5a) already
+landed.
 
 ## Done — completed
 
@@ -89,12 +96,16 @@ delete/stream.
 | S-5 | **Readiness probe** | backend | `GET /api/v1/health/ready` checks Postgres and returns 503 on failure; liveness stays on `/health`. |
 | S-6 | **UI error boundaries** | frontend | Root `error.tsx` and `global-error.tsx` show a retry surface instead of a blank screen. |
 | S-7 | **Startup config validation** | backend | `ENCRYPTION_KEY` must be base64-encoded 32 bytes at boot, not at first encrypt. |
+| P1-3 | **RAG evaluation harness** | quality | Golden datasets (`backend/eval/datasets/`) score the real retriever with recall@k, precision@k, MRR, nDCG@k, and negative-result accuracy. `pnpm eval` runs one on demand; pure metric/dataset tests run in CI. Baselines and labeling rules live in `docs/evaluation.md`. |
 | P1-1 | **New model providers** | integrations | Added Groq as the first new provider (OpenAI-compatible, Bearer auth): registry + catalog entry, `GROQ_API_KEY`, `credential_provider` enum value, and frontend provider constant. Settings schema unions and the models aggregation now derive from the registry, so the next provider is a registry entry, catalog entries, an env key, and an enum value. Anthropic/Gemini still need provider-aware credential verification (`x-api-key` / `?key=`). |
 | P0-1 | **Request IDs + correlation** | backend | `genReqId` mints/echoes `x-request-id`; an `AsyncLocalStorage` request context (`@fastify/request-context`) exposes `reqId` to the shared logger for the whole request lifecycle. |
 | P0-2 | **SSE error contract + heartbeat** | chat | `streamMessage` sends periodic heartbeat comments and a terminal `event: error` frame on mid-stream failure instead of leaving the client hanging. |
 | P0-3 | **Validate `startDate`/`endDate`** | gitRepositories | TypeBox `format: "date-time"` on the discovery query so bad dates return 400. |
+| P0-4 | **Chat-turn idempotency** | chat | `chat_messages.client_message_id` + partial unique index `(session_id, role, client_message_id)`; `ON CONFLICT DO NOTHING` dedupes retried sends and replays a completed turn. The frontend generates one id per logical send. Projects/credentials/git connections already upsert on natural keys, so no generic layer was needed. The original `idempotency_keys` table, hashing, locks, TTLs, replay responses, and header contract were overengineering for this app; only the extreme case — duplicate user chat turns — is handled. |
 | P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
+| P2-5a | **Chat-session ownership enforcement** | chat | Read, stream, and delete now return 404 for a session owned by another anonymous id; the header is trimmed/capped and input is bounded. Landed in `cf3c6fd`. |
+| P2-9a | **Git provider param validation** | backend | `GitProviderParams` already enforces the `GitProviderSchema` union (`github`/`gitlab`), so the redundant `unimplementedProvider` guard was removed from the connection handlers. |
 | P3-3 | **Persona-driven synthesis** | product | Per-conversation `persona` (`founder` / `cto` / `engineer`) flows from `ChatComposer` through `useAIChat` and the chat API into `buildSystemPrompt`, which maps each persona to audience-specific tone rules. Frontend and backend persona lists are kept in sync. |
 | P3-7 | **Production Docker images** | deployment | Workspace-aware `backend/Dockerfile` and `frontend/Dockerfile`, plus `docker-compose.prod.yml`. Backend bundles `main` and the migration runner with esbuild, installs prod deps only, ships native git, runs as non-root, healthchecks readiness, and migrates on boot. Frontend builds a Docker-only Next standalone bundle (guarded by `NEXT_OUTPUT`, so Vercel is unchanged) and runs `server.js` as non-root. See `docs/deployment.md`. |
 | — | **Embedding resilience** | ingestion | Provider failures no longer fail an ingest: chunks are stored, the failure is logged, and retrieval falls back to keyword search. Every ingest re-checks pending embeddings, so a temporary outage self-heals on the next branch prepare; `pnpm embed:backfill` is the bulk path. |

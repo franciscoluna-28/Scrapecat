@@ -102,8 +102,33 @@ export const MODEL_CATALOG: Record<string, ModelDescriptor[]> = {
   ollama: [],
 };
 
+// OpenRouter and Ollama are dynamic (free model list / installed models).
+const CLOSED_CHAT_CATALOGS = new Set([
+  "deepseek",
+  "openai",
+  "groq",
+  "opencode-go",
+]);
+
+// MVP embedding models constrained to the vector(768) column.
+export const EMBEDDING_MODEL_ALLOWLIST = new Set([
+  "openai/text-embedding-3-small",
+  "openai/text-embedding-3-large",
+]);
+
 export function getCatalogModels(provider: string): ModelDescriptor[] {
   return MODEL_CATALOG[provider] ?? [];
+}
+
+export function isChatModelAllowed(provider: string, modelId: string): boolean {
+  if (!CLOSED_CHAT_CATALOGS.has(provider)) return true;
+  return getCatalogModels(provider).some((model) => model.id === modelId);
+}
+
+export function isEmbeddingModelAllowed(provider: string, modelId: string): boolean {
+  if (provider === "ollama") return true;
+  if (provider === "openrouter") return EMBEDDING_MODEL_ALLOWLIST.has(modelId);
+  return false;
 }
 
 export function resolveModel(

@@ -11,6 +11,14 @@ const streamdownPlugins: NonNullable<
   ComponentProps<typeof Streamdown>["plugins"]
 > = { cjk, math, mermaid };
 
+// Model output is untrusted. Block images so prompt-injected markdown cannot
+// beacon the viewer's browser to an external host.
+const safeComponents: NonNullable<
+  ComponentProps<typeof Streamdown>["components"]
+> = {
+  img: () => null,
+};
+
 const MessageResponseInner = memo(
   ({ className, ...props }: ComponentProps<typeof Streamdown>) => (
     <Streamdown
@@ -20,6 +28,7 @@ const MessageResponseInner = memo(
       )}
       plugins={streamdownPlugins}
       {...props}
+      components={safeComponents}
     />
   ),
   (prevProps, nextProps) =>

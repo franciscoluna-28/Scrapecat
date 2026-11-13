@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/src/shared/api/client";
-import { queryKeys } from "@/src/shared/services/keys";
-import { useProjects } from "@/src/_features/chat/services/projects-api";
+import { toast } from "sonner";
+import { errorMessage } from "@/src/shared/api/client";
+import { useCreateProject, useProjects } from "@/src/_features/chat/services/projects-api";
 import {
   IS_DEMO,
   DEMO_PROJECTS,
@@ -20,7 +19,7 @@ export type DemoProjectEntry = DemoProject & { projectId: string | null };
  * create it on demand via the same endpoint the "connect repository" flow uses.
  */
 export function useDemoProjects() {
-  const queryClient = useQueryClient();
+  const { mutateAsync: createProject } = useCreateProject();
   const { projects } = useProjects();
 
   const findProject = useCallback(
@@ -52,21 +51,22 @@ export function useDemoProjects() {
       const existing = findProject(demo);
       if (existing) return existing.id;
 
-      const res = await apiClient.POST("/api/v1/projects", {
-        body: {
+      try {
+        const project = await createProject({
           gitProvider: "github",
           providerProjectId: demo.id,
           providerOwner: demo.owner,
           repositoryName: demo.repo,
           defaultBranch: demo.defaultBranch,
-        },
-      });
-      if (res.error || !res.data) return null;
+        });
 
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.list });
-      return res.data.id;
+        return project.id;
+      } catch (error) {
+        toast.error(errorMessage(error, "Failed to open demo project"));
+        return null;
+      }
     },
-    [findProject, queryClient],
+    [createProject, findProject],
   );
 
   return { isDemo: IS_DEMO, demoProjects, defaultProject, ensureProject };

@@ -6,11 +6,15 @@ import {
   type DemoProjectEntry,
 } from "@/src/_features/demo/hooks/useDemoProjects";
 import { useProjects } from "@/src/_features/chat/services/projects-api";
+import type { GitProviderId } from "@/src/shared/constants";
 
 export type SidebarProjectEntry = {
   key: string;
   label: string;
   projectId: string | null;
+  owner: string;
+  repositoryName: string;
+  gitProvider: GitProviderId;
   demo?: DemoProjectEntry;
 };
 
@@ -19,7 +23,7 @@ export type SidebarProjectEntry = {
  * synced projects, keeping stable keys and dropping duplicates.
  */
 export function useSidebarProjects() {
-  const { projects, isLoading } = useProjects();
+  const { projects } = useProjects();
   const { isDemo, demoProjects, ensureProject } = useDemoProjects();
 
   const projectEntries = useMemo<SidebarProjectEntry[]>(() => {
@@ -33,14 +37,24 @@ export function useSidebarProjects() {
             key: `${d.owner}/${d.repo}`,
             label: d.label,
             projectId: d.projectId,
+            owner: d.owner,
+            repositoryName: d.repo,
+            gitProvider: "github" as const,
             demo: d,
           }))
         : []),
       ...projects
         .filter((p) => !fixedDemoIds.has(p.id))
-        .map((p) => ({ key: p.id, label: p.repositoryName, projectId: p.id })),
+        .map((p) => ({
+          key: p.id,
+          label: p.repositoryName,
+          projectId: p.id,
+          owner: p.providerOwner,
+          repositoryName: p.repositoryName,
+          gitProvider: p.gitProvider,
+        })),
     ];
   }, [isDemo, demoProjects, projects]);
 
-  return { projectEntries, projects, isLoading, isDemo, ensureProject };
+  return { projectEntries, isDemo, ensureProject };
 }

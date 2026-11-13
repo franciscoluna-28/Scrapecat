@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/src/components/ui/card";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { XCircle } from "lucide-react";
 import { useCredentials } from "@/src/_features/credentials/services";
+import { errorMessage } from "@/src/shared/api/client";
 import { PROVIDERS } from "@/src/shared/constants";
 import { CredentialField } from "./CredentialField";
 
@@ -29,7 +30,9 @@ export function CredentialsManager() {
         <Card>
           <CardContent className="p-6 text-center">
             <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-            <p className="text-sm text-red-600">Failed to load credentials</p>
+            <p className="text-sm text-red-600">
+              {errorMessage(error, "Failed to load credentials")}
+            </p>
           </CardContent>
         </Card>
       ) : (

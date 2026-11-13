@@ -9,6 +9,7 @@ import {
   useAddCredential,
   useVerifyCredential,
 } from "@/src/_features/credentials/services";
+import { errorMessage } from "@/src/shared/api/client";
 import { ProviderIcon } from "./ProviderIcon";
 
 export function CredentialField({
@@ -42,8 +43,8 @@ export function CredentialField({
       await addCredential.mutateAsync({ provider: provider.id, key });
       setKey("");
       toast.success(`${provider.label} key saved and verified`);
-    } catch {
-      toast.error("Failed to save key");
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to save key"));
     }
   };
 
