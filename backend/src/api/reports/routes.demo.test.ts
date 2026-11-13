@@ -48,4 +48,22 @@ describe("report routes in demo mode", () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  it("disables a single report", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/reports/33333333-3333-4333-8333-333333333333",
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("disables manual runs", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/report-schedules/11111111-1111-4111-8111-111111111111/run",
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
 });
