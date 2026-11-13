@@ -38,13 +38,20 @@ AI is increasing commit velocity, not reducing it. Scrapecat is the missing laye
 
 ```mermaid
 flowchart LR
-    A["Ingest commits<br/>(git archive or GitHub API)"] --> B["Upsert commit_chunks<br/>+ embed commit messages"]
-    B --> C["Ask a question"]
-    C --> D["Retrieve via<br/>pgvector HNSW (+ keyword fallback)"]
-    D --> E["LLM summary<br/>with commit citations"]
+    subgraph ingest["Ingest"]
+        A["Git archive<br/>or GitHub API"] --> B["Dedupe commits by SHA"]
+        B --> C[("Postgres + pgvector<br/>commit_chunks + embeddings")]
+    end
+    subgraph answer["Answer"]
+        Q["Question"] --> D["Parse date window"]
+        C --> D
+        D --> E["Vector + keyword search"]
+        E --> F["Fuse results (RRF)"]
+        F --> G["LLM summary<br/>with commit citations"]
+    end
 ```
 
-Ingestion is batch/archive-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval runs against Postgres as the read model.
+Ingestion is batch/archive-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval fuses vector and keyword results over Postgres (the read model) and abstains when the evidence is weak.
 
 ## Demo Mode (public concept demo)
 
@@ -182,8 +189,8 @@ and unchanged — see [`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
 ### RAG Pipeline
 
 1. **Query parsing** — natural language date windows are parsed ("last 30 days", "since June", "2024") and applied as metadata filters
-2. **Vector search** — candidate commits retrieved via the pgvector HNSW index (`MAX_COSINE_DISTANCE = 0.8`)
-3. **Keyword fallback** — text match when embeddings are missing or the vector query fails
+2. **Hybrid retrieval** — vector search over the pgvector HNSW index (`MAX_COSINE_DISTANCE = 0.8`) and keyword search run in parallel
+3. **Fusion** — results are merged with reciprocal rank fusion (RRF); weak evidence abstains instead of surfacing the nearest commits
 4. **LLM summarization** — system prompt instructs the LLM to group by feature, not list individual commits
 5. **Sources** — every response includes a collapsible "Sources Used" section with commit links
 
@@ -191,6 +198,10 @@ and unchanged — see [`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
 
 We welcome contributions from engineers who understand that documentation is as important as code.
 
+- **Guidelines:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- **Security Policy:** [SECURITY.md](SECURITY.md)
+- **Accessibility:** [ACCESSIBILITY.md](ACCESSIBILITY.md)
 - **Bug Reports:** Open an issue with a clear reproduction script and environment details.
 - **Feature Requests:** Focused on scalability, retrieval accuracy, and developer autonomy.
 

@@ -14,13 +14,16 @@
 - [ ] Chore
 - [ ] Other
 
-## Changes
-
-<!-- Bullet list of key changes -->
-
 ## Testing
 
-<!-- How to verify this works -->
+<!-- How you verified this works -->
+
+## Checklist
+
+- [ ] `pnpm check` passes
+- [ ] Tests added or updated for behavior changes
+- [ ] No secrets or `.env` files included
+- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Related Issues
 
