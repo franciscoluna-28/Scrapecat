@@ -26,7 +26,7 @@ function canAccessSession(
   session: { anonymousId: string | null },
   anonymousId: string,
 ): boolean {
-  return !session.anonymousId || session.anonymousId === anonymousId;
+  return !!session.anonymousId && session.anonymousId === anonymousId;
 }
 
 export async function createSession(req: FastifyRequest, reply: FastifyReply) {

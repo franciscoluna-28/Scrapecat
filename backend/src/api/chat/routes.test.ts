@@ -71,7 +71,11 @@ describe("chat routes", () => {
     mockGetMessages.mockReset();
     mockDeleteSession.mockReset();
     mockStreamMessage.mockReset();
-    mockGetSession.mockResolvedValue({ id: SESSION_ID, projectId: PROJECT_ID });
+    mockGetSession.mockResolvedValue({
+      id: SESSION_ID,
+      projectId: PROJECT_ID,
+      anonymousId: "anonymous",
+    });
   });
 
   it("creates a chat session", async () => {
@@ -162,6 +166,21 @@ describe("chat routes", () => {
 
     expect(res.statusCode).toBe(404);
     expect(mockGetMessages).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a legacy session with no owner", async () => {
+    mockGetSession.mockResolvedValue({
+      id: SESSION_ID,
+      projectId: PROJECT_ID,
+      anonymousId: null,
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/chat/sessions/${SESSION_ID}/messages`,
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 
   it("deletes a session", async () => {
