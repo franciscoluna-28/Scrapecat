@@ -6,7 +6,7 @@ deterministic, so the harness is fast, free, and reproducible.
 
 ## Metrics
 
-Computed over the top `k` (default 10) retrieved commit SHAs against each case's
+Computed over the top `k` (default 5) retrieved commit SHAs against each case's
 judged `relevantShas`:
 
 - **Context recall**: fraction of judged commits that were retrieved.
@@ -15,6 +15,9 @@ judged `relevantShas`:
   scores `1.0`.
 - **MRR**: reciprocal rank of the first relevant commit. Debugging aid only.
 - **Negative accuracy**: fraction of `negative` cases that return no results.
+
+Metrics depend on `k`. Only compare runs at the same `k`; the MVP budget is 5,
+and `--top-k` can go up to the hard cap for diagnostics.
 
 Labels are not exhaustive, so recall is measured against the judged set.
 
@@ -75,7 +78,8 @@ pnpm eval --prepare
 pnpm eval
 
 # Options
-pnpm eval --top-k 5 --min-context-recall 0.7 --min-context-precision 0.4
+pnpm eval --min-context-recall 0.7 --min-context-precision 0.4
+pnpm eval --top-k 10                                              # diagnostic budget
 pnpm eval --json | Out-File -Encoding utf8 eval/reports/run.json   # PowerShell
 pnpm eval --json > eval/reports/run.json                          # bash
 ```
@@ -87,7 +91,9 @@ to index the branch.
 
 | Date | Commit | Embedding model | k | Recall | Precision | MRR | Negative |
 |---|---|---|---|---|---|---|---|
-| _pending first run_ | — | openai/text-embedding-3-small | 10 | — | — | — | — |
+| 2026-11-12 | working tree | openai/text-embedding-3-small | 5 | 0.936 | 0.788 | 0.817 | 1.000 |
+| 2026-11-12 | working tree | openai/text-embedding-3-small | 10 | 1.000 | 0.743 | 0.817 | 1.000 |
 
-Re-run the same dataset before and after a retrieval change. Do not compare
-across embedding models.
+The k=5 row is the MVP budget; k=10 is a diagnostic run. Re-run the same
+dataset at the same k before and after a retrieval change. Do not compare across
+embedding models.
