@@ -93,14 +93,13 @@ Ollama runs LLMs locally — no API key, no cloud, no data leaves your machine.
    ollama pull nomic-embed-text  # Embedding model (274MB)
    ```
 3. Verify Ollama is running: `curl http://localhost:11434/api/tags`
-4. In the **Settings UI** (`/settings`):
-   - Set the **chat model** provider to `Ollama (Local)` → select `llama3.2:1b`
-   - Set **Embedding Provider** to `Ollama (Local)` → select `nomic-embed-text`
-5. The API key field can be set to `ollama` (placeholder, no real key needed)
+4. In a chat, open the model selector and choose `Ollama (Local)` → `llama3.2:1b`
+5. In **Settings** (`/settings`), set **Embedding Provider** to `Ollama (Local)` → `nomic-embed-text`
+6. No API key is needed. Set `OLLAMA_BASE_URL` only if Ollama is not on the default port
 
 **Available models are fetched automatically** from your local Ollama instance — only installed models appear in the dropdown.
 
-> **Docker users:** When running in Docker, the backend connects to Ollama via `host.docker.internal`. If Ollama is running on your host machine, no extra config is needed.
+> **Docker users:** The backend connects to Ollama via `host.docker.internal`. Both compose files set this, so no extra config is needed when Ollama runs on the host.
 
 ### 4. OpenCode Go (Optional, Chat)
 
