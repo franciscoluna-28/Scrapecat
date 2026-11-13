@@ -14,6 +14,7 @@ describe("GET /api/v1/models", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("returns models from OpenRouter plus the provider catalogs", async () => {
@@ -77,6 +78,105 @@ describe("GET /api/v1/models", () => {
   it("returns 400 for invalid modality", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/models?modality=nope" });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("includes Ollama chat models in the aggregate list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).includes("/api/tags")) {
+          return {
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                models: [
+                  { name: "llama3.2:1b", details: { parameter_size: "1.2B" } },
+                  { name: "nomic-embed-text:latest" },
+                ],
+              }),
+          };
+        }
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              data: [
+                {
+                  id: "free/model",
+                  name: "Free Model",
+                  pricing: { prompt: "0", completion: "0" },
+                  description: "",
+                },
+              ],
+            }),
+        };
+      }),
+    );
+
+    const res = await app.inject({ method: "GET", url: "/api/v1/models" });
+    expect(res.statusCode).toBe(200);
+    const ollama = res
+      .json()
+      .models.filter((m: any) => m.provider === "ollama");
+    expect(ollama.map((m: any) => m.id)).toEqual(["llama3.2:1b"]);
+  });
+
+  it("lists Ollama embedding models without capabilities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            models: [
+              { name: "llama3.2:1b" },
+              { name: "nomic-embed-text:latest" },
+              { name: "bge-m3" },
+            ],
+          }),
+      })),
+    );
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/models?provider=ollama&modality=embeddings",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().models.map((m: any) => m.id)).toEqual([
+      "nomic-embed-text",
+      "bge-m3",
+    ]);
+  });
+
+  it("keeps the aggregate list when Ollama is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).includes("/api/tags")) {
+          throw new Error("connect ECONNREFUSED");
+        }
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              data: [
+                {
+                  id: "free/model",
+                  name: "Free Model",
+                  pricing: { prompt: "0", completion: "0" },
+                  description: "",
+                },
+              ],
+            }),
+        };
+      }),
+    );
+
+    const res = await app.inject({ method: "GET", url: "/api/v1/models" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.models.map((m: any) => m.provider)).toContain("openrouter");
+    expect(body.models.map((m: any) => m.provider)).not.toContain("ollama");
   });
 
   it("returns only 512-dim allowlisted embedding models", async () => {

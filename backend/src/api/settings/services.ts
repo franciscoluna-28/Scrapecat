@@ -62,8 +62,24 @@ export type AISettings = {
 /**
  * Domain default used when no settings row exists. Env-derived on purpose, so
  * it stays in the settings service rather than `shared/utils`.
+ *
+ * Outside demo mode we default to local Ollama so self-hosted/local dev works
+ * without a paid API key or BYOK. Demo keeps the cloud defaults because its
+ * visitors cannot run Ollama.
  */
 export function defaultAISettings(): AISettings {
+  // When running in a first visit want to see the most accessible and private settings, we are working with their internal repositories
+  if (!env.isDemoMode) {
+    return {
+      chatProvider: "ollama",
+      chatModel: "llama3.2:1b",
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+    };
+  }
+
+  // Demo inference is done through OpenRouter to showcase the product to visitors; pricing purposes
+  // Demo mode should not be used in production, it's meant for visitors to try the product without an account or API key
   return {
     chatProvider: "openrouter",
     chatModel: env.AI_MODEL,

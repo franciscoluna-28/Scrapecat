@@ -106,7 +106,7 @@ export function ModelSelectorDialog({
                 {sortedProviders.flatMap((provider) =>
                   grouped[provider].map((model) => (
                     <CommandItem
-                      key={`all-${model.id}`}
+                      key={`all-${provider}-${model.id}`}
                       value={`${model.name} ${model.id} ${provider}`}
                       onSelect={() => handleSelect(model)}
                     >

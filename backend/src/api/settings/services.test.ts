@@ -42,20 +42,18 @@ describe("AI settings service", () => {
     });
   });
 
-  it("falls back to the environment defaults when no row exists", async () => {
-    await expect(getAISettings()).resolves.toEqual({
-      chatProvider: "openrouter",
-      chatModel: env.AI_MODEL,
-      embeddingProvider: "openrouter",
-      embeddingModel: env.EMBEDDING_MODEL,
-    });
+  it("falls back to local Ollama defaults when no row exists outside demo mode", async () => {
+    expect(env.isDemoMode).toBe(false);
 
-    expect(defaultAISettings()).toEqual({
-      chatProvider: "openrouter",
-      chatModel: env.AI_MODEL,
-      embeddingProvider: "openrouter",
-      embeddingModel: env.EMBEDDING_MODEL,
-    });
+    const localDefaults = {
+      chatProvider: "ollama",
+      chatModel: "llama3.2:1b",
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+    };
+
+    await expect(getAISettings()).resolves.toEqual(localDefaults);
+    expect(defaultAISettings()).toEqual(localDefaults);
   });
 
   it("maps the stored row to the public settings shape", async () => {

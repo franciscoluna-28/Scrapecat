@@ -32,6 +32,9 @@ services:
       REPO_ARCHIVE_DIR: /app/repos
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4000:4000"
     volumes:

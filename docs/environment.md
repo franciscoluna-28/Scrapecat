@@ -19,6 +19,9 @@ GITLAB_TOKEN=
 GITLAB_HOST=https://gitlab.com
 AI_MODEL=mimo-v2.6-flash
 AI_TIMEOUT_MS=120000
+# Local Ollama (optional; no cloud key required).
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_API_KEY=ollama
 PORT=4000
 HOST=0.0.0.0
 DATABASE_POOL_MAX=10
