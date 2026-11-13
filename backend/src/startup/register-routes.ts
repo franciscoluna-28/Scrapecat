@@ -258,7 +258,12 @@ function registerRepositoryRoutes(app: FastifyInstance) {
       description: "Create or connect a new project",
       tags: ["projects"],
       body: CreateProjectBody,
-      response: { 201: CreateProjectResponse, 500: ErrorResponse },
+      response: {
+        201: CreateProjectResponse,
+        400: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+      },
     },
   }, createProjectRoute);
 
@@ -268,7 +273,12 @@ function registerRepositoryRoutes(app: FastifyInstance) {
       tags: ["projects"],
       params: ProjectIdParams,
       body: PrepareBranchBody,
-      response: { 200: PrepareBranchResponse, 404: ErrorResponse, 500: ErrorResponse },
+      response: {
+        200: PrepareBranchResponse,
+        400: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+      },
     },
   }, prepareBranch);
 }
@@ -287,7 +297,12 @@ function registerSettingsRoutes(app: FastifyInstance) {
       description: "Update global AI model settings",
       tags: ["settings"],
       body: AISettingsBody,
-      response: { 200: AISettingsGetResponse, 400: ErrorResponse, 500: ErrorResponse },
+      response: {
+        200: AISettingsGetResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        500: ErrorResponse,
+      },
     },
   }, updateSettingsRoute);
 
@@ -326,6 +341,12 @@ function registerReportRoutes(app: FastifyInstance) {
         404: ErrorResponse,
         409: ErrorResponse,
         500: ErrorResponse,
+      },
+    },
+    config: {
+      rateLimit: {
+        max: env.REPORT_RATE_LIMIT_MAX,
+        timeWindow: "1 minute",
       },
     },
   }, createReportSchedule);
@@ -371,6 +392,12 @@ function registerReportRoutes(app: FastifyInstance) {
         404: ErrorResponse,
         409: ErrorResponse,
         500: ErrorResponse,
+      },
+    },
+    config: {
+      rateLimit: {
+        max: env.REPORT_RATE_LIMIT_MAX,
+        timeWindow: "1 minute",
       },
     },
   }, runReportSchedule);

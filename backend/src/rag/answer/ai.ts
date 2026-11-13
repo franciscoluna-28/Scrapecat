@@ -4,6 +4,7 @@ import { logger } from "@/shared/logger";
 import { resolveApiKey } from "@/api/credentials/services";
 import { getAISettings } from "@/api/settings/services";
 import {
+  isChatModelAllowed,
   resolveModel,
   type ModelDescriptor,
 } from "@/shared/integrations/providers/catalog";
@@ -78,14 +79,20 @@ export async function resolveChatModel(override?: {
     (await resolveApiKey(provider)) || (provider === "ollama" ? "ollama" : "");
   if (!apiKey) throw new ProviderKeyError(provider);
 
+  let modelId = override?.model || settings.chatModel;
+  if (!isChatModelAllowed(provider, modelId)) {
+    if (override?.model) throw new Error(`Unsupported model: ${modelId}`);
+    logger.warn(
+      { provider, model: modelId },
+      "stored chat model is not supported; using the provider default",
+    );
+    modelId = config.defaultModel;
+  }
+
   return {
     provider,
     config,
-    model: resolveModel(
-      provider,
-      override?.model || settings.chatModel,
-      config.defaultProtocol,
-    ),
+    model: resolveModel(provider, modelId, config.defaultProtocol),
     apiKey,
   };
 }

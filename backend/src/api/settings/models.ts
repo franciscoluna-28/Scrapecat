@@ -3,6 +3,7 @@ import type { Static } from "@sinclair/typebox";
 import { ModelsQuery } from "@/api/settings/schemas";
 import { env } from "@/shared/config/env";
 import {
+  EMBEDDING_MODEL_ALLOWLIST,
   getCatalogModels,
   type ModelDescriptor,
 } from "@/shared/integrations/providers/catalog";
@@ -40,12 +41,6 @@ async function fetchOllamaModels(
 function isFree(pricing: any): boolean {
   return !pricing || (pricing?.prompt == 0 && pricing?.completion == 0);
 }
-
-// MVP embedding models constrained to the vector(768) column.
-const EMBEDDING_MODEL_ALLOWLIST = new Set([
-  "openai/text-embedding-3-small",
-  "openai/text-embedding-3-large",
-]);
 
 async function fetchOpenRouterEmbeddingModels() {
   try {

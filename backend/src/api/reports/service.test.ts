@@ -515,6 +515,17 @@ describe("createReportsService", () => {
     );
   });
 
+  it("rejects a manual run during the cooldown window", async () => {
+    deps.store.getSchedule.mockResolvedValue(
+      makeScheduleRow({ lastRunAt: new Date("2026-01-10T11:59:30.000Z") }),
+    );
+
+    await expect(
+      deps.service.startScheduleRun(SCHEDULE_ID),
+    ).rejects.toThrow(REPORT_ERROR_MESSAGES.scheduleCooldown);
+    expect(deps.store.markScheduleRunning).not.toHaveBeenCalled();
+  });
+
   it("rejects a manual run when the schedule is already running", async () => {
     deps.store.getSchedule.mockResolvedValue(makeScheduleRow());
     deps.store.markScheduleRunning.mockResolvedValue(null);

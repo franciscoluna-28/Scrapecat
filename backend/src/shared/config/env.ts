@@ -64,6 +64,7 @@ export const envSchema = z.object({
   // visitor can't burn through AI credits. Set to large values to disable.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(240),
   CHAT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  REPORT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   REPO_ARCHIVE_DIR: z.string().default("repos"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

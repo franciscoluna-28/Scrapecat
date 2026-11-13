@@ -33,6 +33,8 @@ import {
   type ReportScheduleRow,
 } from "@/db/schema";
 
+const REPORT_RUN_COOLDOWN_MS = 60_000;
+
 type ProjectRow = typeof projects.$inferSelect;
 type CommitChunkRow = Awaited<
   ReturnType<typeof commitChunksStore.listCommitsForProject>
@@ -45,6 +47,7 @@ export const REPORT_ERROR_MESSAGES = {
   duplicateSchedule: "A schedule already exists for this project and branch",
   scheduleNotFound: "Schedule not found",
   scheduleRunning: "Schedule is already running",
+  scheduleCooldown: "Schedule was run recently; try again shortly",
   reportNotFound: "Report not found",
   invalidTimezone: "Invalid timezone",
 } as const;
@@ -441,6 +444,12 @@ export function createReportsService(
     if (!current) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
 
     const now = deps.now();
+    if (
+      current.lastRunAt &&
+      now.getTime() - current.lastRunAt.getTime() < REPORT_RUN_COOLDOWN_MS
+    ) {
+      throw new Error(REPORT_ERROR_MESSAGES.scheduleCooldown);
+    }
     const claimed = await deps.store.markScheduleRunning({
       id,
       now,

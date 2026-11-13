@@ -3,6 +3,10 @@ import {
   isEmbeddingProviderSupported,
   isProviderSupported,
 } from "@/shared/integrations/providers/registry";
+import {
+  isChatModelAllowed,
+  isEmbeddingModelAllowed,
+} from "@/shared/integrations/providers/catalog";
 import { logger } from "@/shared/logger";
 import { getJobQueue } from "@/shared/queue";
 import {
@@ -85,6 +89,12 @@ export async function updateAISettings(input: AISettingsInput): Promise<AISettin
   }
   if (!isEmbeddingProviderSupported(input.embeddingProvider)) {
     throw new Error(`Unsupported embedding provider: ${input.embeddingProvider}`);
+  }
+  if (!isChatModelAllowed(input.chatProvider, input.chatModel)) {
+    throw new Error(`Unsupported model: ${input.chatModel}`);
+  }
+  if (!isEmbeddingModelAllowed(input.embeddingProvider, input.embeddingModel)) {
+    throw new Error(`Unsupported embedding model: ${input.embeddingModel}`);
   }
 
   const previous = await getAISettings();

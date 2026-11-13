@@ -33,7 +33,8 @@ function errorStatus(error: unknown): number {
   }
   if (
     message === REPORT_ERROR_MESSAGES.duplicateSchedule ||
-    message === REPORT_ERROR_MESSAGES.scheduleRunning
+    message === REPORT_ERROR_MESSAGES.scheduleRunning ||
+    message === REPORT_ERROR_MESSAGES.scheduleCooldown
   ) {
     return 409;
   }

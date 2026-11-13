@@ -160,4 +160,45 @@ describe("AI settings service", () => {
       updateAISettings(makeAISettingsInput({ embeddingProvider: "opencode-go" })),
     ).rejects.toThrow("Unsupported embedding provider");
   });
+
+  it("rejects a model outside a closed catalog", async () => {
+    await expect(
+      updateAISettings(
+        makeAISettingsInput({ chatProvider: "openai", chatModel: "not-a-model" }),
+      ),
+    ).rejects.toThrow("Unsupported model");
+
+    expect(mockUpsertSettings).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown embedding model", async () => {
+    await expect(
+      updateAISettings(
+        makeAISettingsInput({ embeddingModel: "not-an-embedding-model" }),
+      ),
+    ).rejects.toThrow("Unsupported embedding model");
+
+    expect(mockUpsertSettings).not.toHaveBeenCalled();
+  });
+
+  it("allows dynamic models for OpenRouter and Ollama", async () => {
+    const previous = makeAISettings();
+    const input = makeAISettingsInput({
+      chatProvider: "openrouter",
+      chatModel: "vendor/dynamic-free-model",
+    });
+    mockGetSettings
+      .mockResolvedValueOnce({
+        ...previous,
+        id: GLOBAL_SETTINGS_ID,
+        updatedAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        ...input,
+        id: GLOBAL_SETTINGS_ID,
+        updatedAt: new Date(),
+      });
+
+    await expect(updateAISettings(input)).resolves.toEqual(input);
+  });
 });
