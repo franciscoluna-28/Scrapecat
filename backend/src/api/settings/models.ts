@@ -13,26 +13,52 @@ import {
   type ProviderName,
 } from "@/shared/integrations/providers/registry";
 
+const OLLAMA_TIMEOUT_MS = 1500;
+const EMBEDDING_MODEL_NAME = /(embed|bge|minilm|mxbai|nomic|e5|gte)/i;
+
+function isOllamaModel(
+  model: any,
+  modality: "chat" | "embeddings",
+): boolean {
+  const capabilities = Array.isArray(model.capabilities)
+    ? (model.capabilities as string[])
+    : null;
+  if (capabilities) {
+    return capabilities.includes(
+      modality === "embeddings" ? "embedding" : "completion",
+    );
+  }
+
+  // `/api/tags` does not return capabilities. Classify by name: embedding
+  // models are easy to recognize, everything else is treated as chat.
+  const name = String(model.name ?? model.model ?? "");
+  const isEmbedding = EMBEDDING_MODEL_NAME.test(name);
+  return modality === "embeddings" ? isEmbedding : !isEmbedding;
+}
+
 async function fetchOllamaModels(
   modality: "chat" | "embeddings",
 ): Promise<Array<{ id: string; name: string; free: boolean; description: string; provider: string }>> {
   try {
-    const res = await fetch(`${env.OLLAMA_BASE_URL}/api/tags`);
+    const res = await fetch(`${env.OLLAMA_BASE_URL}/api/tags`, {
+      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+    });
     if (!res.ok) return [];
     const data = await res.json();
-    const models = data?.models || [];
+    const models = Array.isArray(data?.models) ? data.models : [];
     return models
-      .filter((m: any) => {
-        if (modality === "embeddings") return m.capabilities?.includes("embedding");
-        return m.capabilities?.includes("completion");
+      .filter((m: any) => isOllamaModel(m, modality))
+      .map((m: any) => {
+        const id = String(m.name ?? m.model ?? "").replace(/:latest$/, "");
+        return {
+          id,
+          name: id,
+          free: true,
+          description: `${m.details?.parameter_size || ""} · ${m.details?.quantization_level || ""}`.trim(),
+          provider: "ollama",
+        };
       })
-      .map((m: any) => ({
-        id: m.name.replace(/:latest$/, ""),
-        name: m.name.replace(/:latest$/, ""),
-        free: true,
-        description: `${m.details?.parameter_size || ""} · ${m.details?.quantization_level || ""}`.trim(),
-        provider: "ollama",
-      }));
+      .filter((m: { id: string }) => m.id.length > 0);
   } catch {
     return [];
   }
@@ -135,10 +161,10 @@ export async function listModels(
     });
   }
 
-  const openRouterModels = await fetchOpenRouterModels();
   if (provider === "openrouter") {
+    const models = await fetchOpenRouterModels();
     return reply.send({
-      models: openRouterModels.map((model) => toApiModel(model, "openrouter")),
+      models: models.map((model) => toApiModel(model, "openrouter")),
     });
   }
 
@@ -146,8 +172,14 @@ export async function listModels(
     Object.keys(PROVIDER_REGISTRY) as ProviderName[]
   ).filter((provider) => provider !== "openrouter" && provider !== "ollama");
 
+  const [openRouterModels, ollamaModels] = await Promise.all([
+    fetchOpenRouterModels(),
+    fetchOllamaModels("chat"),
+  ]);
+
   const all = [
     ...openRouterModels.map((model) => toApiModel(model, "openrouter")),
+    ...ollamaModels,
     ...catalogProviders.flatMap((provider) =>
       getCatalogModels(provider).map((model) => toApiModel(model, provider)),
     ),

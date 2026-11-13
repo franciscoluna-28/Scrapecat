@@ -81,7 +81,8 @@ query embedding.
 - **Ollama:** Ollama's OpenAI-compatible endpoint does not implement the OpenAI
   `dimensions` override, so the parameter is omitted (`embeddingDimensionsParam:
   false` in the provider registry). The selected Ollama model must natively emit
-  768 dims (e.g. `nomic-embed-text`); the response is still length-checked.
+  768 dims. The tested local model is `nomic-embed-text` (768 dims); the response
+  is still length-checked.
 - **Guarding:** every response is validated against `EMBEDDING_DIMENSIONS`
   (including Ollama), so a wrong-width vector fails the batch loudly instead of
   hitting the `vector(768)` column.
