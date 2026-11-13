@@ -45,6 +45,8 @@ type GithubApiDeps = {
 const PER_PAGE = 100;
 const DEFAULT_MAX_COMMITS = 200;
 const FILE_FETCH_CONCURRENCY = 6;
+const PUBLIC_CACHE_TTL_MS = 10 * 60 * 1000;
+const publicRepoCache = new Map<string, { isPublic: boolean; expires: number }>();
 
 const token = env.GITHUB_TOKEN || null;
 const defaultDeps: GithubApiDeps = {
@@ -64,8 +66,33 @@ export function createGithubApiClient(
 ): GithubApiClient {
   const deps = { ...defaultDeps, ...overrides };
 
+  /**
+   * Demo serves public repositories only, regardless of token scope. Cached so
+   * repeated reads for the same repo do not spend extra GitHub requests.
+   */
+  async function assertPublicRepo(owner: string, repo: string): Promise<void> {
+    if (!env.isDemoMode) return;
+    const key = `${owner}/${repo}`.toLowerCase();
+    const cached = publicRepoCache.get(key);
+    if (cached && cached.expires > Date.now()) {
+      if (!cached.isPublic) throw new Error("Repository is not public");
+      return;
+    }
+    const { data } = await deps.octokit.request("GET /repos/{owner}/{repo}", {
+      owner,
+      repo,
+    });
+    const isPublic = (data as { private?: boolean }).private === false;
+    publicRepoCache.set(key, {
+      isPublic,
+      expires: Date.now() + PUBLIC_CACHE_TTL_MS,
+    });
+    if (!isPublic) throw new Error("Repository is not public");
+  }
+
   async function listCommits(opts: ListCommitsOptions): Promise<ApiCommit[]> {
     const { owner, repo, branch, since, until } = opts;
+    await assertPublicRepo(owner, repo);
     const max = opts.max ?? DEFAULT_MAX_COMMITS;
     const sinceMs = since?.getTime();
     const untilMs = until?.getTime();

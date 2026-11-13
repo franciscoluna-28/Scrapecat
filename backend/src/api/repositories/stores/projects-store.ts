@@ -26,8 +26,6 @@ export function createProjectsStore(client: DbOrTx = db) {
         .onConflictDoUpdate({
           target: [projects.gitProvider, projects.providerProjectId],
           set: {
-            providerOwner: input.providerOwner,
-            repositoryName: input.repositoryName,
             updatedAt: new Date(),
           },
         })

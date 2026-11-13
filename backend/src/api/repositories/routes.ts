@@ -72,10 +72,42 @@ export async function createProject(req: FastifyRequest, reply: FastifyReply) {
       }
     }
 
+    // Demo trusts only the provider's real default branch, not client input.
+    let defaultBranch = body.defaultBranch ?? "main";
+    if (env.isDemoMode) {
+      try {
+        defaultBranch = await getGitProvider(
+          gitProvider,
+          await resolveGitToken(gitProvider),
+        ).getDefaultBranch(body.providerOwner, body.repositoryName);
+      } catch {
+        // Keep the supplied/default branch if discovery fails.
+      }
+    }
+
+    const byProviderId = await projectsStore.getProjectByProviderId({
+      gitProvider,
+      providerProjectId,
+    });
+    if (byProviderId) {
+      const sameRepo =
+        byProviderId.providerOwner.toLowerCase() ===
+          body.providerOwner.toLowerCase() &&
+        byProviderId.repositoryName.toLowerCase() ===
+          body.repositoryName.toLowerCase();
+      if (!sameRepo) {
+        return reply
+          .status(409)
+          .send({ error: "Repository id already belongs to another project" });
+      }
+      return reply.code(201).send(projectResponse(byProviderId));
+    }
+
     const { project } = await projectsStore.upsertProject({
       ...body,
       gitProvider,
       providerProjectId,
+      defaultBranch,
     });
     return reply.code(201).send(projectResponse(project));
   } catch (error) {

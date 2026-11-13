@@ -8,7 +8,11 @@ import {
   type Repository,
 } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
-import { restrictDemoBranches } from "@/shared/demo-branches";
+import {
+  restrictDemoBranches,
+  isDemoTrunkBranch,
+  isDemoBranchAllowed,
+} from "@/shared/demo-branches";
 import { githubApiClient } from "@/rag/github/github-api";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
@@ -34,6 +38,25 @@ type DiscoveryFilters = {
 
 function parseDate(value?: string): Date | undefined {
   return value ? new Date(`${value}T00:00:00.000Z`) : undefined;
+}
+
+/** Demo may read only trunk branches or the provider's real default. */
+async function demoBranchAllowed(
+  gitProvider: GitProviderId,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<boolean> {
+  if (isDemoTrunkBranch(branch)) return true;
+  try {
+    const actual = await getGitProvider(
+      gitProvider,
+      await resolveGitToken(gitProvider),
+    ).getDefaultBranch(owner, repo);
+    return isDemoBranchAllowed(branch, actual);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -217,6 +240,9 @@ export async function listCommits(
           owner,
           repo,
         ));
+      if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
+        return reply.send({ commits: [] });
+      }
       const commits = await githubApiClient.listCommits({
         owner,
         repo,
@@ -289,6 +315,9 @@ export async function countCommits(
           owner,
           repo,
         ));
+      if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
+        return reply.send({ count: 0 });
+      }
       const commits = await githubApiClient.listCommits({
         owner,
         repo,

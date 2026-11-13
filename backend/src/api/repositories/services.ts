@@ -2,7 +2,10 @@ import { env } from "@/shared/config/env";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
-import { isDemoBranchAllowed } from "@/shared/demo-branches";
+import {
+  isDemoBranchAllowed,
+  isDemoTrunkBranch,
+} from "@/shared/demo-branches";
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
@@ -48,9 +51,21 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
 
   const existing = await commitChunksStore.countChunksForProject({ projectId, branch });
 
-  // Demo only ingests trunk branches (main/master) — or the repo's default.
-  // Anything else serves whatever was already stored, without hitting GitHub.
-  if (env.isDemoMode && !isDemoBranchAllowed(branch, project.defaultBranch)) {
+  // Demo only ingests trunk branches (main/master) — or the repo's real
+  // default. Resolve the default server-side rather than trusting stored,
+  // client-supplied project metadata.
+  let demoDefaultBranch = project.defaultBranch;
+  if (env.isDemoMode && !isDemoTrunkBranch(branch)) {
+    try {
+      demoDefaultBranch = await getGitProvider(
+        project.gitProvider,
+        await resolveGitToken(project.gitProvider),
+      ).getDefaultBranch(project.providerOwner, project.repositoryName);
+    } catch {
+      // Fall back to the stored default; the allow check below still applies.
+    }
+  }
+  if (env.isDemoMode && !isDemoBranchAllowed(branch, demoDefaultBranch)) {
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
