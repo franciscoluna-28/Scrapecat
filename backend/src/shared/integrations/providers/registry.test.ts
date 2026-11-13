@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { envSchema } from "@/config/env";
+import { envSchema } from "@/shared/config/env";
 import { getCatalogModels } from "@/shared/integrations/providers/catalog";
 import {
   EMBEDDING_PROVIDER_NAMES,

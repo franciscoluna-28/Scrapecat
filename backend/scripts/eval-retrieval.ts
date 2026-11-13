@@ -1,20 +1,21 @@
 import "dotenv/config";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RETRIEVAL_LIMIT } from "@/chat/retrieval";
-import { loadGoldenDataset } from "@/eval/golden";
-import { evalService, type EvalReport } from "@/eval/service";
+import { closeDb } from "@/db/client";
+import {
+  DEFAULT_RETRIEVAL_LIMIT,
+  MAX_RETRIEVAL_LIMIT,
+} from "@/rag/constants";
+import { loadGoldenDataset } from "@/rag/eval/golden";
+import { evalService, type EvalReport } from "@/rag/eval/service";
 
 type Options = {
   dataset: string;
-  projectId?: string;
   topK: number;
   json: boolean;
-  out?: string;
-  minRecall?: number;
   prepare: boolean;
-  allowMissing: boolean;
+  minContextRecall?: number;
+  minContextPrecision?: number;
 };
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -27,15 +28,13 @@ function usage(): string {
   return [
     "Usage: pnpm eval [options]",
     "",
-    "  --dataset <path>     Golden dataset JSON (default: eval/datasets/scrapecat-dev.json)",
-    "  --project-id <uuid>  Evaluate an existing project instead of resolving owner/repo",
-    "  --top-k <n>          Results considered per query (default: 10)",
-    "  --min-recall <n>     Exit non-zero when mean recall falls below n (0..1)",
-    "  --prepare            Ingest + embed the dataset project/branch before running",
-    "  --allow-missing      Continue when judged SHAs are not in the database",
-    "  --json               Print the report as JSON",
-    "  --out <path>         Write the JSON report to a file",
-    "  --help               Show this message",
+    "  --dataset <path>            Golden dataset JSON (default: eval/datasets/scrapecat-dev.json)",
+    `  --top-k <n>                 Results considered per query (default: ${DEFAULT_RETRIEVAL_LIMIT})`,
+    "  --prepare                   Index + embed the dataset project/branch before running",
+    "  --min-context-recall <n>    Exit non-zero when mean context recall falls below n (0..1)",
+    "  --min-context-precision <n> Exit non-zero when mean context precision falls below n (0..1)",
+    "  --json                      Print the full report as JSON (redirect to save)",
+    "  --help                      Show this message",
   ].join("\n");
 }
 
@@ -50,10 +49,9 @@ function nextValue(args: string[], index: number, flag: string): string {
 function parseArgs(argv: string[]): Options {
   const options: Options = {
     dataset: DEFAULT_DATASET,
-    topK: 10,
+    topK: DEFAULT_RETRIEVAL_LIMIT,
     json: false,
     prepare: false,
-    allowMissing: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -66,27 +64,20 @@ function parseArgs(argv: string[]): Options {
         options.dataset = path.resolve(process.cwd(), nextValue(argv, i, arg));
         i += 1;
         break;
-      case "--project-id":
-        options.projectId = nextValue(argv, i, arg);
-        i += 1;
-        break;
       case "--top-k":
         options.topK = Number(nextValue(argv, i, arg));
         i += 1;
         break;
-      case "--min-recall":
-        options.minRecall = Number(nextValue(argv, i, arg));
+      case "--min-context-recall":
+        options.minContextRecall = Number(nextValue(argv, i, arg));
         i += 1;
         break;
-      case "--out":
-        options.out = path.resolve(process.cwd(), nextValue(argv, i, arg));
+      case "--min-context-precision":
+        options.minContextPrecision = Number(nextValue(argv, i, arg));
         i += 1;
         break;
       case "--prepare":
         options.prepare = true;
-        break;
-      case "--allow-missing":
-        options.allowMissing = true;
         break;
       case "--json":
         options.json = true;
@@ -102,16 +93,16 @@ function parseArgs(argv: string[]): Options {
   if (!Number.isInteger(options.topK) || options.topK <= 0) {
     throw new Error("--top-k must be a positive integer");
   }
-  if (options.topK > RETRIEVAL_LIMIT) {
-    throw new Error(`--top-k must be at most ${RETRIEVAL_LIMIT}`);
+  if (options.topK > MAX_RETRIEVAL_LIMIT) {
+    throw new Error(`--top-k must be at most ${MAX_RETRIEVAL_LIMIT}`);
   }
-  if (
-    options.minRecall !== undefined &&
-    (!Number.isFinite(options.minRecall) ||
-      options.minRecall < 0 ||
-      options.minRecall > 1)
-  ) {
-    throw new Error("--min-recall must be a number between 0 and 1");
+  for (const [flag, value] of [
+    ["--min-context-recall", options.minContextRecall],
+    ["--min-context-precision", options.minContextPrecision],
+  ] as const) {
+    if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1)) {
+      throw new Error(`${flag} must be a number between 0 and 1`);
+    }
   }
 
   return options;
@@ -122,31 +113,29 @@ function printReport(report: EvalReport) {
     `\nDataset: ${report.dataset} (branch ${report.branch}, k=${report.topK})\n`,
   );
   console.log(
-    `${"case".padEnd(30)} ${"category".padEnd(9)} ${"hits".padEnd(8)} ${"rank".padEnd(5)} ${"recall".padEnd(7)} ${"prec".padEnd(5)} result`,
+    `${"case".padEnd(30)} ${"category".padEnd(9)} ${"hits".padEnd(7)} ${"rank".padEnd(5)} ${"recall".padEnd(7)} ${"prec".padEnd(6)} result`,
   );
   for (const result of report.cases) {
-    const rank = result.metrics
-      ? result.metrics.mrr > 0
-        ? String(Math.round(1 / result.metrics.mrr))
-        : "-"
-      : "-";
-    const hits = result.metrics
-      ? `${result.metrics.hits}/${result.metrics.relevant}`
-      : "-";
-    const recall = result.metrics ? result.metrics.recall.toFixed(2) : "-";
-    const precision = result.metrics
-      ? result.metrics.precision.toFixed(2)
-      : "-";
+    const metrics = result.metrics;
+    const hits = metrics ? `${metrics.hits}/${metrics.relevant}` : "-";
+    const rank =
+      metrics && metrics.mrr > 0 ? String(Math.round(1 / metrics.mrr)) : "-";
+    const recall = metrics ? metrics.contextRecall.toFixed(2) : "-";
+    const precision = metrics ? metrics.contextPrecision.toFixed(2) : "-";
+    const missing = result.missingShas.length
+      ? ` missing=${result.missingShas.map((sha) => sha.slice(0, 7)).join(",")}`
+      : "";
     console.log(
-      `${result.id.padEnd(30)} ${result.category.padEnd(9)} ${hits.padEnd(8)} ${rank.padEnd(5)} ${recall.padEnd(7)} ${precision.padEnd(5)} ${result.passed ? "pass" : "miss"}`,
+      `${result.id.padEnd(30)} ${result.category.padEnd(9)} ${hits.padEnd(7)} ${rank.padEnd(5)} ${recall.padEnd(7)} ${precision.padEnd(6)} ${result.passed ? "pass" : "miss"}${missing}`,
     );
   }
 
-  const summary = report.summary;
+  const { summary } = report;
   console.log(
-    `\nSummary: hit-rate=${summary.hitRate.toFixed(3)} recall=${summary.meanRecall.toFixed(3)} ` +
-      `precision=${summary.meanPrecision.toFixed(3)} mrr=${summary.mrr.toFixed(3)} ` +
-      `ndcg=${summary.meanNdcg.toFixed(3)} negative=${report.negativeAccuracy.toFixed(3)}`,
+    `\nSummary: context-recall=${summary.meanContextRecall.toFixed(3)} ` +
+      `context-precision=${summary.meanContextPrecision.toFixed(3)} ` +
+      `mrr=${summary.mrr.toFixed(3)} ` +
+      `negative-accuracy=${report.negativeAccuracy.toFixed(3)}`,
   );
 }
 
@@ -156,9 +145,7 @@ async function main() {
 
   const result = await evalService.run({
     dataset,
-    projectId: options.projectId,
     prepare: options.prepare,
-    allowMissing: options.allowMissing,
     topK: options.topK,
   });
 
@@ -171,34 +158,42 @@ async function main() {
     console.warn(warning);
   }
 
-  if (options.out) {
-    await mkdir(path.dirname(options.out), { recursive: true });
-    await writeFile(
-      options.out,
-      `${JSON.stringify(result.report, null, 2)}\n`,
-      "utf8",
-    );
-    console.log(`Wrote ${options.out}`);
-  }
-
   if (options.json) {
     console.log(JSON.stringify(result.report, null, 2));
   } else {
     printReport(result.report);
   }
 
-  if (
-    options.minRecall !== undefined &&
-    result.report.summary.meanRecall < options.minRecall
-  ) {
-    console.error(
-      `Mean recall ${result.report.summary.meanRecall.toFixed(3)} is below --min-recall ${options.minRecall}.`,
-    );
-    process.exitCode = 1;
+  const gates = [
+    {
+      flag: "--min-context-recall",
+      threshold: options.minContextRecall,
+      actual: result.report.summary.meanContextRecall,
+      label: "context recall",
+    },
+    {
+      flag: "--min-context-precision",
+      threshold: options.minContextPrecision,
+      actual: result.report.summary.meanContextPrecision,
+      label: "context precision",
+    },
+  ];
+  for (const gate of gates) {
+    if (gate.threshold !== undefined && gate.actual < gate.threshold) {
+      console.error(
+        `Mean ${gate.label} ${gate.actual.toFixed(3)} is below ${gate.flag} ${gate.threshold}.`,
+      );
+      process.exitCode = 1;
+    }
   }
 }
 
-main().catch((error) => {
-  console.error(`Eval failed: ${(error as Error).message}`);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error(`Eval failed: ${(error as Error).message}`);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    // The postgres pool keeps the event loop alive; close it so the CLI exits.
+    await closeDb();
+  });

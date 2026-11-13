@@ -16,15 +16,21 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — builds the Fastify app in-process, writes a temporary OpenAPI spec, and runs openapi-typescript; no backend server or database needed
 
-## API layer (per-domain `routes.ts` + `src/app/register-routes.ts`)
+## API layer (per-domain `routes.ts` + `src/startup/register-routes.ts`)
 
-Structure is routes → services, organized by **domain** (screaming architecture). Each domain folder (`src/projects/`, `src/repositories/`, `src/credentials/`, etc.) owns its handlers, Zod/TypeBox schemas, services, stores, and colocated tests. Cross-cutting infrastructure lives in `src/shared/` (`integrations/`, `storage/`, `queue/`); shared DB infra in `src/db/`.
+Structure is routes → services, organized by **domain** (screaming architecture), grouped by tier:
 
-**Imports use the `@/` alias** pointing at `src/` (e.g. `@/projects/routes`, `@/db/schema`, `@/shared/integrations/git-provider`) — never relative `../` paths. Resolved by tsconfig `paths` (`@/*` → `./src/*`), vitest `resolve.alias`, and `tsx` at runtime. New files must import via `@/`.
+- `src/api/` — HTTP domains (`chat`, `credentials`, `repositories`, `settings`, `reports`, `system`). Each owns its handlers, TypeBox schemas, services, stores, and colocated tests.
+- `src/rag/` — the retrieval/indexing pipeline (`answer`, `context`, `retrieval`, `indexing`, `git`, `github`, `eval`).
+- `src/shared/` — cross-cutting infrastructure (`integrations/`, `storage/`, `queue/`, `config/`, `utils/`).
+- `src/startup/` — server composition (`create-server.ts`, `register-routes.ts`).
+- `src/db/` — DB client, schema, and migrations.
+
+**Imports use the `@/` alias** pointing at `src/` (e.g. `@/api/repositories/routes`, `@/db/schema`, `@/shared/integrations/git-provider`) — never relative `../` paths. Resolved by tsconfig `paths` (`@/*` → `./src/*`), vitest `resolve.alias`, and `tsx` at runtime. New files must import via `@/`.
 
 Route handlers stay thin; business logic goes in services.
 
-All route registration is imperative in `src/app/register-routes.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/projects/routes.ts`). `src/build-app.ts` is the public composition entrypoint: it creates the server (`src/app/create-server.ts`) and registers routes. There is no router/index.ts or decorator-based routing.
+All route registration is imperative in `src/startup/register-routes.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/api/repositories/routes.ts`). `src/build-app.ts` is the public composition entrypoint: it creates the server (`src/startup/create-server.ts`) and registers routes. There is no router/index.ts or decorator-based routing.
 
 **Route handler pattern** (every handler must follow this):
 1. Accept `req: FastifyRequest, reply: FastifyReply` — do **not** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; validation is enforced at the route `schema` level, not via compile-time generics
@@ -33,10 +39,10 @@ All route registration is imperative in `src/app/register-routes.ts` — each ro
 4. Return data or catch with a generic `500`
 
 Validation uses **TypeBox-first, Fastify-owned validation**:
-- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/app/register-routes.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
+- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/startup/register-routes.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
 - Handlers read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts — no Zod schemas in the request path.
-- A global `setErrorHandler` in `src/app/create-server.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
-- **Zod is reserved for non-request validation only:** `src/config/env.ts` (env parsing). Do not reintroduce Zod for route input.
+- A global `setErrorHandler` in `src/startup/create-server.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
+- **Zod is reserved for non-request validation only:** `src/shared/config/env.ts` (env parsing). Do not reintroduce Zod for route input.
 
 Never return API key values from any endpoint — metadata only (key hints).
 
@@ -46,19 +52,19 @@ CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). Pe
 
 Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which runs `select 1` against Postgres and returns 503 when the database is unavailable. Docker healthchecks use the readiness route.
 
-## AI / model provisioning (`src/chat/ai.ts` + `src/shared/integrations/providers/`)
+## AI / model provisioning (`src/rag/answer/ai.ts` + `src/shared/integrations/providers/`)
 
-All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/chat/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/chat/retrieval.ts`) → prompt assembly (pure functions) → `turnResolver` → `aiClient.stream()` (web chat) or `aiClient.generate()` (stateless MCP/CLI). `createChatService()` owns the stateful web path; `createAnswerService()` owns the stateless one. Dependencies are injectable.
+All LLM calls go through `aiClient.generate()` / `aiClient.stream()` from `src/rag/answer/ai.ts` (built by `createAIClient()`) — never instantiate provider SDKs directly. `resolveChatModel()` wires settings, provider metadata, and keys. The RAG stages are `retriever.resolveScope()` (`createRetriever()` in `src/rag/retrieval/retrieve.ts`) → prompt assembly (pure functions) → `turnResolver` → `aiClient.stream()` (web chat) or `aiClient.generate()` (stateless MCP/CLI). `createChatService()` owns the stateful web path; `createAnswerService()` owns the stateless one. Dependencies are injectable.
 
 ### Chat turn seam (web chat + MCP)
 
-`src/chat/turn.ts` is the transport-agnostic turn resolver: project lookup, branch selection, retrieval, model resolution, and prompt assembly. It must not import `chat/services`, create sessions, write messages, or touch Fastify/SSE. `src/chat/services.ts` is the stateful web facade (sessions, history, streaming, persistence); `src/chat/answer.ts` is the stateless one-shot path for MCP/CLI. Changes to persona, retrieval, prompts, or model selection belong in `turn.ts` so both clients stay consistent. MCP tools must never import `chat/services`, and must not trigger ingestion unless explicitly designed to.
+`src/rag/answer/turn.ts` is the transport-agnostic turn resolver: project lookup, branch selection, retrieval, model resolution, and prompt assembly. It must not import `src/api/chat/services`, create sessions, write messages, or touch Fastify/SSE. `src/api/chat/services.ts` is the stateful web facade (sessions, history, streaming, persistence); `src/rag/answer/answer.ts` is the stateless one-shot path for MCP/CLI. Changes to persona, retrieval, prompts, or model selection belong in `turn.ts` so both clients stay consistent. MCP tools must never import `src/api/chat/services`, and must not trigger ingestion unless explicitly designed to.
 
 Provider metadata (label, default model/protocol, env key name, verify URL, base URLs, headers) lives in `src/shared/integrations/providers/registry.ts` `PROVIDER_REGISTRY`. The model catalog (`catalog.ts`) maps each model id to its transport protocol: `openai-chat`, `openai-responses`, `anthropic-messages`, or `google-generative`. `protocols.ts` is the only module that imports model SDKs (Vercel AI SDK); `createLanguageModel()` resolves the protocol and base URL for a model. This is how one provider (OpenCode Go) can serve models across several endpoints.
 
-To add a provider: add an entry to `PROVIDER_REGISTRY` (with `defaultProtocol`, base URL(s), and any headers), add its models to `MODEL_CATALOG`, and add the env key default to `src/config/env.ts`.
+To add a provider: add an entry to `PROVIDER_REGISTRY` (with `defaultProtocol`, base URL(s), and any headers), add its models to `MODEL_CATALOG`, and add the env key default to `src/shared/config/env.ts`.
 
-API key resolution: `resolveApiKey()` in `src/credentials/services.ts` decrypts the most recent stored credential for a provider. Falls back to env vars if no credential exists. Keys are encrypted at rest with AES-256-GCM (`src/credentials/encryption.ts`).
+API key resolution: `resolveApiKey()` in `src/api/credentials/services.ts` decrypts the most recent stored credential for a provider. Falls back to env vars if no credential exists. Keys are encrypted at rest with AES-256-GCM (`src/api/credentials/encryption.ts`).
 
 Chat sessions are scoped by the `x-anonymous-id` header: reading, streaming, or deleting a session owned by another id returns 404 so session existence is not leaked. Input is bounded by the TypeBox schemas (uuid project/session ids, 10k message cap).
 
@@ -70,7 +76,7 @@ Pure helpers live in `src/shared/utils/` (`index.ts` is the public surface). Sto
 
 The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; the provider REST APIs are also used for discovery.
 
-- **Discovery** (repos/branches) hits the connected providers live: `src/gitRepositories/routes.ts`. `GET /api/v1/repositories` fans out to every provider with a resolvable token (GitHub-only in demo), tags each row with `provider`, and merges by recency; passing `?provider=` still selects one host. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
+- **Discovery** (repos/branches) hits the connected providers live: `src/api/repositories/discovery.ts`. `GET /api/v1/repositories` fans out to every provider with a resolvable token (GitHub-only in demo), tags each row with `provider`, and merges by recency; passing `?provider=` still selects one host. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
 - **Chat retrieval** (`POST /api/v1/chat/sessions/:id/messages`) ingests the branch via the job queue (see `src/shared/queue/`), then reads `commit_chunks`.
 
 ## Database (`src/db/`)
@@ -84,24 +90,24 @@ Tables defined in `src/db/schema.ts`:
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`), `name` is unique
 
-All DB access goes through per-domain store modules — `src/projects/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/credentials/stores/credentials-store.ts`, `src/settings/stores/settings-store.ts`, `src/chat/chat-store.ts` — routes never import `db` directly. Each store exports a `createXStore(client?: DbOrTx)` factory plus a default `xStore` singleton; methods bind the client once and take flattened arguments, so tests can inject a fake client instead of mocking the module.
+All DB access goes through per-domain store modules — `src/api/repositories/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/api/credentials/stores/credentials-store.ts`, `src/api/settings/stores/settings-store.ts`, `src/api/chat/chat-store.ts` — routes never import `db` directly. Each store exports a `createXStore(client?: DbOrTx)` factory plus a default `xStore` singleton; methods bind the client once and take flattened arguments, so tests can inject a fake client instead of mocking the module.
 
-## Commit ingestion (`src/repositories/`)
+## Commit ingestion (`src/rag/`)
 
-Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/projects/log-events.ts`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/rag/indexing/log-events.ts`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
 
 - **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
 - **Archive store** (`src/shared/storage/`): `ArchiveStore` is a warm cache for the branch clone — `fs` (default: local disk already is the archive), `s3` (one `tar.gz` object per branch written with a single atomic `PutObject`, with disposable job-scoped local scratch), `memory` (tests). `ensureArchive` (`archive-service.ts`) hydrates before cloning, clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`), then dehydrates only when the tip changed. GitHub remains the source of truth. **Known gap:** deleting a project cascades in Postgres but orphans its archive (S3 object / fs clone); the cache is regenerable, so cleanup is manual.
-- **Native git only** (`repositories/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the images (`backend/Dockerfile.dev`, `backend/Dockerfile`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
+- **Native git only** (`src/rag/git/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the images (`backend/Dockerfile.dev`, `backend/Dockerfile`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
 - **Ingest orchestrator** (`ingest.ts`): `ingestCommits(source, opts)` owns the shared pipeline — dedupe by SHA (before any file-scope work; `commit_message` is the embedding source) → batched upsert of `commit_chunks` → `embedNewChunks`. A `CommitSource` supplies `listCommits`, `toChunkInputs`, and `batchSize`; the source also resolves its own `tipSha`. Changing `embeddingProvider`/`embeddingModel` enqueues `reindex-embeddings`, which re-embeds pending rows across projects.
 - **Git source** (`git-source.ts`): `createGitCommitSource` — ensure archive → list window commits → per-commit file scope (`git diff-tree`, concurrency 8) → guardrail; upserts in batches of 50. `commitUrl` is `https://github.com/{owner}/{repo}/commit/{sha}`.
-- **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `shared/integrations/git-provider/octokit.ts`.
-- **API source** (`api-source.ts`): `createApiCommitSource` feeds the same orchestrator using the API reads. File scopes are best-effort and the whole window upserts in a single batch; guardrail does **not** run here, so demo chunks carry no `metadata.validation`. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `src/gitConnections/services.ts`.
-- **Database-first** (`projects/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
-- **Demo branch scope** (`shared/demo-branches.ts`): demo only exposes/ingests `main`/`master` (or the repo's resolved default). `listBranches` filters the UI list and `prepareProjectBranch` skips ingestion for any other branch, so a visit can't fan out across every feature branch.
+- **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `src/shared/integrations/git-provider/octokit.ts`.
+- **API source** (`api-source.ts`): `createApiCommitSource` feeds the same orchestrator using the API reads. File scopes are best-effort and the whole window upserts in a single batch; guardrail does **not** run here, so demo chunks carry no `metadata.validation`. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `src/api/credentials/git-connections.ts`.
+- **Database-first** (`src/api/repositories/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
+- **Demo branch scope** (`src/shared/demo-branches.ts`): demo only exposes/ingests `main`/`master` (or the repo's resolved default). `listBranches` filters the UI list and `prepareProjectBranch` skips ingestion for any other branch, so a visit can't fan out across every feature branch.
 - **Read-only demo**: `DEMO_MODE=true` also implies `DEMO_RESTRICT_KEYS` (no BYOK). Repo-adding is controlled separately by `ALLOW_ADD_REPOS` (default true): leave it on to seed the database on first run, then set `ALLOW_ADD_REPOS=false` to lock visitors to the pre-ingested set.
 
 Migrations managed via `drizzle-kit` in `src/db/migrations/`. Run `pnpm db:generate` after schema changes, then `pnpm db:migrate` to apply them. **Never run `db:push`** — it does not run migration files, so `CREATE EXTENSION vector` and the `credential_provider` enum are never created and schema pushes fail with `type "vector" does not exist`.
@@ -118,13 +124,13 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `g
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `searchPublicRepositories`, `listBranches`, `getDefaultBranch`, `getRepositoryId`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/repositories/`), never from this interface. The default branch is resolved via the provider API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `searchPublicRepositories`, `listBranches`, `getDefaultBranch`, `getRepositoryId`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/rag/`), never from this interface. The default branch is resolved via the provider API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
 
-`GithubAdapter` (`github-adapter.ts`) uses `@octokit/core` with throttling and retry plugins; shared construction lives in `octokit.ts` (`createOctokit(token?)`, token optional for anonymous public access). `GitlabAdapter` (`gitlab-adapter.ts`) uses a thin native-`fetch` client in `gitlab-client.ts` (auth, timeout, bounded retry, `x-next-page` pagination) — deliberately not a GitLab SDK, since the discovery surface is small and we need retry/backoff the SDK does not provide. `GITLAB_HOST` selects the instance (default `https://gitlab.com`) and is used for API, web, and clone URLs; nested `group/subgroup/project` paths are URL-encoded. The factory `getGitProvider(provider, token?)` in `index.ts` returns the interface via the registry's `createAdapter`; the provider comes from the project/request (`project.gitProvider`), never a global env setting. The app-layer `GitProviderId` is defined in `registry.ts`, independent of the DB enum. Provider wiring lives in `registry.ts` (`getGitProviderConfig`): host, token env var, commit/clone URLs, clone auth header, and adapter factory. Unimplemented providers throw instead of silently falling back to GitHub. Token resolution goes through `resolveGitToken(provider)`; connection storage/verification lives in `src/gitConnections/`. Demo commit reads do not use this interface — they live in `src/repositories/github-api.ts`, and demo mode rejects non-GitHub providers (`gitRepositories/routes.ts`, `api-source.ts`).
+`GithubAdapter` (`github-adapter.ts`) uses `@octokit/core` with throttling and retry plugins; shared construction lives in `octokit.ts` (`createOctokit(token?)`, token optional for anonymous public access). `GitlabAdapter` (`gitlab-adapter.ts`) uses a thin native-`fetch` client in `gitlab-client.ts` (auth, timeout, bounded retry, `x-next-page` pagination) — deliberately not a GitLab SDK, since the discovery surface is small and we need retry/backoff the SDK does not provide. `GITLAB_HOST` selects the instance (default `https://gitlab.com`) and is used for API, web, and clone URLs; nested `group/subgroup/project` paths are URL-encoded. The factory `getGitProvider(provider, token?)` in `index.ts` returns the interface via the registry's `createAdapter`; the provider comes from the project/request (`project.gitProvider`), never a global env setting. The app-layer `GitProviderId` is defined in `registry.ts`, independent of the DB enum. Provider wiring lives in `registry.ts` (`getGitProviderConfig`): host, token env var, commit/clone URLs, clone auth header, and adapter factory. Unimplemented providers throw instead of silently falling back to GitHub. Token resolution goes through `resolveGitToken(provider)`; connection storage/verification lives in `src/api/credentials/`. Demo commit reads do not use this interface — they live in `src/rag/github/github-api.ts`, and demo mode rejects non-GitHub providers (`src/api/repositories/discovery.ts`, `api-source.ts`).
 
 Git connection API: `GET|POST|DELETE /api/v1/git-providers/:provider/connection` is the single token lifecycle for every provider (stored credential or env fallback). Do not add provider-specific connection routes.
 
-## Credentials / encryption (`src/credentials/services.ts` + `encryption.ts`)
+## Credentials / encryption (`src/api/credentials/services.ts` + `encryption.ts`)
 
 - `createCredential()` — validates provider support, encrypts key with AES-256-GCM (32-byte key from `ENCRYPTION_KEY`, 12-byte IV), stores with `maskApiKey()` hint
 - `listCredentials()` — returns safe view (no encrypted keys), optional provider filter
@@ -134,7 +140,7 @@ Git connection API: `GET|POST|DELETE /api/v1/git-providers/:provider/connection`
 
 Encryption output format: `base64url(iv + tag + ciphertext)`.
 
-## Environment config (`src/config/env.ts`)
+## Environment config (`src/shared/config/env.ts`)
 
 Zod-validated `process.env` with `.default()` for all optional fields. Non-defaulted required: `ENCRYPTION_KEY`. Warns on missing `OPENROUTER_API_KEY` (and `GITHUB_TOKEN`, except in demo mode where anonymous public access is fine) but does not exit.
 
@@ -144,7 +150,7 @@ Key defaults: `PORT: 4000`, `HOST: "0.0.0.0"`, `DATABASE_URL: "postgres://scrape
 
 ## Testing
 
-Vitest with colocated `*.test.ts` files. Route tests use `buildApp()` from `../app` then `app.inject()` for HTTP-level testing. Mock `../shared/integrations/git-provider` with `vi.mock()` at module scope. Pure unit tests (schemas, prompts, utils) call functions directly.
+Vitest with colocated `*.test.ts` files. Route tests use `buildApp()` from `@/build-app` then `app.inject()` for HTTP-level testing. Mock `@/shared/integrations/git-provider` with `vi.mock()` at module scope. Pure unit tests (schemas, prompts, utils) call functions directly.
 
 Test pattern:
 ```ts
@@ -182,8 +188,8 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 
 - `src/shared/storage/` — archive warm-cache adapters (`fs`/`s3`/`memory`) + tar helpers
 - `src/shared/queue/` — in-process job queue, handler registry, and the `ingest-branch` job
-- `src/repositories/` — archive clone/hydrate, git reading, ingestion orchestrator
+- `src/rag/` — archive clone/hydrate, git reading, ingestion orchestrator
 - `src/shared/integrations/providers/` — provider registry, model catalog (id → protocol), AI SDK model factory
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/shared/integrations/git-provider/gitlab-client.ts` + `gitlab-adapter.ts` — GitLab REST client (auth/retry/pagination), self-hosted host, field mapping
-- `src/credentials/encryption.ts` — AES-256-GCM details
+- `src/api/credentials/encryption.ts` — AES-256-GCM details

@@ -51,6 +51,12 @@ export const vector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+export const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
+
 export type CommitChunkMetadata = {
   filesChanged?: string[];
   fileStats?: {
@@ -112,6 +118,9 @@ export const commitChunks = pgTable(
     metadata: jsonb("metadata")
       .$type<CommitChunkMetadata>()
       .default({}),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`setweight(to_tsvector('english', coalesce(commit_message, '')), 'A') || setweight(to_tsvector('simple', coalesce(metadata->>'filesChanged', '')), 'B')`,
+    ),
     committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -126,6 +135,15 @@ export const commitChunks = pgTable(
       embeddingIdx: index("commit_embedding_hnsw_idx").using(
         "hnsw",
         table.embedding.op("vector_cosine_ops"),
+      ),
+      searchVectorIdx: index("commit_search_vector_gin_idx").using(
+        "gin",
+        table.searchVector,
+      ),
+      windowIdx: index("commit_project_branch_committed_at_idx").on(
+        table.projectId,
+        table.branch,
+        table.committedAt,
       ),
     };
   },

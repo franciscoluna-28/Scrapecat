@@ -14,6 +14,9 @@
 .vercel
 .env
 .env.*
+**/.env
+**/.env.*
+!**/.env.example
 data
 .ollama
 models

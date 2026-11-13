@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { createServer } from "@/app/create-server";
-import { registerRoutes } from "@/app/register-routes";
+import { createServer } from "@/startup/create-server";
+import { registerRoutes } from "@/startup/register-routes";
 
 /**
  * Public factory used by `main.ts`, the Vercel entrypoint, and tests.

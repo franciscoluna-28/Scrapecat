@@ -1,6 +1,6 @@
 import { pino } from "pino";
 import { requestContext } from "@fastify/request-context";
-import { env } from "@/config/env";
+import { env } from "@/shared/config/env";
 
 export const logger = pino({
   base: undefined,

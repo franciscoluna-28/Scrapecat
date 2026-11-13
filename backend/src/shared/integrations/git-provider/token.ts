@@ -1,6 +1,6 @@
-import { env } from "@/config/env";
-import { decrypt } from "@/credentials/encryption";
-import { credentialsStore } from "@/credentials/stores/credentials-store";
+import { env } from "@/shared/config/env";
+import { decrypt } from "@/api/credentials/encryption";
+import { credentialsStore } from "@/api/credentials/stores/credentials-store";
 import {
   getGitProviderConfig,
   type GitProviderId,

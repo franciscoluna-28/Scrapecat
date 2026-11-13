@@ -56,11 +56,15 @@ export function CommitCitationCard({ citation }: Props) {
   );
 
   const cardClassName = "block rounded-lg border bg-background p-3";
+  const safeCommitUrl =
+    citation.commitUrl && /^https:\/\//i.test(citation.commitUrl)
+      ? citation.commitUrl
+      : null;
 
-  if (citation.commitUrl) {
+  if (safeCommitUrl) {
     return (
       <a
-        href={citation.commitUrl}
+        href={safeCommitUrl}
         target="_blank"
         rel="noreferrer"
         aria-label="Open commit"

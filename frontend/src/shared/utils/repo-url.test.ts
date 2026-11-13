@@ -50,6 +50,8 @@ describe("parseRepoUrl", () => {
     ["not a url"],
     ["github.com/onlyowner"],
     ["https://github.com/"],
+    ["https://github.com/../../etc"],
+    ["owner\\repo"],
   ])("returns null for %s", (input) => {
     expect(parseRepoUrl(input)).toBeNull();
   });

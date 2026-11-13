@@ -15,6 +15,11 @@ export function restrictDemoBranches(branches: string[], defaultBranch: string):
   return trunk.length > 0 ? trunk : [defaultBranch];
 }
 
+/** Whether a branch is a trunk branch. */
+export function isDemoTrunkBranch(branch: string): boolean {
+  return isTrunk(branch);
+}
+
 /** Whether a branch may be ingested in demo mode. */
 export function isDemoBranchAllowed(branch: string, defaultBranch: string): boolean {
   return isTrunk(branch) || branch === defaultBranch;

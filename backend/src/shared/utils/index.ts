@@ -4,3 +4,4 @@
 export * from "./date";
 export * from "./embedding";
 export * from "./hash";
+export * from "./path-safety";
