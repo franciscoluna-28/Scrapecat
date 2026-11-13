@@ -3,6 +3,12 @@ import {
   GitProviderSchema,
   OptionalGitProviderSchema,
 } from "@/shared/typebox";
+import {
+  BRANCH_PATTERN,
+  OWNER_PATTERN,
+  PROVIDER_PROJECT_ID_PATTERN,
+  REPO_PATTERN,
+} from "@/shared/utils";
 
 export const ProjectsResponse = Type.Object({
   projects: Type.Array(
@@ -25,7 +31,7 @@ export const ProjectIdParams = Type.Object({
 });
 
 export const PrepareBranchBody = Type.Object({
-  branch: Type.String({ minLength: 1 }),
+  branch: Type.String({ minLength: 1, maxLength: 200, pattern: BRANCH_PATTERN }),
 });
 
 export const PrepareBranchResponse = Type.Object({
@@ -36,10 +42,16 @@ export const PrepareBranchResponse = Type.Object({
 
 export const CreateProjectBody = Type.Object({
   gitProvider: OptionalGitProviderSchema,
-  providerProjectId: Type.String(),
-  providerOwner: Type.String(),
-  repositoryName: Type.String(),
-  defaultBranch: Type.Optional(Type.String({ default: "main" })),
+  providerProjectId: Type.String({
+    minLength: 1,
+    maxLength: 200,
+    pattern: PROVIDER_PROJECT_ID_PATTERN,
+  }),
+  providerOwner: Type.String({ minLength: 1, maxLength: 200, pattern: OWNER_PATTERN }),
+  repositoryName: Type.String({ minLength: 1, maxLength: 100, pattern: REPO_PATTERN }),
+  defaultBranch: Type.Optional(
+    Type.String({ maxLength: 200, pattern: BRANCH_PATTERN, default: "main" }),
+  ),
 });
 
 export const CreateProjectResponse = Type.Object({
@@ -54,8 +66,8 @@ export const CreateProjectResponse = Type.Object({
 });
 
 export const RepoOwnerParams = Type.Object({
-  owner: Type.String(),
-  repo: Type.String(),
+  owner: Type.String({ minLength: 1, maxLength: 200, pattern: OWNER_PATTERN }),
+  repo: Type.String({ minLength: 1, maxLength: 100, pattern: REPO_PATTERN }),
 });
 
 export const BranchesQuery = Type.Object({
@@ -67,7 +79,7 @@ export const CommitsQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 100 })),
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
-  branch: Type.Optional(Type.String()),
+  branch: Type.Optional(Type.String({ maxLength: 200, pattern: BRANCH_PATTERN })),
 });
 
 export const CommitsResponse = Type.Object({
@@ -86,7 +98,7 @@ export const CommitsCountQuery = Type.Object({
   provider: OptionalGitProviderSchema,
   startDate: Type.Optional(Type.String({ format: "date" })),
   endDate: Type.Optional(Type.String({ format: "date" })),
-  branch: Type.Optional(Type.String()),
+  branch: Type.Optional(Type.String({ maxLength: 200, pattern: BRANCH_PATTERN })),
 });
 
 export const CommitsCountResponse = Type.Object({

@@ -4,7 +4,7 @@ import {
   type GitProviderId,
 } from "@/shared/integrations/git-provider/registry";
 import { commitUrl, cloneUrl } from "@/shared/integrations/git-provider/urls";
-import { authArgs } from "@/rag/git/git";
+import { authEnv } from "@/rag/git/git";
 
 describe("git provider registry", () => {
   it("builds provider-aware commit and clone urls", () => {
@@ -36,21 +36,23 @@ describe("git provider registry", () => {
     );
   });
 
-  it("uses provider-aware clone auth", () => {
-    const [, header] = authArgs("github", "tok");
-    expect(header.startsWith("http.extraheader=AUTHORIZATION: basic ")).toBe(true);
-    const encoded = header.replace("http.extraheader=AUTHORIZATION: basic ", "");
+  it("uses provider-aware clone auth via the environment", () => {
+    const env = authEnv("github", "tok");
+    expect(env?.GIT_CONFIG_KEY_0).toBe("http.extraheader");
+    const header = env?.GIT_CONFIG_VALUE_0 ?? "";
+    expect(header.startsWith("AUTHORIZATION: basic ")).toBe(true);
+    const encoded = header.replace("AUTHORIZATION: basic ", "");
     expect(Buffer.from(encoded, "base64").toString()).toBe("x-access-token:tok");
   });
 
   it("authenticates GitLab clones as the oauth2 user", () => {
-    const [, header] = authArgs("gitlab", "glpat");
-    const encoded = header.replace("http.extraheader=AUTHORIZATION: basic ", "");
+    const header = authEnv("gitlab", "glpat")?.GIT_CONFIG_VALUE_0 ?? "";
+    const encoded = header.replace("AUTHORIZATION: basic ", "");
     expect(Buffer.from(encoded, "base64").toString()).toBe("oauth2:glpat");
   });
 
   it("omits auth headers when there is no token", () => {
-    expect(authArgs("github", null)).toEqual([]);
-    expect(authArgs("gitlab", null)).toEqual([]);
+    expect(authEnv("github", null)).toBeUndefined();
+    expect(authEnv("gitlab", null)).toBeUndefined();
   });
 });

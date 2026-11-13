@@ -24,7 +24,7 @@ vi.mock("@/shared/storage", () => ({
 
 vi.mock("@/rag/git/git", () => ({
   runGit: (opts: { args: string[] }) => mockRunGit(opts),
-  authArgs: () => [],
+  authEnv: () => undefined,
 }));
 
 vi.mock("@/shared/integrations/git-provider/token", () => ({
@@ -68,6 +68,34 @@ describe("archive-service store wiring", () => {
     expect(cloneCalls).toHaveLength(0);
     expect(fetchCalls).toHaveLength(1);
     expect(mockDehydrate).toHaveBeenCalledWith(destDir, { owner, repo, branch }, "tip-from-git");
+  });
+
+  it("rejects paths that escape the archive root", async () => {
+    await expect(
+      ensureArchive({
+        gitProvider: "github",
+        owner: "o",
+        repo: "r",
+        branch: "../../Windows",
+      }),
+    ).rejects.toThrow(/Invalid branch/);
+    await expect(
+      ensureArchive({
+        gitProvider: "github",
+        owner: "..",
+        repo: "r",
+        branch: "main",
+      }),
+    ).rejects.toThrow(/Invalid owner/);
+    await expect(
+      ensureArchive({
+        gitProvider: "github",
+        owner: "o",
+        repo: "r",
+        branch: "C:\\Windows",
+      }),
+    ).rejects.toThrow(/Invalid branch/);
+    expect(mockRunGit).not.toHaveBeenCalled();
   });
 
   it("clones when the store has no cached archive", async () => {

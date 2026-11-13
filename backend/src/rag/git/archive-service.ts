@@ -8,7 +8,8 @@ import { getArchiveStore, type ArchiveKey } from "@/shared/storage";
 import { cloneUrl } from "@/shared/integrations/git-provider/urls";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import type { GitProviderId } from "@/shared/integrations/git-provider/registry";
-import { runGit, authArgs } from "@/rag/git/git";
+import { runGit, authEnv } from "@/rag/git/git";
+import { resolveInside, safeJobDirName } from "@/shared/utils";
 
 export type RepoArchive = {
   owner: string;
@@ -39,9 +40,9 @@ function archiveDir(owner: string, repo: string, branch: string, jobId?: string)
   // relative destination would be resolved twice on Windows.
   const base =
     usesJobScratch() && jobId
-      ? path.join(jobScratchRoot(), jobId)
+      ? path.join(jobScratchRoot(), safeJobDirName(jobId))
       : env.REPO_ARCHIVE_DIR;
-  return path.resolve(base, owner, repo, branch);
+  return resolveInside(base, owner, repo, branch);
 }
 
 function remoteUrl(gitProvider: GitProviderId, owner: string, repo: string): string {
@@ -95,6 +96,7 @@ async function ensureArchiveUnlocked(opts: {
   const dir = archiveDir(owner, repo, branch, jobId);
   const url = remoteUrl(gitProvider, owner, repo);
   const token = await resolveGitToken(gitProvider);
+  const auth = authEnv(gitProvider, token);
   const store = getArchiveStore();
   const key: ArchiveKey = { owner, repo, branch };
 
@@ -123,7 +125,8 @@ async function ensureArchiveUnlocked(opts: {
     if (existed) {
       await runGit({
         cwd: dir,
-        args: [...authArgs(gitProvider, token), "fetch", "origin"],
+        args: ["fetch", "origin"],
+        env: auth,
         timeoutMs: TRANSFER_TIMEOUT_MS,
         label: "git fetch",
       });
@@ -138,7 +141,6 @@ async function ensureArchiveUnlocked(opts: {
       await runGit({
         cwd: path.dirname(dir),
         args: [
-          ...authArgs(gitProvider, token),
           "clone",
           "--single-branch",
           "--branch",
@@ -147,6 +149,7 @@ async function ensureArchiveUnlocked(opts: {
           url,
           cloneDir,
         ],
+        env: auth,
         timeoutMs: TRANSFER_TIMEOUT_MS,
         label: "git clone",
       });
@@ -188,7 +191,7 @@ export async function ensureArchive(opts: {
  */
 export async function wipeJobScratch(jobId: string): Promise<void> {
   if (!usesJobScratch()) return;
-  const dir = path.join(jobScratchRoot(), jobId);
+  const dir = path.join(jobScratchRoot(), safeJobDirName(jobId));
   try {
     await fs.rm(dir, { recursive: true, force: true });
     logger.info({ jobId, dir }, "job scratch wiped");

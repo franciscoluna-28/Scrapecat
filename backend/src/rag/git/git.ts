@@ -55,12 +55,19 @@ export async function runGit(opts: {
 }
 
 /**
- * Auth flags for HTTPS clones, provider-aware. The token travels via an extra
- * HTTP header so it never appears in the URL or argv. With no token, an empty
- * array lets git clone public repositories anonymously.
+ * Auth environment for HTTPS clones, provider-aware. The token travels via
+ * `GIT_CONFIG_*` environment variables, so it never appears in the URL or
+ * process argv. With no token, git clones public repositories anonymously.
  */
-export function authArgs(provider: GitProviderId, token?: string | null): string[] {
-  if (!token) return [];
+export function authEnv(
+  provider: GitProviderId,
+  token?: string | null,
+): Record<string, string> | undefined {
+  if (!token) return undefined;
   const authorization = getGitProviderConfig(provider).authorization(token);
-  return ["-c", `http.extraheader=AUTHORIZATION: ${authorization}`];
+  return {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.extraheader",
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: ${authorization}`,
+  };
 }

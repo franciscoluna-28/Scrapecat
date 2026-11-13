@@ -1,4 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { BRANCH_PATTERN } from "@/shared/utils";
 
 const ChatCitation = Type.Object({
   commitSha: Type.String(),
@@ -50,7 +51,9 @@ export const ChatMessagesResponse = Type.Object({
 
 export const SendMessageBody = Type.Object({
   content: Type.String({ minLength: 1, maxLength: 10000 }),
-  branch: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  branch: Type.Optional(
+    Type.String({ minLength: 1, maxLength: 200, pattern: BRANCH_PATTERN }),
+  ),
   model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
   provider: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
   persona: Type.Optional(
