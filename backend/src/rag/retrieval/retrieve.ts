@@ -1,10 +1,22 @@
 import type { ChatCitation } from "@/db/schema";
 import {
+  ABSTAIN_COSINE_DISTANCE,
+  CORROBORATION_COSINE_DISTANCE,
+  CORROBORATION_TOP_CANDIDATES,
+  DEFAULT_RETRIEVAL_LIMIT,
+  MAX_COSINE_DISTANCE,
+  MIN_QUERY_TOKEN_MATCHES,
+  RELATIVE_FALLBACK_DAYS,
+  STRONG_COSINE_DISTANCE,
+  TEMPORAL_CONTEXT_LIMIT,
+} from "@/rag/constants";
+import {
   hasTemporalIntent,
   isTemporalSummaryQuery,
   parseQueryWindow,
 } from "@/rag/retrieval/date-window";
 import { reciprocalRankFusionScored } from "@/rag/retrieval/fusion";
+import { countQueryTokenMatches } from "@/rag/retrieval/query-evidence";
 import {
   embedTexts,
   resolveEmbeddingSpace,
@@ -15,37 +27,7 @@ import {
   type CommitSearchResult,
 } from "@/rag/indexing/commit-chunks-store";
 
-export const RETRIEVAL_LIMIT = 20;
-
-/**
- * Accuracy-first cap for window summaries. The temporal channel returns the
- * whole window instead of top-k; the cap only protects the prompt token budget.
- */
-export const TEMPORAL_CONTEXT_LIMIT = 200;
-
-/**
- * How far back to look when a relative query ("latest", "this week") returns
- * nothing. Anchoring to the newest commit keeps recency questions useful for
- * repos that have not been touched recently.
- */
-export const RELATIVE_FALLBACK_DAYS = 45;
-
 const DAY_MS = 86_400_000;
-
-/**
- * Cosine distance ceiling for a semantic hit. `text-embedding-3-small` distances
- * between a natural-language question and short commit subjects typically land
- * around 0.45–0.65 even when the commits are clearly on-topic, so a tight floor
- * throws away the whole candidate set (the model then reports "no commits").
- */
-export const MAX_COSINE_DISTANCE = 0.8;
-
-/**
- * Above this distance a semantic candidate is weak evidence. If the lexical
- * channel also finds nothing, the retriever abstains instead of returning
- * irrelevant context. Tune from eval diagnostics, not intuition.
- */
-export const ABSTAIN_COSINE_DISTANCE = 0.7;
 
 export type RetrievalMode = "hybrid" | "temporal";
 
@@ -56,6 +38,7 @@ export type RetrievalTrace = {
   semanticCandidates: number;
   semanticHits: number;
   bestSemanticDistance: number | null;
+  matchedQueryTokens: string[];
   fusedCandidates: number;
   topFusedScore: number | null;
   truncated: boolean;
@@ -93,6 +76,7 @@ function emptyTrace(mode: RetrievalMode): RetrievalTrace {
     semanticCandidates: 0,
     semanticHits: 0,
     bestSemanticDistance: null,
+    matchedQueryTokens: [],
     fusedCandidates: 0,
     topFusedScore: null,
     truncated: false,
@@ -176,7 +160,7 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
       return temporalRetrieve(opts);
     }
 
-    const limit = opts.limit ?? RETRIEVAL_LIMIT;
+    const limit = opts.limit ?? DEFAULT_RETRIEVAL_LIMIT;
     const candidateLimit = Math.min(limit * 4, 200);
 
     let activeSpace: EmbeddingSpace | null = null;
@@ -247,9 +231,29 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
       : null;
 
     const hasLexical = lexicalRows.length > 0;
-    const hasSemantic =
+    const hasStrongSemantic =
+      bestSemanticDistance != null &&
+      bestSemanticDistance <= STRONG_COSINE_DISTANCE;
+    const hasModerateSemantic =
       bestSemanticDistance != null &&
       bestSemanticDistance <= ABSTAIN_COSINE_DISTANCE;
+    const queryTokenMatches = countQueryTokenMatches(
+      opts.query,
+      semanticRows
+        .slice(0, CORROBORATION_TOP_CANDIDATES)
+        .map((row) => row.commitMessage),
+    );
+    const hasCorroboratedSemantic =
+      bestSemanticDistance != null &&
+      bestSemanticDistance <= CORROBORATION_COSINE_DISTANCE &&
+      queryTokenMatches.count >= MIN_QUERY_TOKEN_MATCHES;
+    // A single channel is not enough for moderate evidence: require lexical
+    // corroboration (full match or the query's own tokens in the nearest
+    // commits) so out-of-domain questions abstain instead of surfacing the
+    // nearest commits.
+    const hasSemantic =
+      hasStrongSemantic ||
+      (hasModerateSemantic && (hasLexical || hasCorroboratedSemantic));
 
     if (!hasLexical && !hasSemantic) {
       return {
@@ -261,6 +265,7 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
           semanticCandidates: semanticRows.length,
           semanticHits: semanticHits.length,
           bestSemanticDistance,
+          matchedQueryTokens: queryTokenMatches.matched,
         },
       };
     }
@@ -278,6 +283,7 @@ export function createRetriever(overrides: Partial<RetrieverDeps> = {}) {
         semanticCandidates: semanticRows.length,
         semanticHits: semanticHits.length,
         bestSemanticDistance,
+        matchedQueryTokens: queryTokenMatches.matched,
         fusedCandidates: fused.length,
         topFusedScore: fused[0]?.score ?? null,
       },

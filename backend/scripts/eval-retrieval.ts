@@ -1,7 +1,11 @@
 import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RETRIEVAL_LIMIT } from "@/rag/retrieval/retrieve";
+import { closeDb } from "@/db/client";
+import {
+  DEFAULT_RETRIEVAL_LIMIT,
+  MAX_RETRIEVAL_LIMIT,
+} from "@/rag/constants";
 import { loadGoldenDataset } from "@/rag/eval/golden";
 import { evalService, type EvalReport } from "@/rag/eval/service";
 
@@ -25,7 +29,7 @@ function usage(): string {
     "Usage: pnpm eval [options]",
     "",
     "  --dataset <path>            Golden dataset JSON (default: eval/datasets/scrapecat-dev.json)",
-    "  --top-k <n>                 Results considered per query (default: 10)",
+    `  --top-k <n>                 Results considered per query (default: ${DEFAULT_RETRIEVAL_LIMIT})`,
     "  --prepare                   Index + embed the dataset project/branch before running",
     "  --min-context-recall <n>    Exit non-zero when mean context recall falls below n (0..1)",
     "  --min-context-precision <n> Exit non-zero when mean context precision falls below n (0..1)",
@@ -45,7 +49,7 @@ function nextValue(args: string[], index: number, flag: string): string {
 function parseArgs(argv: string[]): Options {
   const options: Options = {
     dataset: DEFAULT_DATASET,
-    topK: 10,
+    topK: DEFAULT_RETRIEVAL_LIMIT,
     json: false,
     prepare: false,
   };
@@ -89,8 +93,8 @@ function parseArgs(argv: string[]): Options {
   if (!Number.isInteger(options.topK) || options.topK <= 0) {
     throw new Error("--top-k must be a positive integer");
   }
-  if (options.topK > RETRIEVAL_LIMIT) {
-    throw new Error(`--top-k must be at most ${RETRIEVAL_LIMIT}`);
+  if (options.topK > MAX_RETRIEVAL_LIMIT) {
+    throw new Error(`--top-k must be at most ${MAX_RETRIEVAL_LIMIT}`);
   }
   for (const [flag, value] of [
     ["--min-context-recall", options.minContextRecall],
@@ -184,7 +188,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`Eval failed: ${(error as Error).message}`);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error(`Eval failed: ${(error as Error).message}`);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    // The postgres pool keeps the event loop alive; close it so the CLI exits.
+    await closeDb();
+  });

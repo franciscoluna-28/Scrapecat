@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   ABSTAIN_COSINE_DISTANCE,
-  createRetriever,
+  CORROBORATION_COSINE_DISTANCE,
+  CORROBORATION_TOP_CANDIDATES,
+  DEFAULT_RETRIEVAL_LIMIT,
   MAX_COSINE_DISTANCE,
+  MIN_QUERY_TOKEN_MATCHES,
   RELATIVE_FALLBACK_DAYS,
-  RETRIEVAL_LIMIT,
+  STRONG_COSINE_DISTANCE,
   TEMPORAL_CONTEXT_LIMIT,
-} from "@/rag/retrieval/retrieve";
+} from "@/rag/constants";
+import { createRetriever } from "@/rag/retrieval/retrieve";
 
 const row = {
   id: "1",
@@ -78,10 +82,16 @@ describe("retriever.retrieve", () => {
     });
 
     expect(deps.store.semanticSearchCommits).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: "p1", limit: RETRIEVAL_LIMIT * 4 }),
+      expect.objectContaining({
+        projectId: "p1",
+        limit: DEFAULT_RETRIEVAL_LIMIT * 4,
+      }),
     );
     expect(deps.store.lexicalSearchCommits).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: "p1", limit: RETRIEVAL_LIMIT * 4 }),
+      expect.objectContaining({
+        projectId: "p1",
+        limit: DEFAULT_RETRIEVAL_LIMIT * 4,
+      }),
     );
     expect(result.map((citation) => citation.commitSha)).toEqual([
       "b",
@@ -202,6 +212,176 @@ describe("retriever.retrieve", () => {
     const result = await deps.retriever.retrieveDetailed({
       projectId: "p1",
       query: "which kubernetes settings did we tune",
+    });
+
+    expect(result.citations).toEqual([]);
+    expect(result.trace.abstained).toBe(true);
+  });
+
+  it("abstains on moderate semantic evidence without lexical corroboration", async () => {
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      {
+        ...row,
+        commitSha: "moderate",
+        distance: (STRONG_COSINE_DISTANCE + ABSTAIN_COSINE_DISTANCE) / 2,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "which salesforce settings did we tune",
+    });
+
+    expect(result.citations).toEqual([]);
+    expect(result.trace.abstained).toBe(true);
+  });
+
+  it("accepts moderate semantic evidence when lexical corroborates it", async () => {
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      {
+        ...row,
+        commitSha: "moderate",
+        distance: (STRONG_COSINE_DISTANCE + ABSTAIN_COSINE_DISTANCE) / 2,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([lexicalRow]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "how does the chat work",
+    });
+
+    expect(result.citations.map((citation) => citation.commitSha)).toContain(
+      "moderate",
+    );
+    expect(result.trace.abstained).toBe(false);
+  });
+
+  it("accepts strong semantic evidence without lexical corroboration", async () => {
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      { ...row, commitSha: "strong", distance: STRONG_COSINE_DISTANCE - 0.05 },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "how does the chat work",
+    });
+
+    expect(result.citations.map((citation) => citation.commitSha)).toEqual([
+      "strong",
+    ]);
+    expect(result.trace.abstained).toBe(false);
+  });
+
+  it("accepts moderate semantic evidence when query tokens corroborate it", async () => {
+    const borderline = CORROBORATION_COSINE_DISTANCE - 0.01;
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      {
+        ...row,
+        commitSha: "chat",
+        commitMessage: "fix: enforce chat session ownership",
+        distance: borderline,
+      },
+      {
+        ...row,
+        commitSha: "stop",
+        commitMessage: "fix: stop auto-selecting the first project on chat",
+        distance: borderline + 0.02,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query:
+        "How do we stop one visitor from reading another visitor's chat?",
+    });
+
+    expect(result.trace.abstained).toBe(false);
+    expect(result.citations.map((citation) => citation.commitSha)).toContain(
+      "chat",
+    );
+    expect(result.trace.matchedQueryTokens).toHaveLength(
+      MIN_QUERY_TOKEN_MATCHES,
+    );
+  });
+
+  it("abstains when only one generic query token is corroborated", async () => {
+    const borderline = CORROBORATION_COSINE_DISTANCE - 0.01;
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      {
+        ...row,
+        commitSha: "sync",
+        commitMessage: "feat: background sync worker",
+        distance: borderline,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "How does the Salesforce CRM sync work?",
+    });
+
+    expect(result.citations).toEqual([]);
+    expect(result.trace.abstained).toBe(true);
+    expect(result.trace.matchedQueryTokens).toEqual(["sync"]);
+  });
+
+  it("only inspects the nearest corroboration candidates", async () => {
+    const borderline = CORROBORATION_COSINE_DISTANCE - 0.02;
+    const rows = Array.from(
+      { length: CORROBORATION_TOP_CANDIDATES },
+      (_, index) => ({
+        ...row,
+        commitSha: `near-${index}`,
+        commitMessage: "chore: unrelated refactor",
+        distance: borderline + index * 0.005,
+      }),
+    );
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      ...rows,
+      {
+        ...row,
+        commitSha: "far-match",
+        commitMessage: "feat: sync salesforce crm",
+        distance: borderline + 0.015,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "How does the Salesforce CRM sync work?",
+    });
+
+    expect(result.citations).toEqual([]);
+    expect(result.trace.abstained).toBe(true);
+  });
+
+  it("does not let query tokens corroborate hits outside the band", async () => {
+    deps.embed.mockResolvedValue([[0.1, 0.2]]);
+    deps.store.semanticSearchCommits.mockResolvedValue([
+      {
+        ...row,
+        commitSha: "purge",
+        commitMessage: "refactor: delete demo data",
+        distance: 0.677,
+      },
+    ]);
+    deps.store.lexicalSearchCommits.mockResolvedValue([]);
+
+    const result = await deps.retriever.retrieveDetailed({
+      projectId: "p1",
+      query: "How do users export or delete their data under GDPR?",
     });
 
     expect(result.citations).toEqual([]);
