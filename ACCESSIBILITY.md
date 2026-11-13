@@ -11,8 +11,8 @@ Scrapecat aims to be usable with a keyboard and common assistive technology.
 ## Known limitations
 
 - The interface is desktop-first; small-screen layouts are basic.
-- AI-generated content, diagrams, and charts may not be fully accessible.
-- A full screen-reader audit has not been completed.
+- AI-generated answers and reports may include Mermaid diagrams, math, tables, code, and images. Mermaid diagrams render as SVG with only a generic label and no text alternative, and generated images may lack alt text.
+- A full screen-reader and WCAG audit has not been completed.
 
 ## Reporting a barrier
 
