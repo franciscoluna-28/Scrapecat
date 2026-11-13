@@ -73,7 +73,7 @@ describe("createTurnResolver", () => {
     expect(result.messages[0]).toEqual(
       expect.objectContaining({
         role: "system",
-        content: expect.stringContaining("owner/repo"),
+        content: expect.stringContaining("<commit_data>"),
       }),
     );
     expect(result.messages.at(-1)).toEqual(
