@@ -36,7 +36,7 @@ vi.mock("@/src/_features/chat/hooks/useChatProject", async () => {
         branch: projectId ? "main" : null,
         defaultBranch: projectId ? "main" : null,
         selectProject: async (demo: { repo: string }) => {
-          mocks.selectProject(demo);
+          await mocks.selectProject(demo);
           setProjectId(`project-${demo.repo}`);
         },
         changeBranch: vi.fn(),
@@ -92,7 +92,7 @@ import { Chat } from "./Chat";
 
 describe("Chat in demo mode", () => {
   beforeEach(() => {
-    mocks.selectProject.mockReset();
+    mocks.selectProject.mockReset().mockResolvedValue(undefined);
     mocks.sendMessage.mockReset();
   });
 
@@ -120,5 +120,29 @@ describe("Chat in demo mode", () => {
     await user.click(screen.getByRole("button", { name: "Submit" }));
 
     expect(mocks.sendMessage).toHaveBeenCalledWith("What shipped recently?");
+  });
+
+  it("opens a demo project only once while it is preparing", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    let resolveSelect: () => void = () => {};
+    mocks.selectProject.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSelect = resolve;
+        }),
+    );
+
+    render(<Chat />);
+
+    const button = screen.getByRole("button", { name: /formbricks/i });
+    await user.click(button);
+    await user.click(button);
+
+    expect(mocks.selectProject).toHaveBeenCalledTimes(1);
+
+    resolveSelect();
+    await waitFor(() =>
+      expect(screen.getByText("Ask about formbricks")).toBeInTheDocument(),
+    );
   });
 });

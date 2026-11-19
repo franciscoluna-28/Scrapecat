@@ -71,12 +71,11 @@ export function SidebarNavigation() {
           ),
         )}
         {IS_DEMO && (
-          <SidebarMenuItem>
+          <SidebarMenuItem className="mt-2 border-t pt-2">
             <SidebarMenuButton
               isActive={false}
               tooltip="API keys are managed by the server"
             >
-              <Key className="size-4 opacity-60" />
               <span className="text-muted-foreground">
                 Keys managed by server
               </span>
