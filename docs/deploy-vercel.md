@@ -73,6 +73,9 @@ pnpm --filter @scrapecat/backend db:migrate
   Project Settings → Functions if you want a tighter cap.
 - Vercel Functions support response streaming, so SSE works, but verify with a
   real chat on the deployed URL.
+- Scheduled reports are not available in this profile: the report poller is
+  skipped on Vercel and in demo mode. Use the Docker/self-hosted runtime for
+  daily/weekly summaries.
 
 ## Verify
 

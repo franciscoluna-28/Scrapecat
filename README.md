@@ -16,12 +16,13 @@ Built by a former founding engineer to stop generating reports and communicating
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements
 - **Data Source:** GitHub and GitLab APIs for discovery, native git archive for self-hosted commit ingestion, GitHub REST for demo ingestion
-- **Intelligence:** OpenRouter, OpenCode Go, or Ollama (local LLMs), with protocol-aware provider routing
+- **Intelligence:** OpenRouter, OpenAI, DeepSeek, Groq, OpenCode Go, or Ollama (local LLMs), with protocol-aware provider routing
 - **Package Manager:** pnpm workspaces
 
 ## Core Features
 
-- **RAG Chat:** Ask questions about your code history in natural language. The system retrieves the most relevant commits via vector search (pgvector HNSW index) and summarizes them with an LLM.
+- **RAG Chat:** Ask questions about your code history in natural language. The system retrieves the most relevant commits with hybrid vector + keyword search over pgvector and summarizes them with an LLM.
+- **Scheduled Reports:** Generate daily or weekly in-app summaries for a project branch, grounded in commit citations, with run-now, edit, and delete controls.
 - **Feature-Level Summaries:** Related commits are grouped by feature, bug fix, refactor, or infrastructure — no individual commit listing unless asked.
 - **Source Citations:** Every AI response includes a collapsible "Sources Used" section with direct links to provider commits.
 - **Project Tree Sidebar:** Connected repositories with nested chat sessions, branch selector, and navigation.

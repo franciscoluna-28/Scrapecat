@@ -64,6 +64,15 @@ migrations once out-of-band and start the replicas with
 docker run --rm --env-file backend/.env scrapecat-backend node dist/migrate.mjs
 ```
 
+## Scheduled reports
+
+The daily/weekly report poller starts only in the long-running backend
+(`src/main.ts`). It is skipped on Vercel and in demo mode. Scheduled reports
+require the Docker/self-hosted runtime. Multiple backend replicas are safe: due
+schedules are claimed with a conditional update, so only one replica runs them.
+Report generation uses the configured chat model, so the backend needs outbound
+access to that provider.
+
 ## Health and shutdown
 
 - Liveness: `GET /api/v1/health`

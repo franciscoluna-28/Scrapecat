@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import {
   Empty,
@@ -30,6 +30,8 @@ export function Chat() {
   const setLastProjectId = useActiveProjectStore((s) => s.setLastProjectId);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [openingRepo, setOpeningRepo] = useState<string | null>(null);
+  const openingRepoRef = useRef(false);
 
   const {
     projectId,
@@ -73,6 +75,18 @@ export function Chat() {
     }
   };
 
+  const openDemoProject = async (demo: (typeof DEMO_PROJECTS)[number]) => {
+    if (openingRepoRef.current) return;
+    openingRepoRef.current = true;
+    setOpeningRepo(demo.repo);
+    try {
+      await selectProject(demo);
+    } finally {
+      openingRepoRef.current = false;
+      setOpeningRepo(null);
+    }
+  };
+
   return (
     <div className="w-full min-h-full flex flex-col mx-auto">
       {!projectId ? (
@@ -90,11 +104,15 @@ export function Chat() {
                 {DEMO_PROJECTS.map((demo) => (
                   <button
                     key={demo.repo}
-                    onClick={() => selectProject(demo)}
-                    className="flex items-center gap-3 p-4 border rounded-lg hover:bg-accent text-left transition-colors"
+                    onClick={() => void openDemoProject(demo)}
+                    disabled={openingRepo !== null}
+                    className="flex items-center gap-3 p-4 border rounded-lg hover:bg-accent text-left transition-colors disabled:opacity-50"
                   >
                     <span className="font-medium">{demo.label}</span>
                     <span className="text-xs text-muted-foreground ml-auto">{demo.owner}/{demo.repo}</span>
+                    {openingRepo === demo.repo && (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    )}
                   </button>
                 ))}
               </div>

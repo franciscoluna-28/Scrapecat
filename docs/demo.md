@@ -95,6 +95,11 @@ falls back to whatever rows already exist instead of erroring.
 projects/commits are shared — so visitors get their own chat history over the
 same shared, pre-ingested data.
 
+## Marketing
+
+The sidebar shows a demo-only "Star on GitHub" link at the bottom. The link
+lives in `GITHUB_STAR_URL` in `frontend/src/shared/constants/index.ts`.
+
 ## Privacy & token guidance
 
 Demo mode never calls user-scoped GitHub endpoints (`/user`, `/user/repos`), so

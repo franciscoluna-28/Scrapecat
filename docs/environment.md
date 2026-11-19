@@ -50,7 +50,8 @@ S3_PREFIX=archives
 
 Commit ingestion runs inline in-process (deduped by project+branch) — there is no
 external job queue. `ARCHIVE_STORE=fs` keeps today's local clone under
-`REPO_ARCHIVE_DIR` (this is what the serverless demo uses).
+`REPO_ARCHIVE_DIR` (the self-hosted default); the serverless demo reads the
+GitHub REST API and does not use an archive.
 
 `docker-compose.yml` also ships **MinIO** (S3 archive cache) for local full-stack
 runs. MinIO is initialized automatically by the `minio-init` service, which waits
@@ -68,7 +69,7 @@ ARCHIVE_STORE=s3 docker compose up
 
 ### Lifecycle gap: project deletion
 
-Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions), but it does **not** delete the archive — neither the S3 object nor the `fs` clone under `REPO_ARCHIVE_DIR`. There is no delete-project endpoint today, and archives are regenerable cache, so orphaning them is an accepted trade-off rather than a correctness issue. Reclaim space manually (delete objects / add an S3 lifecycle rule) when it matters.
+Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions), but it does **not** delete the archive — neither the S3 object nor the `fs` clone under `REPO_ARCHIVE_DIR`. There is no delete-project endpoint today, so archives can only be reclaimed manually (delete objects / add an S3 lifecycle rule) when it matters. Tracked as P2-3.
 
 `frontend/.env`:
 

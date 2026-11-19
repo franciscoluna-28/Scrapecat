@@ -67,6 +67,9 @@ export const BRAND = {
     "Scrapecat - Ask questions about your repository's history using your GitHub commits",
 } as const;
 
+export const GITHUB_REPO_URL = "https://github.com/franciscoluna-28/Scrapecat";
+export const GITHUB_STAR_URL = GITHUB_REPO_URL;
+
 // Demo mode is opt-in via NEXT_PUBLIC_DEMO_MODE="true". When enabled the UI
 // pre-loads onto the bundled demo repository, shows canned questions and an
 // onboarding popup, and hides BYOK. The open-source product is untouched

@@ -1,12 +1,19 @@
 import { Type } from "@sinclair/typebox";
 import { GitProviderSchema } from "@/shared/typebox";
+import { PROVIDER_REGISTRY } from "@/shared/integrations/providers/registry";
 
 export const CredentialIdParams = Type.Object({
   id: Type.String(),
 });
 
+export const CredentialProviderSchema = Type.Union(
+  (Object.keys(PROVIDER_REGISTRY) as Array<keyof typeof PROVIDER_REGISTRY>).map(
+    (provider) => Type.Literal(provider),
+  ),
+);
+
 export const AddCredentialBody = Type.Object({
-  provider: Type.String({ minLength: 1 }),
+  provider: CredentialProviderSchema,
   key: Type.String({ minLength: 1 }),
 });
 
@@ -26,7 +33,7 @@ export const CredentialCreatedResponse = Type.Object({
 });
 
 export const VerifyCredentialBody = Type.Object({
-  provider: Type.String({ minLength: 1 }),
+  provider: CredentialProviderSchema,
   key: Type.String({ minLength: 1 }),
 });
 
