@@ -9,7 +9,7 @@ these vectors backs RAG retrieval.
    formatting, generated files) for little retrieval value. The corpus is the
    **commit message** — commit/PR review, not code review.
 2. **Reliability.** Embedding must never block or fail chat retrieval. If the
-   provider is down or out of quota, the keyword fallback still answers; vectors
+   provider is down or out of quota, the lexical channel still answers; vectors
    are a derived cache that catches up later.
 3. **Correctness by construction.** A commit is immutable (identified by SHA), so
    stored content never changes — only its embedding can go stale, and that
@@ -68,8 +68,8 @@ query embedding.
 - **Provider:** OpenRouter's OpenAI-compatible embeddings endpoint (reusing the
   OpenRouter key via `resolveApiKey("openrouter")` → `OPENROUTER_API_KEY`), or a
   local Ollama instance; both are on the embedding-provider allowlist.
-- **Model:** the `embeddingModel` setting, defaulting to
-  `openai/text-embedding-3-small` (env `EMBEDDING_MODEL` fallback).
+- **Default:** self-hosted falls back to Ollama / `nomic-embed-text`; demo falls
+  back to OpenRouter / `openai/text-embedding-3-small` (env `EMBEDDING_MODEL`).
 - **Dimensions:** **768** — a database constraint shared by the
   `vector(768)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine).
   The single source of truth is `EMBEDDING_DIMENSIONS` in

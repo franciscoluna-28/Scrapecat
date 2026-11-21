@@ -57,20 +57,51 @@ sequenceDiagram
     API->>Q: prepareProjectBranch (ingest if not stored)
     Q->>DB: upsert commit_chunks → embedNewChunks
     API->>DB: retriever.resolveScope(query, branch, window)
-    DB-->>API: ranked citations (vector, keyword fallback)
+    DB-->>API: ranked citations (lexical + semantic, RRF-fused)
     API->>LLM: system prompt + retrieved commits + question
     LLM-->>C: streamed tokens (SSE)
     API->>DB: persist assistant message + citations
 ```
 
-- **Vector search** is the primary path (`cosineDistance` over the HNSW index,
-  ceiling `MAX_COSINE_DISTANCE = 0.8`); **keyword search** is the fallback when
-  embeddings are missing or the vector query fails. Retrieval limit: `20`.
+- **Hybrid retrieval** runs semantic and lexical channels in parallel and fuses
+  them with reciprocal rank fusion (`src/rag/retrieval/fusion.ts`), so agreement
+  between channels wins without score calibration. Semantic hits are capped at
+  `MAX_COSINE_DISTANCE = 0.8`; lexical search covers queries where embeddings
+  are missing or the provider fails. Default limit: `5`; hard ceiling: `20`.
+- **Evidence gating** requires strong semantic distance or lexical/token
+  corroboration for borderline hits, and abstains instead of returning the
+  nearest commits when neither channel has enough evidence.
 - **Date windows** ("last 30 days", "since June") are parsed into metadata
-  filters; temporal keywords with no explicit date anchor on the latest commit.
+  filters; temporal summary queries read the whole window rather than top-k, and
+  temporal keywords with no explicit date anchor on the latest commit.
 - **Grounding** is the commit message plus file scope — see [`embeddings.md`](embeddings.md).
 - **Quality** is measured with golden-set retrieval evals (`pnpm eval`) — see
   [`evaluation.md`](evaluation.md).
+
+## Scheduled reports
+
+Daily and weekly in-app summaries reuse the chat model settings and the same
+ingestion path. Schedules live in `report_schedules`, generated summaries in
+`reports`; each schedule targets one project branch (unique on project +
+branch).
+
+```mermaid
+flowchart LR
+    P["Report poller<br/>(60s)"] --> C["Claim due schedule<br/>(conditional update)"]
+    C --> R["prepareProjectBranch<br/>(refresh archive, dedupe by SHA)"]
+    R --> W["Read commits since last success"]
+    W --> L["buildReportMessages<br/>+ aiClient.generate()"]
+    L --> S[("reports<br/>summary + sourceCommits")]
+```
+
+- `startReportScheduler()` runs in the long-running backend (`main.ts`);
+  serverless/Vercel and demo mode skip it, and report routes return 403 in demo.
+- A run uses the period since `lastSuccessAt`, so a missed or failed run is
+  covered by the next successful one instead of replaying every interval.
+- Schedule writes use a clock check (`lastRunAt`) plus a conditional claim so a
+  manual run cannot double-fire and due schedules are not run twice.
+- V1 supports daily/weekly cadence and one schedule per branch; custom cron,
+  multi-project schedules, and email/Slack delivery are not built.
 
 ## Commit ingestion
 
@@ -145,13 +176,15 @@ the API path.
 
 Two roles, each with a provider + model setting stored in `app_settings`:
 
-| Role | Setting | Default |
-|---|---|---|
-| Chat (RAG answer) | `chatProvider` / `chatModel` | `openrouter` / `env.AI_MODEL` |
-| Embeddings | `embeddingProvider` / `embeddingModel` | `openrouter` / `env.EMBEDDING_MODEL` |
+| Role | Setting | Default (self-hosted) | Default (demo) |
+|---|---|---|---|
+| Chat (RAG answer) | `chatProvider` / `chatModel` | `ollama` / `llama3.2:1b` | `openrouter` / `env.AI_MODEL` |
+| Embeddings | `embeddingProvider` / `embeddingModel` | `ollama` / `nomic-embed-text` | `openrouter` / `env.EMBEDDING_MODEL` |
 
 Precedence: a per-conversation override (chat only) → stored `app_settings` row →
-`defaultAISettings()` (env defaults). Chat calls go through
+`defaultAISettings()`. Outside demo mode the fallback is local Ollama so a
+self-hosted install works without a cloud key; demo uses OpenRouter because
+visitors cannot run Ollama. Chat calls go through
 `resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
 `src/rag/answer/ai.ts`; embeddings through `embedTexts()` in
 `src/rag/indexing/embeddings.ts`. Each `commit_chunks` row stores its embedding
@@ -281,12 +314,20 @@ and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions
 - No transactions: project upsert and chunk ingest are separate writes. A mid-way
   failure leaves chunks persisted (safe today — chunks are the cache).
 
+### No project deletion
+
+There is no `DELETE /api/v1/projects/:id` route or store method. Removing a
+project currently requires direct database work, and `ArchiveStore` has no delete
+operation, so even a manual cascade would leave the S3 object or fs clone behind.
+Add the endpoint, Postgres cascade, and archive removal together (P2-3). The
+archive is regenerable, so the leak is silent rather than corrupting.
+
 ### Unbounded pending embedding reads
 
 `embedNewChunks` loads every pending row for a project with
-`listPendingChunks(projectId)` before embedding them in batches. The write side
-is set-based (one `UPDATE ... FROM unnest(...)` per batch), but the read side is
-not bounded.
+`listPendingChunks(projectId, space)` before embedding them in batches. The write
+side is set-based (one `UPDATE ... FROM unnest(...)` per batch), but the read
+side is not bounded.
 
 This is an accepted trade-off at the current scale: pending normally means the
 commits from the current ingest, re-runs find almost nothing, and the demo caps

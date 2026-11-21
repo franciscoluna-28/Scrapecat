@@ -16,16 +16,16 @@ No one should have to remember to ask "what did engineering do this week?"
 Summary is a scheduled digest generated from the same commit ingestion and
 retrieval pipeline that powers chat. On a cadence the user chooses, Scrapecat:
 
-- refreshes the selected repositories;
+- refreshes the selected project branch;
 - reads the commits in the period since the last successful summary;
 - groups the work into features, fixes, refactors, and infrastructure;
 - writes a short, founder-oriented update with commit citations;
 - stores it in the app, where it can be read, revisited, and followed up on in
   chat.
 
-The default is a **daily summary**. Weekly and custom cron schedules are
-supported. A schedule selects which repositories are included; unselected
-repositories are excluded.
+The default is a **daily summary**. Weekly schedules are supported today;
+custom cron is a future extension. A schedule targets one project branch, and
+multiple schedules can cover different repositories or branches.
 
 V1 is **in-app only**. There is no email, Slack, or webhook delivery yet. The
 summary is the destination, not another notification to triage.
@@ -58,9 +58,9 @@ Chat remains the place for follow-up questions. Summary is the daily push.
 ## User experience
 
 - A **Summary** page in the app lists past summaries newest-first.
-- A summary shows the period, the selected repositories, highlights, and the
+- A summary shows the period, the selected project branch, highlights, and the
   source commits behind each section.
-- Settings expose the schedule: daily/weekly/custom cron, timezone, repository
+- Settings expose the schedule: daily/weekly cadence, timezone, project/branch
   selection, enable/disable, and “run now”.
 - Opening a summary is enough; asking a follow-up opens chat with the same
   project context.
@@ -71,21 +71,24 @@ Chat remains the place for follow-up questions. Summary is the daily push.
 
 ```mermaid
 flowchart LR
-    S["Schedule (cron + timezone)"] --> P["Poller claims due schedule"]
-    P --> R["Refresh selected repositories<br/>(incremental ingestion)"]
+    S["Schedule (daily/weekly + timezone)"] --> P["Poller claims due schedule"]
+    P --> R["Refresh the project branch<br/>(dedupe by commit SHA)"]
     R --> W["Read commits since<br/>last successful summary"]
     W --> L["LLM summary<br/>(founder tone + citations)"]
-    L --> D[("report_runs")]
+    L --> D[("reports")]
     D --> UI["In-app Summary page"]
 ```
 
-- Schedules are installation-global; each schedule selects its own repositories.
-- A poller runs in the long-running backend. Due schedules are claimed with
-  `FOR UPDATE SKIP LOCKED`, so multiple instances do not send duplicates.
+- Schedules are installation-global; each schedule targets one project branch,
+  and multiple schedules can cover different repositories.
+- A poller runs in the long-running backend. Due schedules are claimed with a
+  conditional update (`nextRunAt` + not already running), so multiple instances
+  do not run the same schedule twice.
 - Report runs are stored in Postgres, so a restart or a failed generation does
   not lose the schedule. The next successful run covers the gap.
-- Ingestion is incremental: refresh starts from the latest stored commit rather
-  than re-reading the full branch history.
+- Ingestion is incremental in effect: refresh re-reads the branch, but dedupe by
+  SHA skips already-stored commits before any file-scope work, so only new
+  commits are enriched.
 - Summaries use the existing chat model settings and `aiClient.generate()`.
   There is no separate report model to configure in v1.
 
@@ -96,7 +99,7 @@ flowchart LR
 - Not a real-time activity feed; the cadence is daily or slower.
 - Not multi-tenant or per-user in v1. Schedules belong to the installation.
 - Not a reason to add a durable job queue, Redis, or the old `sync_jobs` worker.
-  `report_runs` is the durable record.
+  `reports` and `report_schedules` are the durable records.
 
 ## Success
 
@@ -111,9 +114,10 @@ flowchart LR
 ## Roadmap
 
 1. **V1 — daily in-app summaries.** Schedule, generate, store, and read reports
-   inside Scrapecat.
-2. **V2 — delivery and team cadence.** Optional email/Slack delivery, weekly
-   digests, and multiple schedules per installation.
+   inside Scrapecat: daily/weekly cadence, one schedule per project branch,
+   run-now, and report history. Done.
+2. **V2 — delivery and team cadence.** Optional email/Slack delivery, custom
+   cron, and multi-project schedules.
 3. **V3 — external context.** Cross-reference tickets, docs, and chat where the
    integration clearly improves the summary. Not before the core habit works.
 
