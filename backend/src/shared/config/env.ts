@@ -65,7 +65,6 @@ export const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(240),
   CHAT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   REPORT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
-  REPO_ARCHIVE_DIR: z.string().default("repos"),
   // Set false on API-only replicas that share the database with a worker.
   WORKER_ENABLED: z
     .enum(["true", "false"])

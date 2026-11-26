@@ -7,4 +7,3 @@ process.env.GITHUB_TOKEN ??= "";
 process.env.HOST ??= "localhost";
 process.env.PORT ??= "4000";
 process.env.CORS_ORIGIN ??= "*";
-process.env.REPO_ARCHIVE_DIR ??= ".tmp-repos";

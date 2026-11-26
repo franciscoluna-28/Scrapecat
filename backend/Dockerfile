@@ -26,7 +26,6 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=4000
 ENV HOST=0.0.0.0
-ENV REPO_ARCHIVE_DIR=/app/repos
 WORKDIR /app/backend
 
 COPY --from=prod-deps --chown=node:node /app/node_modules /app/node_modules

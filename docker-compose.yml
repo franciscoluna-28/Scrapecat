@@ -29,7 +29,6 @@ services:
       - /app/backend/node_modules
       - /app/frontend/node_modules
       - /app/.next
-      - repo_archives:/app/repos
     env_file:
       - backend/.env
     environment:
@@ -38,7 +37,6 @@ services:
       - CORS_ORIGIN=http://localhost:3000
       - DATABASE_URL=postgres://scrapecat:scrapecat@db:5432/scrapecat
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - REPO_ARCHIVE_DIR=/app/repos
     depends_on:
       db:
         condition: service_healthy
@@ -62,4 +60,3 @@ services:
 
 volumes:
   postgres_data:
-  repo_archives:
