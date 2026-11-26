@@ -20,7 +20,7 @@ None open. P1-1–P1-5 are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-3 | **Project deletion + archive cleanup** | storage | There is no project-delete route or store method today, and `ArchiveStore` has no delete operation (`backend/AGENTS.md:102`). Add `DELETE /api/v1/projects/:id` (cascade in Postgres) plus archive removal (S3 object / fs clone) so a deleted project does not leave regenerable state behind. |
+| P2-3 | **Project deletion + archive cleanup** | storage | There is no project-delete route or store method today, and no archive-removal step (`backend/AGENTS.md`). Add `DELETE /api/v1/projects/:id` (cascade in Postgres) plus removal of the `fs` clone under `REPO_ARCHIVE_DIR` so a deleted project does not leave regenerable state behind. |
 | P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete repeat the session lookup + `canAccessSession` check (`backend/src/api/chat/routes.ts:56-107`). Add a `preHandler` + `req.chatSession` decorator so one lookup serves all session routes. Authorization behavior itself is already fixed by P2-5a. |
 | P2-6 | **SSE reply plugin** | chat | `backend/src/api/chat/routes.ts:109-183` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
 | P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `chat`, `credentials`, `repositories`, `settings`, and `reports` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`backend/src/startup/create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
@@ -40,7 +40,7 @@ tracked in [`frontend-tech-debt.md`](./frontend-tech-debt.md).
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:33`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:34`). |
 | P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching (`listPendingChunks(projectId, space)`); writes are set-based but the read is unbounded. Ingest re-checks pending embeddings on every run, so a large persistent backlog is read on each re-ingest. Acceptable for current repo sizes; revisit for very large histories. See `architecture.md` → "Unbounded pending embedding reads". |
-| P3-8 | **Durable job queue** | backend | Ingestion runs on the in-process memory queue. Report schedules claim durable rows and catch up missed runs, and graceful shutdown drains active jobs (S-3), but a crash or redeploy still drops queued chat ingests; the next on-demand ingest re-runs them. Reintroduce a durable queue (Postgres-backed or Redis) if continuous/autonomous ingest makes lost work visible. |
+
 
 ## Production scale
 
@@ -49,7 +49,7 @@ Known limits that only bite past a single trusted deployment:
 | Gap | Why it blocks scale | Item |
 |---|---|---|
 | **No multi-tenant identity** | Intentional for open-source self-hosted; chat sessions and demo writes are already authorization-scoped, but there is no account/tenant isolation | P3-2 |
-| **In-process queue only** | A crash or redeploy drops queued ingests, and workers cannot scale horizontally | P3-8 |
+| **Single-process worker** | Jobs are durable in Postgres, but the default worker runs in one process; horizontal scaling needs stale-lock recovery instead of fail-on-boot | — |
 | **No project delete** | Projects and their archives can only be removed manually, so storage grows unbounded | P2-3 |
 | **Unbounded pending-embedding reads** | Memory scales with the whole backlog, not the batch size | P3-6 |
 | **No ingest transactions** | Partial writes become unsafe once ingests run concurrently across tenants | P3-1 |
@@ -83,7 +83,8 @@ authorization half (P2-5a) already landed.
 | ID | Item | Area | Notes |
 |---|---|---|---|
 | S-1 | **CI pipeline** | tooling | GitHub Actions runs frozen install, typecheck, lint, unit tests, and build; a second job migrates an empty pgvector database and runs the integration suite. Root `check` mirrors the typecheck/lint/test gates locally; CI also builds. |
-| S-3 | **Graceful shutdown** | backend | `SIGTERM`/`SIGINT` close the server; the in-process queue drains active ingests with a 10s bound instead of dropping them. |
+| S-3 | **Graceful shutdown** | backend | `SIGTERM`/`SIGINT` stop the job worker and wait for the current job before closing; jobs interrupted by a hard crash are failed on the next boot so callers do not wait forever. |
+| P3-8 | **Durable job queue** | backend | Ingestion and reindexing run as deduped Postgres `jobs` rows claimed with `FOR UPDATE SKIP LOCKED` by an in-process worker; no Redis/RabbitMQ. Progress survives restarts via the `progress` column, and the unique active idempotency key dedupes concurrent callers. Set `WORKER_ENABLED=false` for API-only replicas. |
 | S-4 | **Bounded provider calls** | ai | `AI_TIMEOUT_MS` bounds chat and embedding requests; embeddings retry once; SSE aborts upstream work when the client disconnects. |
 | S-5 | **Readiness probe** | backend | `GET /api/v1/health/ready` checks Postgres and returns 503 on failure; liveness stays on `/health`. |
 | S-6 | **UI error boundaries** | frontend | Root `error.tsx` and `global-error.tsx` show a retry surface instead of a blank screen. |

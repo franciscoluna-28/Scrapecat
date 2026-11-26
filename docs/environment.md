@@ -33,43 +33,29 @@ RATE_LIMIT_MAX=240
 CHAT_RATE_LIMIT_MAX=20
 REPORT_RATE_LIMIT_MAX=5
 REPO_ARCHIVE_DIR=repos
+# Durable Postgres-backed jobs run in-process unless this is false.
+WORKER_ENABLED=true
 LOG_LEVEL=info
-
-# Archive warm cache (optional; default is infra-free)
-ARCHIVE_STORE=fs          # fs (default) | s3 | memory (tests)
-S3_BUCKET=scrapecat-archives
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_FORCE_PATH_STYLE=true
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
-S3_PREFIX=archives
 ```
 
-## Archive store
+## Jobs and archives
 
-Commit ingestion runs inline in-process (deduped by project+branch) — there is no
-external job queue. `ARCHIVE_STORE=fs` keeps today's local clone under
-`REPO_ARCHIVE_DIR` (the self-hosted default); the serverless demo reads the
-GitHub REST API and does not use an archive.
+Commit ingestion runs as durable, deduped jobs stored in Postgres (the `jobs`
+table). The worker runs in-process with the API (`src/main.ts`) and claims due
+jobs with `FOR UPDATE SKIP LOCKED`; there is no Redis or RabbitMQ. Set
+`WORKER_ENABLED=false` on API-only replicas that share the database with a
+worker.
 
-`docker-compose.yml` also ships **MinIO** (S3 archive cache) for local full-stack
-runs. MinIO is initialized automatically by the `minio-init` service, which waits
-for the server and creates the `scrapecat-archives` bucket with
-`mc mb --ignore-existing`. To use it:
-
-```bash
-# start the stack with the S3 cache enabled
-ARCHIVE_STORE=s3 docker compose up
-```
-
-- MinIO API: http://localhost:9000 · Console: http://localhost:9001 (`minioadmin` / `minioadmin`)
-- Archives are stored one `tar.gz` object per branch (`archives/{owner}/{repo}/{branch}.tar.gz`), overwritten only when the branch tip advances.
-- In production, point `S3_*` at real S3 (or any S3-compatible store) instead of MinIO; `S3_FORCE_PATH_STYLE` can stay `false` there.
+`REPO_ARCHIVE_DIR` (default `repos/`) holds the local clone used by self-hosted
+ingestion. The serverless demo reads the GitHub REST API and does not use an
+archive.
 
 ### Lifecycle gap: project deletion
 
-Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions), but it does **not** delete the archive — neither the S3 object nor the `fs` clone under `REPO_ARCHIVE_DIR`. There is no delete-project endpoint today, so archives can only be reclaimed manually (delete objects / add an S3 lifecycle rule) when it matters. Tracked as P2-3.
+Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions),
+but it does **not** delete the `fs` clone under `REPO_ARCHIVE_DIR`. There is no
+delete-project endpoint today, so archives can only be reclaimed manually when
+it matters. Tracked as P2-3.
 
 `frontend/.env`:
 

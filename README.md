@@ -12,6 +12,8 @@ Scrapecat is an engineering intelligence assistant that answers questions about 
 
 Built by a former founding engineer to stop generating reports and communicating technical progress by hand. Come on it's 2026, stop guessing what your engineers are doing. 
 
+**Deployment shape:** one process, one database — do not run two backend replicas.
+
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements

@@ -51,7 +51,10 @@ Configuration:
 - `CORS_ORIGIN` must be the public frontend origin.
 - `NEXT_PUBLIC_API_URL` is the backend URL **as seen by the browser**.
 - Postgres data lives in the `postgres_data` volume; cloned archives live in
-  `repo_archives` (or use `ARCHIVE_STORE=s3` and set the `S3_*` variables).
+  `repo_archives`.
+- Durable jobs are stored in Postgres and run in the backend process. Set
+  `WORKER_ENABLED=false` for API-only replicas that share the database with a
+  worker.
 
 ## Migrations
 

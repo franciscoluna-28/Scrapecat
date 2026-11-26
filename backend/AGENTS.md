@@ -22,7 +22,7 @@ Structure is routes → services, organized by **domain** (screaming architectur
 
 - `src/api/` — HTTP domains (`chat`, `credentials`, `repositories`, `settings`, `reports`, `system`). Each owns its handlers, TypeBox schemas, services, stores, and colocated tests.
 - `src/rag/` — the retrieval/indexing pipeline (`answer`, `context`, `retrieval`, `indexing`, `git`, `github`, `eval`).
-- `src/shared/` — cross-cutting infrastructure (`integrations/`, `storage/`, `queue/`, `config/`, `utils/`).
+- `src/shared/` — cross-cutting infrastructure (`integrations/`, `queue/`, `config/`, `utils/`).
 - `src/startup/` — server composition (`create-server.ts`, `register-routes.ts`).
 - `src/db/` — DB client, schema, and migrations.
 
@@ -74,7 +74,7 @@ Pure helpers live in `src/shared/utils/` (`index.ts` is the public surface). Sto
 
 ## Read-path model
 
-The DB is the materialized read model for commits. The git archive (self-hosted, warm-cached by the archive store) or the public GitHub REST API (demo) is the ingestion source; the provider REST APIs are also used for discovery.
+The DB is the materialized read model for commits. The local git clone (self-hosted) or the public GitHub REST API (demo) is the ingestion source; the provider REST APIs are also used for discovery.
 
 - **Discovery** (repos/branches) hits the connected providers live: `src/api/repositories/discovery.ts`. `GET /api/v1/repositories` fans out to every provider with a resolvable token (GitHub-only in demo), tags each row with `provider`, and merges by recency; passing `?provider=` still selects one host. The commit preview (`GET /repositories/:owner/:repo/commits` + `/commits/count`) is **Postgres-backed** (reads `commit_chunks`; unknown/un-ingested repos return empty) or **API-backed** in demo — see the route's `DEMO_MODE` branch.
 - **Chat retrieval** (`POST /api/v1/chat/sessions/:id/messages`) ingests the branch via the job queue (see `src/shared/queue/`), then reads `commit_chunks`.
@@ -89,24 +89,25 @@ Tables defined in `src/db/schema.ts`:
 - **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `embedding_provider`/`embedding_model` (vector-space identity), `content_hash`/`embedding_hash` (content staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding. A row is current only when its provider/model match the active settings and `embedding_hash = content_hash`.
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
 - **credentials** — encrypted API keys; `provider` is a `pgEnum` (`openai` | `openrouter` | `deepseek` | `opencode-go` | `ollama` | `github` | `gitlab`), `name` is unique
+- **jobs** — durable background work (`type`, `status`, `payload`/`result`/`progress` jsonb, attempts, `run_at`, `idempotency_key`); unique partial index on `idempotency_key` for queued/running rows so concurrent callers dedupe
 
 All DB access goes through per-domain store modules — `src/api/repositories/stores/projects-store.ts`, `commit-chunks-store.ts`, `src/api/credentials/stores/credentials-store.ts`, `src/api/settings/stores/settings-store.ts`, `src/api/chat/chat-store.ts` — routes never import `db` directly. Each store exports a `createXStore(client?: DbOrTx)` factory plus a default `xStore` singleton; methods bind the client once and take flattened arguments, so tests can inject a fake client instead of mocking the module.
 
 ## Commit ingestion (`src/rag/`)
 
-Commit ingestion runs as a deduped in-process job in `src/shared/queue/`. Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/rag/indexing/log-events.ts`. The caller enqueues `ingest-branch` and awaits `runAndWait`; the handler runs inline, and concurrent callers for the same project+branch attach to the in-flight run. There are two interchangeable paths, selected by `DEMO_MODE`:
+Commit ingestion runs as durable, deduped jobs backed by the Postgres `jobs` table (`src/shared/queue/`). Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/rag/indexing/log-events.ts`. Callers `enqueueJob(...)` then `waitForJob(...)`; the stable idempotency key makes concurrent callers for the same project+branch attach to the same run. The worker (`worker.ts`) claims due jobs with `FOR UPDATE SKIP LOCKED` in the API process (`main.ts`, gated by `WORKER_ENABLED`); serverless runs the handler inline. This first version targets one process and one database, not replicas or horizontal scale: the worker takes a Postgres advisory lock at startup (a second replica serves API only), and on boot it fails any `running` rows left by a crash (queued rows survive) rather than re-queuing them or recovering stale locks at runtime. There are two interchangeable paths, selected by `DEMO_MODE`:
 
-- **Self-hosted (default)** — clone/extract a local `git` archive (warm-cached through the archive store).
+- **Self-hosted (default)** — clone/fetch a local `git` repository under `REPO_ARCHIVE_DIR`.
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
-- **Archive store** (`src/shared/storage/`): `ArchiveStore` is a warm cache for the branch clone — `fs` (default: local disk already is the archive), `s3` (one `tar.gz` object per branch written with a single atomic `PutObject`, with disposable job-scoped local scratch), `memory` (tests). `ensureArchive` (`archive-service.ts`) hydrates before cloning, clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`), then dehydrates only when the tip changed. GitHub remains the source of truth. **Known gap:** there is no project-delete endpoint or `ArchiveStore` delete operation, so removing a project currently requires direct database work and would still orphan its archive (S3 object / fs clone). The cache is regenerable, so cleanup is manual. Tracked as P2-3.
+- **Local clone** (`src/rag/git/archive-service.ts`): `ensureArchive` clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`). GitHub remains the source of truth. **Known gap:** there is no project-delete endpoint, so removing a project currently requires direct database work and would still orphan its `fs` clone. The cache is regenerable, so cleanup is manual. Tracked as P2-3.
 - **Native git only** (`src/rag/git/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the images (`backend/Dockerfile.dev`, `backend/Dockerfile`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
 - **Ingest orchestrator** (`ingest.ts`): `ingestCommits(source, opts)` owns the shared pipeline — dedupe by SHA (before any file-scope work; `commit_message` is the embedding source) → batched upsert of `commit_chunks` → `embedNewChunks`. A `CommitSource` supplies `listCommits`, `toChunkInputs`, and `batchSize`; the source also resolves its own `tipSha`. Changing `embeddingProvider`/`embeddingModel` enqueues `reindex-embeddings`, which re-embeds pending rows across projects.
 - **Git source** (`git-source.ts`): `createGitCommitSource` — ensure archive → list window commits → per-commit file scope (`git diff-tree`, concurrency 8) → guardrail; upserts in batches of 50. `commitUrl` is `https://github.com/{owner}/{repo}/commit/{sha}`.
 - **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `src/shared/integrations/git-provider/octokit.ts`.
 - **API source** (`api-source.ts`): `createApiCommitSource` feeds the same orchestrator using the API reads. File scopes are best-effort and the whole window upserts in a single batch; guardrail does **not** run here, so demo chunks carry no `metadata.validation`. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `src/api/credentials/git-connections.ts`.
-- **Database-first** (`src/api/repositories/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
+- **Database-first** (`src/api/repositories/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the durable `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
 - **Demo branch scope** (`src/shared/demo-branches.ts`): demo only exposes/ingests `main`/`master` (or the repo's resolved default). `listBranches` filters the UI list and `prepareProjectBranch` skips ingestion for any other branch, so a visit can't fan out across every feature branch.
 - **Read-only demo**: `DEMO_MODE=true` also implies `DEMO_RESTRICT_KEYS` (no BYOK). Repo-adding is controlled separately by `ALLOW_ADD_REPOS` (default true): leave it on to seed the database on first run, then set `ALLOW_ADD_REPOS=false` to lock visitors to the pre-ingested set.
 
@@ -181,14 +182,12 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
 | `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
-| `ARCHIVE_STORE` | Warm cache: `fs` (default) \| `s3` \| `memory` (tests) |
-| `S3_BUCKET` / `S3_ENDPOINT` / `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_PREFIX` | S3 (or MinIO) archive cache settings |
+| `WORKER_ENABLED` | Run the in-process durable job worker (default `true`); set `false` for API-only replicas |
 
 ## Deep dives
 
-- `src/shared/storage/` — archive warm-cache adapters (`fs`/`s3`/`memory`) + tar helpers
-- `src/shared/queue/` — in-process job queue, handler registry, and the `ingest-branch` job
-- `src/rag/` — archive clone/hydrate, git reading, ingestion orchestrator
+- `src/shared/queue/` — Postgres-backed job store, in-process worker, handler registry, and the `ingest-branch`/`reindex-embeddings` jobs
+- `src/rag/` — local clone, git reading, ingestion orchestrator
 - `src/shared/integrations/providers/` — provider registry, model catalog (id → protocol), AI SDK model factory
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/shared/integrations/git-provider/gitlab-client.ts` + `gitlab-adapter.ts` — GitLab REST client (auth/retry/pagination), self-hosted host, field mapping

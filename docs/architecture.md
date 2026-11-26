@@ -17,7 +17,7 @@ flowchart TB
     subgraph D["Data"]
         PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
         STORE["Per-domain stores (routes never touch db directly)"]
-        INFRA["Archive store (fs | s3) · in-process job queue<br/>native git (clone/fetch) · Octokit / GitLab REST (discovery only)"]
+        INFRA["Durable Postgres jobs · in-process worker<br/>native git (clone/fetch) · Octokit / GitLab REST (discovery only)"]
     end
     FE --> API --> PG
     API --> STORE --> PG
@@ -49,7 +49,7 @@ retrieves, then streams the answer.
 sequenceDiagram
     participant C as Client
     participant API as Chat route
-    participant Q as Job queue
+    participant Q as Durable jobs
     participant DB as Postgres
     participant LLM as aiClient
 
@@ -103,22 +103,36 @@ flowchart LR
 - V1 supports daily/weekly cadence and one schedule per branch; custom cron,
   multi-project schedules, and email/Slack delivery are not built.
 
+## Durable jobs
+
+Heavy work runs as Postgres-backed jobs (`jobs` table) instead of an in-memory
+queue. `enqueueJob` inserts a row with an optional idempotency key (unique while
+queued/running, so concurrent callers dedupe); `waitForJob` polls the row's
+`progress`/`status` and replays progress to the caller. The worker
+(`src/shared/queue/worker.ts`) claims due rows with `FOR UPDATE SKIP LOCKED`,
+runs the registered handler, writes `result`/`error`, and retries with backoff
+up to `max_attempts`. It runs in the API process (`WORKER_ENABLED`, default
+true); serverless (Vercel) runs the handler inline because it cannot host a
+long-running loop. On boot, any `running` rows left by a crash are marked failed
+so waiters fail fast instead of hanging. This first version targets one process
+and one database, not replicas or horizontal scale: the worker takes a Postgres
+advisory lock at startup, so a second replica serves API only.
+
 ## Commit ingestion
 
-Batched, run as a deduped in-process job. The job selects a `CommitSource` — the
-self-hosted git archive (`createGitCommitSource`) or the demo GitHub API
+Batched, run as a deduped durable job. The job selects a `CommitSource` — the
+self-hosted local clone (`createGitCommitSource`) or the demo GitHub API
 (`createApiCommitSource`) — and a shared orchestrator (`ingestCommits`) runs the
-pipeline either way. Callers enqueue `ingest-branch` and await it; the handler
-runs inline, and concurrent callers for the same project+branch attach to the
-in-flight run.
+pipeline either way. Callers enqueue `ingest-branch` and await it; the in-process
+worker claims it from Postgres, and the stable idempotency key makes concurrent
+callers for the same project+branch attach to the same run.
 
 ```mermaid
 flowchart TD
-    J["ingest-branch job"] --> P["prepareProjectBranch → enqueue + runAndWait"]
-    P --> E["ensureArchive(owner, repo, branch)"]
-    E --> H["hydrate (fs no-op | s3 GetObject + untar)"]
-    H --> G["native git clone/fetch → repos/{owner}/{repo}/{branch}/"]
-    G --> DH["dehydrate when tip changed"]
+    J["ingest-branch job"] --> P["prepareProjectBranch → enqueueJob + waitForJob"]
+    P --> W["worker claims job (FOR UPDATE SKIP LOCKED)"]
+    W --> E["ensureArchive(owner, repo, branch)"]
+    E --> G["native git clone/fetch → repos/{owner}/{repo}/{branch}/"]
     G --> R["listCommitsInRange(dir, ref, since, until)"]
     R --> S["per-commit file scope (git diff-tree --name-status)"]
     S --> CL["guardrail: skip empty/junk, flag misleading"]
@@ -145,14 +159,14 @@ baked into the image (`backend/Dockerfile.dev`). Do **not** replace it with
 `isomorphic-git`, `nodegit`, etc.:
 
 - **Off-loop, bounded memory** — a separate C process keeps pack/delta work off
-  the V8 heap, which is what makes an in-process Worker safe and large clones
-  non-OOMing.
+  the V8 heap, which is what makes the in-process job worker safe and large
+  clones non-OOMing.
 - **Protocol maturity** — shallow/single-branch clone, incremental fetch,
   packfiles, `http.extraheader` auth, fast `log`/`diff-tree` on huge repos.
 - **Reproducibility** — pinning git gives identical behavior across dev,
   replicas, and prod.
-- **Statelessness** — git touches only disposable job scratch, matching "nothing
-  durable on the image."
+- **Regenerable cache** — the clone under `REPO_ARCHIVE_DIR` is disposable; a
+  lost volume only costs the next fetch.
 
 Serverless cannot run the binary at all — which is why the demo uses the GitHub
 REST API. The clean split: self-hosted ships git; serverless does not and uses
@@ -164,8 +178,9 @@ the API path.
   and caps output at `AI_MAX_OUTPUT_TOKENS` (default `8192`) unless the caller
   overrides `maxTokens`; embedding calls use the same timeout with one retry. SSE handlers abort the
   upstream call when the client disconnects.
-- **Graceful shutdown.** `SIGTERM`/`SIGINT` close the Fastify server, which drains
-  active ingest jobs (bounded to 10s) before exiting.
+- **Graceful shutdown.** `SIGTERM`/`SIGINT` stop the job worker, let the current
+  job finish, and then close the Fastify server. Jobs interrupted by a hard crash
+  are failed on the next worker boot so callers do not wait forever.
 - **Readiness.** `GET /api/v1/health/ready` runs `select 1` against Postgres and
   returns 503 when it cannot connect; `GET /api/v1/health` stays a liveness probe.
   Docker images use the readiness route for their healthcheck.
@@ -317,10 +332,10 @@ and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions
 ### No project deletion
 
 There is no `DELETE /api/v1/projects/:id` route or store method. Removing a
-project currently requires direct database work, and `ArchiveStore` has no delete
-operation, so even a manual cascade would leave the S3 object or fs clone behind.
-Add the endpoint, Postgres cascade, and archive removal together (P2-3). The
-archive is regenerable, so the leak is silent rather than corrupting.
+project currently requires direct database work, and there is no archive-removal
+step, so even a manual cascade would leave the `fs` clone behind. Add the
+endpoint, Postgres cascade, and local clone removal together (P2-3). The clone
+is regenerable, so the leak is silent rather than corrupting.
 
 ### Unbounded pending embedding reads
 
