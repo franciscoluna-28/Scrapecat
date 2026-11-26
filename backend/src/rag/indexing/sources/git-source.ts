@@ -1,8 +1,8 @@
-import { timed } from "@/shared/timing";
-import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
-import { createWorkspace, disposeWorkspace } from "@/rag/git/workspace";
-import { listCommitsInRange } from "@/rag/git/git-reader";
-import { getCommitsChangedFiles } from "@/rag/git/git-diff";
+import type { GitProviderId } from "@/shared/integrations/git-provider";
+import {
+  gitRepositoryService,
+  type GitRepositoryHandle,
+} from "@/rag/git/git-repository-service";
 import { classifyCommit } from "@/rag/indexing/guardrail";
 import { type CommitChunkInput } from "@/rag/indexing/commit-chunks-store";
 import type { CommitSource, SourceCommit, SourceContext } from "@/rag/indexing/source";
@@ -10,10 +10,9 @@ import type { CommitSource, SourceCommit, SourceContext } from "@/rag/indexing/s
 const BATCH_SIZE = 50;
 
 /**
- * Self-hosted commit source: clones the branch into a throwaway workspace,
- * reads the commit window with native `git log`, and derives each batch's file
- * scopes in a single `git diff-tree --stdin` process — all off the event loop,
- * bounded memory. Callers must `dispose()` the source when the job ends.
+ * Self-hosted commit source: opens a throwaway git workspace, reads the commit
+ * window with native `git log`, and derives each batch's file scopes through
+ * the repository service. Callers must `dispose()` the source when the job ends.
  *
  * Guardrail runs here (and only here): empty/no-op commits are skipped and
  * uninformative or contradictory messages are flagged in `metadata.validation`.
@@ -25,42 +24,31 @@ export function createGitCommitSource(opts: {
   branch: string;
 }): CommitSource {
   const { gitProvider, owner, repo, branch } = opts;
-  let workspaceDir = "";
+  let repository: GitRepositoryHandle | null = null;
+
+  function requireRepository(): GitRepositoryHandle {
+    if (!repository) throw new Error("Repository workspace is not open");
+    return repository;
+  }
 
   return {
     batchSize: BATCH_SIZE,
 
     async listCommits({ since, until }) {
-      const workspace = await timed("ingest.createWorkspace", { owner, repo, branch }, () =>
-        createWorkspace({ gitProvider, owner, repo, branch }),
-      );
-      workspaceDir = workspace.dir;
-
-      const commits = await timed(
-        "ingest.listCommitsInRange",
-        { owner, repo, branch, since: since?.toISOString(), until: until?.toISOString() },
-        () =>
-          listCommitsInRange({
-            dir: workspace.dir,
-            ref: branch,
-            since,
-            until,
-          }),
-      );
-
-      return { commits, tipSha: workspace.tipSha };
+      const active = await gitRepositoryService.open({
+        gitProvider,
+        owner,
+        repo,
+        branch,
+      });
+      repository = active;
+      const commits = await active.listCommits({ since, until });
+      return { commits, tipSha: active.tipSha };
     },
 
     async toChunkInputs(commits: SourceCommit[], ctx: SourceContext) {
-      const diffBySha = await timed(
-        "ingest.getChangedFiles",
-        { owner, repo, branch, count: commits.length },
-        () =>
-          getCommitsChangedFiles({
-            dir: workspaceDir,
-            shas: commits.map((c) => c.sha),
-          }),
-      );
+      const active = requireRepository();
+      const diffBySha = await active.changedFiles(commits.map((c) => c.sha));
 
       const inputs: CommitChunkInput[] = [];
       let skipped = 0;
@@ -84,7 +72,7 @@ export function createGitCommitSource(opts: {
           author: c.author,
           metadata: {
             filesChanged: stats.files.map((f) => f.filepath),
-            commitUrl: commitUrl(gitProvider, ctx.owner, ctx.repo, c.sha),
+            commitUrl: active.commitUrl(c.sha),
             validation: { status: guard.status, notes: guard.notes },
           },
           committedAt: new Date(c.date),
@@ -95,9 +83,10 @@ export function createGitCommitSource(opts: {
     },
 
     async dispose() {
-      if (!workspaceDir) return;
-      await disposeWorkspace(workspaceDir);
-      workspaceDir = "";
+      if (!repository) return;
+      const active = repository;
+      repository = null;
+      await active.dispose();
     },
   };
 }

@@ -2,7 +2,7 @@ import { env } from "@/shared/config/env";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
 import { branchSyncStore } from "@/rag/indexing/branch-sync-store";
-import { remoteTipSha } from "@/rag/git/workspace";
+import { gitRepositoryService } from "@/rag/git/git-repository-service";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
 import {
   isDemoBranchAllowed,
@@ -86,7 +86,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
   let since: Date | undefined;
   if (!env.isDemoMode) {
     try {
-      const tip = await remoteTipSha({
+      const tip = await gitRepositoryService.tip({
         gitProvider: project.gitProvider,
         owner: project.providerOwner,
         repo: project.repositoryName,

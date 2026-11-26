@@ -1,21 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockCreateWorkspace = vi.fn();
-const mockDisposeWorkspace = vi.fn();
-const mockListCommitsInRange = vi.fn();
-const mockGetCommitsChangedFiles = vi.fn();
+const mockOpen = vi.fn();
 
-vi.mock("@/rag/git/workspace", () => ({
-  createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
-  disposeWorkspace: (...args: unknown[]) => mockDisposeWorkspace(...args),
-}));
-
-vi.mock("@/rag/git/git-reader", () => ({
-  listCommitsInRange: (...args: unknown[]) => mockListCommitsInRange(...args),
-}));
-
-vi.mock("@/rag/git/git-diff", () => ({
-  getCommitsChangedFiles: (...args: unknown[]) => mockGetCommitsChangedFiles(...args),
+vi.mock("@/rag/git/git-repository-service", () => ({
+  gitRepositoryService: {
+    open: (...args: unknown[]) => mockOpen(...args),
+  },
 }));
 
 import { createGitCommitSource } from "@/rag/indexing/sources/git-source";
@@ -37,51 +27,67 @@ const commit = {
   parentSha: null,
 };
 
+type FakeHandle = {
+  dir: string;
+  tipSha: string;
+  listCommits: ReturnType<typeof vi.fn>;
+  changedFiles: ReturnType<typeof vi.fn>;
+  commitUrl: ReturnType<typeof vi.fn>;
+  dispose: ReturnType<typeof vi.fn>;
+};
+
+let handle: FakeHandle;
+
 beforeEach(() => {
-  mockCreateWorkspace.mockReset().mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
-  mockDisposeWorkspace.mockReset().mockResolvedValue(undefined);
-  mockListCommitsInRange.mockReset().mockResolvedValue([commit]);
-  mockGetCommitsChangedFiles.mockReset().mockResolvedValue(new Map([["a", DIFF]]));
+  handle = {
+    dir: "/repo",
+    tipSha: "tip123",
+    listCommits: vi.fn().mockResolvedValue([commit]),
+    changedFiles: vi.fn().mockResolvedValue(new Map([["a", DIFF]])),
+    commitUrl: vi.fn(
+      (sha: string) => `https://github.com/owner/repo/commit/${sha}`,
+    ),
+    dispose: vi.fn().mockResolvedValue(undefined),
+  };
+  mockOpen.mockReset().mockResolvedValue(handle);
 });
 
+function source() {
+  return createGitCommitSource({
+    gitProvider: "github",
+    owner: "owner",
+    repo: "repo",
+    branch: "main",
+  });
+}
+
 describe("createGitCommitSource", () => {
-  it("clones the workspace and returns commits with its tip", async () => {
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
+  it("opens the repository service and returns commits with its tip", async () => {
+    const { commits, tipSha } = await source().listCommits({});
 
-    const { commits, tipSha } = await source.listCommits({});
-
-    expect(mockCreateWorkspace).toHaveBeenCalledWith({
+    expect(mockOpen).toHaveBeenCalledWith({
       gitProvider: "github",
       owner: "owner",
       repo: "repo",
       branch: "main",
     });
+    expect(handle.listCommits).toHaveBeenCalledWith({
+      since: undefined,
+      until: undefined,
+    });
     expect(commits).toEqual([commit]);
     expect(tipSha).toBe("tip123");
   });
 
-  it("disposes the workspace once", async () => {
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
-    await source.listCommits({});
-
-    await source.dispose?.();
-    await source.dispose?.();
-
-    expect(mockDisposeWorkspace).toHaveBeenCalledTimes(1);
-    expect(mockDisposeWorkspace).toHaveBeenCalledWith("/repo");
-  });
-
   it("builds chunk inputs with file scope, github url, and validation", async () => {
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
-    await source.listCommits({});
+    const gitSource = source();
+    await gitSource.listCommits({});
 
-    const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
+    const { inputs, skipped } = await gitSource.toChunkInputs([commit], CTX);
 
     expect(skipped).toBe(0);
-    expect(mockGetCommitsChangedFiles).toHaveBeenCalledWith({
-      dir: "/repo",
-      shas: ["a"],
-    });
+    expect(handle.changedFiles).toHaveBeenCalledWith(["a"]);
+    expect(handle.commitUrl).toHaveBeenCalledWith("a");
     expect(inputs).toEqual([
       {
         projectId: "proj",
@@ -100,34 +106,49 @@ describe("createGitCommitSource", () => {
   });
 
   it("flags uninformative messages but still stores the commit", async () => {
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
-    await source.listCommits({});
+    const gitSource = source();
+    await gitSource.listCommits({});
 
-    const { inputs } = await source.toChunkInputs([{ ...commit, message: "fix: lol" }], CTX);
+    const { inputs } = await gitSource.toChunkInputs(
+      [{ ...commit, message: "fix: lol" }],
+      CTX,
+    );
 
     expect(inputs[0].metadata?.validation?.status).toBe("flagged");
     expect(inputs[0].metadata?.validation?.notes?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("skips empty commits and counts them", async () => {
-    mockGetCommitsChangedFiles.mockResolvedValue(new Map([["a", { filesChanged: 0, files: [] }]]));
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
-    await source.listCommits({});
+    handle.changedFiles.mockResolvedValue(
+      new Map([["a", { filesChanged: 0, files: [] }]]),
+    );
+    const gitSource = source();
+    await gitSource.listCommits({});
 
-    const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
+    const { inputs, skipped } = await gitSource.toChunkInputs([commit], CTX);
 
     expect(inputs).toEqual([]);
     expect(skipped).toBe(1);
   });
 
   it("skips commits missing from the batched diff result", async () => {
-    mockGetCommitsChangedFiles.mockResolvedValue(new Map());
-    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
-    await source.listCommits({});
+    handle.changedFiles.mockResolvedValue(new Map());
+    const gitSource = source();
+    await gitSource.listCommits({});
 
-    const { inputs, skipped } = await source.toChunkInputs([commit], CTX);
+    const { inputs, skipped } = await gitSource.toChunkInputs([commit], CTX);
 
     expect(inputs).toEqual([]);
     expect(skipped).toBe(1);
+  });
+
+  it("disposes the repository handle once", async () => {
+    const gitSource = source();
+    await gitSource.listCommits({});
+
+    await gitSource.dispose?.();
+    await gitSource.dispose?.();
+
+    expect(handle.dispose).toHaveBeenCalledTimes(1);
   });
 });

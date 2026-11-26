@@ -133,7 +133,7 @@ flowchart TD
     T -->|unchanged| C["serve stored rows"]
     T -->|changed| Q["enqueueJob + waitForJob"]
     Q --> W["worker claims job (FOR UPDATE SKIP LOCKED)"]
-    W --> E["createWorkspace (blobless, no checkout)"]
+    W --> E["gitRepositoryService.open (blobless, no checkout)"]
     E --> G["clone → os.tmpdir()/scrapecat/<uuid>"]
     G --> R["listCommitsInRange(dir, ref, since, until)"]
     R --> S["per-commit file scope (git diff-tree --name-status)"]
@@ -141,7 +141,7 @@ flowchart TD
     CL --> U["upsert commit_chunks (dedupe by SHA)"]
     U --> EM["embedNewChunks (batch, non-blocking)"]
     EM --> ST["save tip in project_branches"]
-    EM --> D["dispose workspace (finally)"]
+    EM --> D["repository.dispose (finally)"]
 ```
 
 - **Two sources:** `createGitCommitSource` (self-hosted; native git + per-commit

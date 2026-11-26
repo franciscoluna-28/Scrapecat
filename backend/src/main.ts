@@ -2,7 +2,7 @@ import "dotenv/config.js";
 import { buildApp } from "@/build-app";
 import { env } from "@/shared/config/env";
 import { startJobWorker, stopJobWorker } from "@/shared/queue/worker";
-import { sweepStaleWorkspaces } from "@/rag/git/workspace";
+import { gitRepositoryService } from "@/rag/git/git-repository-service";
 import { logger } from "@/shared/logger";
 import {
   startReportScheduler,
@@ -20,7 +20,9 @@ async function main() {
     );
     startReportScheduler();
     if (env.WORKER_ENABLED) {
-      await startJobWorker({ onLockAcquired: sweepStaleWorkspaces });
+      await startJobWorker({
+        onLockAcquired: () => gitRepositoryService.sweep(),
+      });
     }
   } catch (err) {
     app.log.error(err);

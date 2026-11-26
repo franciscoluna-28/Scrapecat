@@ -25,8 +25,10 @@ vi.mock("@/rag/indexing/branch-sync-store", () => ({
   },
 }));
 
-vi.mock("@/rag/git/workspace", () => ({
-  remoteTipSha: (...args: unknown[]) => mockRemoteTipSha(...args),
+vi.mock("@/rag/git/git-repository-service", () => ({
+  gitRepositoryService: {
+    tip: (...args: unknown[]) => mockRemoteTipSha(...args),
+  },
 }));
 
 vi.mock("@/shared/queue", () => ({
