@@ -7,7 +7,6 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { fastifyRequestContext } from "@fastify/request-context";
 import { env } from "@/shared/config/env";
-import { sweepStaleJobScratch } from "@/rag/git/archive-service";
 import { shutdownJobQueue } from "@/shared/queue";
 
 /**
@@ -37,9 +36,7 @@ export async function createServer(instance?: FastifyInstance) {
     done();
   });
 
-  // s3 mode treats local scratch as disposable: clear any dirs a crashed
-  // worker left behind, and release queue resources on shutdown.
-  await sweepStaleJobScratch();
+  // Release queue resources on shutdown.
   app.addHook("onClose", async () => {
     await shutdownJobQueue();
   });

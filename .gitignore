@@ -42,5 +42,11 @@ next-env.d.ts
 data/
 backend/src/demo/data/
 
+# Runtime repo clones / job scratch
+/repos/
+backend/repos/
+backend/.tmp-repos/
+backend/.ephemeral/
+
 
 

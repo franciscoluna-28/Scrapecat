@@ -1,5 +1,4 @@
 import path from "node:path";
-import { createHash } from "node:crypto";
 
 const SEGMENT = /^[A-Za-z0-9._-]+$/;
 
@@ -68,9 +67,4 @@ export function resolveInside(
     throw new Error("Invalid archive path");
   }
   return resolved;
-}
-
-/** Stable, filesystem-safe directory name for a job id. */
-export function safeJobDirName(jobId: string): string {
-  return createHash("sha256").update(jobId).digest("hex");
 }

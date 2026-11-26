@@ -52,7 +52,6 @@ describe("createGitCommitSource", () => {
       owner: "owner",
       repo: "repo",
       branch: "main",
-      jobId: undefined,
     });
     expect(commits).toEqual([commit]);
     expect(tipSha).toBe("tip123");

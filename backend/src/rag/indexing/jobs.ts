@@ -2,7 +2,6 @@ import { env } from "@/shared/config/env";
 import { ingestCommits, type IngestProgress } from "@/rag/indexing/ingest";
 import { createGitCommitSource } from "@/rag/indexing/sources/git-source";
 import { createApiCommitSource } from "@/rag/indexing/sources/api-source";
-import { wipeJobScratch } from "@/rag/git/archive-service";
 import { reindexAllProjects } from "@/rag/indexing/embed-chunks";
 import { registerJobHandler } from "@/shared/queue";
 import { JOB_NAMES } from "@/shared/queue/jobs";
@@ -23,7 +22,7 @@ export type IngestJobPayload = {
  * resolve it. The demo/self-hosted split selects the commit source; the shared
  * orchestrator runs the pipeline either way.
  */
-registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report, ctx) => {
+registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report) => {
   const { gitProvider, owner, repo, branch, projectId, requestId } = payload as IngestJobPayload;
   const onProgress: IngestProgress = (stage, message, done, total) =>
     report({ stage, message, done, total });
@@ -33,13 +32,8 @@ registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report, ctx) => {
     return ingestCommits(source, { owner, repo, branch, projectId, requestId, onProgress });
   }
 
-  try {
-    const source = createGitCommitSource({ gitProvider, owner, repo, branch, jobId: ctx.jobId });
-    return await ingestCommits(source, { owner, repo, branch, projectId, requestId, onProgress });
-  } finally {
-    // No-op unless the s3 store is active (disposable job scratch).
-    await wipeJobScratch(ctx.jobId);
-  }
+  const source = createGitCommitSource({ gitProvider, owner, repo, branch });
+  return ingestCommits(source, { owner, repo, branch, projectId, requestId, onProgress });
 });
 
 registerJobHandler(JOB_NAMES.reindexEmbeddings, async () => {

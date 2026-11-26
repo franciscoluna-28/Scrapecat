@@ -22,9 +22,8 @@ export function createGitCommitSource(opts: {
   owner: string;
   repo: string;
   branch: string;
-  jobId?: string;
 }): CommitSource {
-  const { gitProvider, owner, repo, branch, jobId } = opts;
+  const { gitProvider, owner, repo, branch } = opts;
   let archiveDir = "";
 
   return {
@@ -32,7 +31,7 @@ export function createGitCommitSource(opts: {
 
     async listCommits({ since, until }) {
       const archive = await timed("ingest.ensureArchive", { owner, repo, branch }, () =>
-        ensureArchive({ gitProvider, owner, repo, branch, jobId }),
+        ensureArchive({ gitProvider, owner, repo, branch }),
       );
       archiveDir = archive.dir;
 
