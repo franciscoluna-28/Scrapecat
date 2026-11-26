@@ -34,7 +34,6 @@ const trace = {
   semanticCandidates: 1,
   semanticHits: 1,
   bestSemanticDistance: 0.2,
-  matchedQueryTokens: [],
   fusedCandidates: 1,
   topFusedScore: 0.03,
   truncated: false,
