@@ -43,7 +43,7 @@ AI is increasing commit velocity, not reducing it. Scrapecat is the missing laye
 flowchart LR
     subgraph ingest["Ingest"]
         A["Git clone<br/>or GitHub API"] --> B["Dedupe commits by SHA"]
-        B --> C[("Postgres + pgvector<br/>commit_chunks + embeddings")]
+        B --> C[("Postgres + pgvector<br/>commit_embeddings (summary + vector)")]
     end
     subgraph answer["Answer"]
         Q["Question"] --> D["Parse date window"]
@@ -54,7 +54,7 @@ flowchart LR
     end
 ```
 
-Ingestion is batch/clone-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval fuses vector and keyword results over Postgres (the read model) and abstains when the evidence is weak.
+Ingestion is batch/clone-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval fuses vector and keyword results over Postgres (the read model) and abstains only when both channels return nothing.
 
 ## Demo Mode (public concept demo)
 
@@ -149,7 +149,7 @@ pnpm install
 # Generate database migration
 pnpm run db:generate
 
-# Apply migrations (creates projects, commit_chunks, chat_sessions, credentials tables)
+# Apply migrations (creates projects, commit_embeddings, chat_sessions, credentials tables)
 pnpm run db:migrate
 
 # Start the development server
@@ -201,8 +201,8 @@ and unchanged — see [`docs/deploy-vercel.md`](./docs/deploy-vercel.md).
 ### RAG Pipeline
 
 1. **Query parsing** — natural language date windows are parsed ("last 30 days", "since June", "2024") and applied as metadata filters
-2. **Hybrid retrieval** — vector search over the pgvector HNSW index (`MAX_COSINE_DISTANCE = 0.8`) and keyword search run in parallel
-3. **Fusion** — results are merged with reciprocal rank fusion (RRF); weak evidence abstains instead of surfacing the nearest commits
+2. **Hybrid retrieval** — vector search over the pgvector HNSW index (one calibrated `MAX_COSINE_DISTANCE = 0.8` ceiling) and keyword search run in parallel
+3. **Fusion** — results are merged with reciprocal rank fusion (RRF); abstains only when both channels return nothing
 4. **LLM summarization** — system prompt instructs the LLM to group by feature, not list individual commits
 5. **Sources** — every response includes a collapsible "Sources Used" section with commit links
 

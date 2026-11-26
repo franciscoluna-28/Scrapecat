@@ -15,7 +15,7 @@ flowchart TB
         API["Fastify 5 · TypeBox · OpenAPI<br/>validation · CORS · Swagger"]
     end
     subgraph D["Data"]
-        PG["PostgreSQL + pgvector<br/>projects · commit_chunks · chat"]
+        PG["PostgreSQL + pgvector<br/>projects · commit_embeddings · chat"]
         STORE["Per-domain stores (routes never touch db directly)"]
         INFRA["Durable Postgres jobs · in-process worker<br/>native git (clone/fetch) · Octokit / GitLab REST (discovery only)"]
     end
@@ -55,7 +55,7 @@ sequenceDiagram
 
     C->>API: message + branch
     API->>Q: prepareProjectBranch (ingest if not stored)
-    Q->>DB: upsert commit_chunks → embedNewChunks
+    Q->>DB: upsert commit_embeddings (diff-grounded summary + vector)
     API->>DB: retriever.resolveScope(query, branch, window)
     DB-->>API: ranked citations (lexical + semantic, RRF-fused)
     API->>LLM: system prompt + retrieved commits + question
@@ -68,13 +68,13 @@ sequenceDiagram
   between channels wins without score calibration. Semantic hits are capped at
   `MAX_COSINE_DISTANCE = 0.8`; lexical search covers queries where embeddings
   are missing or the provider fails. Default limit: `5`; hard ceiling: `20`.
-- **Evidence gating** requires strong semantic distance or lexical/token
-  corroboration for borderline hits, and abstains instead of returning the
-  nearest commits when neither channel has enough evidence.
-- **Date windows** ("last 30 days", "since June") are parsed into metadata
-  filters; temporal summary queries read the whole window rather than top-k, and
-  temporal keywords with no explicit date anchor on the latest commit.
-- **Grounding** is the commit message plus file scope — see [`embeddings.md`](embeddings.md).
+- **One semantic ceiling.** Semantic hits above `MAX_COSINE_DISTANCE = 0.8` are
+  dropped; there is no corroboration/threshold stack. Abort only when both
+  channels return nothing.
+- **Date windows** ("last 30 days", "since June") are parsed into column
+  filters; temporal summary queries read the whole window rather than top-k.
+  Relative phrases without an explicit date are not silently anchored.
+- **Grounding** is the diff-grounded commit summary plus file scope — see [`embeddings.md`](embeddings.md).
 - **Quality** is measured with golden-set retrieval evals (`pnpm eval`) — see
   [`evaluation.md`](evaluation.md).
 
@@ -136,30 +136,30 @@ flowchart TD
     W --> E["gitRepositoryService.open (blobless, no checkout)"]
     E --> G["clone → os.tmpdir()/scrapecat/<uuid>"]
     G --> R["listCommitsInRange(dir, ref, since, until)"]
-    R --> S["per-commit file scope (git diff-tree --name-status)"]
-    S --> CL["guardrail: skip empty/junk, flag misleading"]
-    CL --> U["upsert commit_chunks (dedupe by SHA)"]
-    U --> EM["embedNewChunks (batch, non-blocking)"]
-    EM --> ST["save tip in project_branches"]
-    EM --> D["repository.dispose (finally)"]
+    R --> S["per-commit diff (first parent, numstat + patch, capped)"]
+    S --> SUM["summary service (diff authoritative, message gated)"]
+    SUM --> EM["embed files + summary"]
+    EM --> U["upsert commit_embeddings (reuse across branches)"]
+    U --> ST["save tip in project_branches"]
+    U --> D["repository.dispose (finally)"]
 ```
 
-- **Two sources:** `createGitCommitSource` (self-hosted; native git + per-commit
-  diffs + guardrail, 50-row batches) and `createApiCommitSource` (demo; GitHub
-  REST with best-effort file scopes, a single batch, no guardrail) both feed the
-  same `ingestCommits` orchestrator.
-- **Why batch:** the workload needs everything from a rate-limited API; one clone
-  collapses it into a single idempotent fetch, and the `git ls-remote` tip check
-  skips the clone entirely when the branch has not moved. GitHub REST is used
-  only for **discovery** (repo/branch listing, connection check).
-- **Dedupe by SHA:** re-running a window writes nothing new; already-synced
-  commits are skipped before file-scope work.
-- **Failure handling:** the only remote step is the clone (retryable).
-  Embeddings are a separate, non-blocking step and never fail ingestion.
+- **Two sources:** `createGitCommitSource` (self-hosted; native git diffs) and
+  `createApiCommitSource` (demo; GitHub `files[].patch`) both feed the same
+  `ingestCommits` orchestrator. Both apply the same exclusions and caps.
+- **Diff is the source of truth:** summaries are generated from the cleaned,
+  capped diff. The commit message is a hint only when the rule gate considers it
+  trustworthy; junk or missing messages are omitted from the prompt.
+- **Dedupe and reuse:** the tip check skips unchanged branches; within a run,
+  `(repo_id, commit_sha, diff_hash, summary_version, summary_model)` is reused
+  across branches so the same commit is summarized once.
+- **Failure handling:** the only remote step is the clone/diff (retryable).
+  A summary failure falls back to a structural summary; an embedding failure
+  stores the summary without a vector and is retried by reindex.
 
 ### Why no persistent clone cache
 
-The clone is a workbench, not a cache. Postgres (`commit_chunks`, embeddings,
+The clone is a workbench, not a cache. Postgres (`commit_embeddings`,
 `project_branches`) is the durable read model and answers every query. A clone
 only needs to exist while an ingest job reads git objects, so it is deleted in a
 `finally` and swept on boot after a crash.
@@ -229,9 +229,9 @@ self-hosted install works without a cloud key; demo uses OpenRouter because
 visitors cannot run Ollama. Chat calls go through
 `resolveChatModel()` → `aiClient.generate()` / `aiClient.stream()` in
 `src/rag/answer/ai.ts`; embeddings through `embedTexts()` in
-`src/rag/indexing/embeddings.ts`. Each `commit_chunks` row stores its embedding
-provider/model, and retrieval only searches vectors in the current space;
-changing the embedding model enqueues a background reindex.
+`src/rag/indexing/embeddings.ts`. Each `commit_embeddings` row stores its
+embedding provider/model, and retrieval only searches vectors in the current
+space; changing the embedding model enqueues a background reindex.
 
 Chat model ids are resolved through the provider catalog
 (`src/shared/integrations/providers/catalog.ts`), which records each model's
@@ -353,8 +353,9 @@ and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions
 ### Validation & data-integrity gaps
 
 - `limit`/`per_page` on discovery endpoints are validated (1–100) and fail fast.
-- No transactions: project upsert and chunk ingest are separate writes. A mid-way
-  failure leaves chunks persisted (safe today — chunks are the cache).
+- No transactions: project upsert and commit ingest are separate writes. A
+  mid-way failure leaves committed rows persisted (safe today — the read model
+  is derived and regenerable).
 
 ### No project deletion
 
@@ -363,31 +364,21 @@ project currently requires direct database work. `project_branches` cascades
 with the project, and no persistent clone is left behind (workspaces are temp
 and swept), so only the endpoint + Postgres cascade are missing (P2-3).
 
-### Unbounded pending embedding reads
+### Pending embedding reads
 
-`embedNewChunks` loads every pending row for a project with
-`listPendingChunks(projectId, space)` before embedding them in batches. The write
-side is set-based (one `UPDATE ... FROM unnest(...)` per batch), but the read
-side is not bounded.
+`reindexAllProjects` loads the pending rows per project from
+`listPendingEmbeddings({ repoId, space })` before embedding them. Ingestion
+embeds inline per commit; the pending read only runs for the reindex job. If the
+backlog grows large, add a bounded loop (`LIMIT` until empty) instead of loading
+the whole list.
 
-This is an accepted trade-off at the current scale: pending normally means the
-commits from the current ingest, re-runs find almost nothing, and the demo caps
-commits. It becomes a memory risk with very large repositories or a persistent
-embedding backlog. `EMBEDDING_BATCH_SIZE` bounds the vectors held per batch, not
-the pending row list.
+### Grounding and stored evidence
 
-If this becomes measurable, replace the single read with a bounded loop
-(`LIMIT batchSize` until empty) or a keyset/cursor. Do not add a surrounding
-transaction: the pipeline is idempotent and each batch write is atomic.
-
-### Diff grounding is file-level, not content-level
-
-The prompt is grounded on provable diff **scope** (files, line counts, commit
-link); the commit message is a hint, flagged when it contradicts the diff. The
-chat model never reads patch hunks, and the embedding corpus is the commit
-message by design (this is commit/PR review, not code review). Revisit only if
-message-based retrieval proves insufficient — the `embed:backfill` script already
-handles one-time re-embedding.
+The summary is generated from the cleaned, capped diff (first parent, filtered,
+per-file and total caps). The original commit message is stored for display and
+lexical matching, but it is not the evidence: it is included in the summary
+prompt only when the rule gate considers it trustworthy. Raw diffs are not
+stored; citations redirect to `commit_url`.
 
 ### Idempotency is a natural key, not a layer
 

@@ -71,7 +71,7 @@ See `src/verification/routes.test.ts` (GITHUB_TOKEN set) and `src/verification/r
 
 ## Integration tests
 
-Opt-in integration tests live next to the code and are skipped unless their flag is set. Database-backed tests such as `src/rag/indexing/commit-chunks-store.integration.test.ts` run when `DB_INTEGRATION=1` (the integration config sets it by default).
+Opt-in integration tests live next to the code and are skipped unless their flag is set. Database-backed integration tests run when `DB_INTEGRATION=1` (the integration config sets it by default).
 
 ```bash
 pnpm test:integration   # requires the configured Postgres DATABASE_URL

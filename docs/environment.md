@@ -53,8 +53,8 @@ serverless demo reads the GitHub REST API and does not clone anything.
 
 ### Lifecycle gap: project deletion
 
-Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions,
-`project_branches`). There is no persistent clone to clean up, only the missing
+Deleting a `projects` row cascades in Postgres (`commit_embeddings`, chat
+sessions, `project_branches`). There is no persistent clone to clean up, only the missing
 delete-project endpoint. Tracked as P2-3.
 
 `frontend/.env`:

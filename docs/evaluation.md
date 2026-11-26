@@ -62,7 +62,7 @@ Datasets live in `backend/eval/datasets/*.json`:
 ### Labeling rules
 
 - Label from `git log`, using the commit that introduced or changed the behavior.
-- Skip empty commits that the indexing guardrail drops.
+- Skip empty commits that the diff filter drops (merges, no-ops, binary-only).
 - Avoid relative phrases in labels ("last 30 days") so cases stay stable.
 - Keep the set small and carefully labeled: about 20 cases, with 8 negatives.
 

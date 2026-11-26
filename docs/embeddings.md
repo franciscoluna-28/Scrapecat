@@ -1,124 +1,90 @@
 # Embeddings
 
-How commit embeddings are produced, stored, and kept cheap. Semantic search over
+How commit documents are produced, stored, and kept cheap. Semantic search over
 these vectors backs RAG retrieval.
 
 ## Why this approach
 
-1. **Cost.** Embedding full diffs burns tokens on patch noise (boilerplate,
-   formatting, generated files) for little retrieval value. The corpus is the
-   **commit message** — commit/PR review, not code review.
-2. **Reliability.** Embedding must never block or fail chat retrieval. If the
-   provider is down or out of quota, the lexical channel still answers; vectors
-   are a derived cache that catches up later.
-3. **Correctness by construction.** A commit is immutable (identified by SHA), so
-   stored content never changes — only its embedding can go stale, and that
-   staleness is tracked explicitly.
+1. **The diff is the source of truth.** Commit messages are inconsistent, vague,
+   or wrong. The retrieval document is a short summary generated from the actual
+   diff, not the message.
+2. **Relational first, vector as an index.** Facts live in Postgres columns and
+   arrays; the vector is one indexed column, not the schema.
+3. **Embedding never blocks retrieval.** If the provider is down, the row keeps
+   its summary and the lexical channel still works; the reindex job catches up.
 
-## The corpus: the commit message
+## The document: one row per branch-commit
 
-Each `commit_chunks` row stores the commit message (the embedding source) plus
-metadata:
+`commit_embeddings` stores one row per `(repo_id, branch, commit_sha)`:
 
-| Field | Source | Stored in |
-|---|---|---|
-| `sha` | local git log (native git) | `commit_sha` |
-| `commit_message` | local git log | `commit_message` (embedding source) |
-| `author` | local git log | `author` |
-| `files_changed` | `git diff-tree --name-status` vs parent | `metadata` jsonb |
-| `validation.status` (`confirmed`/`flagged`/`skipped`) + `notes` | rule guardrail | `metadata` jsonb |
+| Field | Source |
+|---|---|
+| `message` | original git message (display + low-weight lexical) |
+| `summary` | LLM-generated, diff-grounded description |
+| `files_changed` | `git diff --numstat` / GitHub commit API |
+| `diff_hash` | SHA-256 of the cleaned, capped `stat + patch` |
+| `summary_version` / `summary_model` | prompt/model identity |
+| `embedding` | vector(768) over `files_changed + summary` |
+| `embedding_provider` / `embedding_model` | vector-space identity |
+| `content_hash` / `embedding_hash` | staleness gate |
+| `search_vector` | generated tsvector (summary A, files B, message C) |
 
-No diff content is read at any point.
+No raw diff is stored. The row stores the summary, file list, hashes, and
+`commit_url`; the UI redirects to the provider commit for the code.
 
-## Staleness gate: content + model identity
+## Ingestion
 
-Two SHA-256 columns plus the provider/model identity make embedding idempotent,
-incremental, and vector-space-safe:
-
-- `content_hash` — hash of the stored `commit_message`; set on every upsert.
-- `embedding_hash` — hash of the content the current `embedding` represents;
-  `NULL` = never embedded.
-- `embedding_provider` / `embedding_model` — the vector space of the stored
-  embedding; `NULL` = legacy or never embedded.
-
-```mermaid
-flowchart LR
-    A["chunk upsert<br/>sets content_hash"] --> B{"embedding_hash = content_hash<br/>and provider/model match?"}
-    B -->|yes| C["current — skip<br/>(zero cost)"]
-    B -->|no / NULL| D["pending"]
-    D --> E["embedNewChunks (inline, non-blocking)"]
-    D --> F["embed:backfill / background reindex"]
-    E --> G["write embedding + provider/model<br/>+ embedding_hash = content_hash"]
-    F --> G
+```
+diff → clean/cap → hash → (reuse | summarize) → embed → upsert
 ```
 
-A row's embedding is **current** iff all three are true:
+- Diff: first parent, `--unified=3`, lockfiles/build/vendor/generated/minified
+  excluded. Per-file and total caps keep the token budget bounded.
+- Message gate: the rule guardrail decides whether the message is trustworthy.
+  A flagged message is omitted from the summary prompt entirely; the diff wins.
+- Summary: one LLM call, 3–4 sentences. If the model fails, a structural
+  file/stat fallback is stored.
+- Reuse: an existing row with the same `(repo_id, commit_sha, diff_hash,
+  summary_version, summary_model)` on another branch is copied instead of
+  calling the model again.
+- Embedding: `files_changed` (capped to 30 unique paths) + `summary`, one call,
+  768 dims.
+
+## Staleness gate
+
+A row's embedding is current iff:
 
 1. `embedding_hash = content_hash`
 2. `embedding_provider = current provider`
 3. `embedding_model = current model`
 
-Re-running over stored commits embeds **nothing**; a changed row or a changed
-embedding model re-embeds exactly once. Retrieval only counts and searches
-vectors in the current space, so old-model vectors are never compared with a new
-query embedding.
+`summary_version` / `summary_model` decide whether the summary itself is
+current. Changing the prompt bumps the version; changing the embedding model
+enqueues `reindex-embeddings`, which re-embeds from the stored summaries without
+re-reading git.
 
-## Provider and dimensions
+## Dimensions and providers
 
-- **Provider:** OpenRouter's OpenAI-compatible embeddings endpoint (reusing the
-  OpenRouter key via `resolveApiKey("openrouter")` → `OPENROUTER_API_KEY`), or a
-  local Ollama instance; both are on the embedding-provider allowlist.
-- **Default:** self-hosted falls back to Ollama / `nomic-embed-text`; demo falls
-  back to OpenRouter / `openai/text-embedding-3-small` (env `EMBEDDING_MODEL`).
-- **Dimensions:** **768** — a database constraint shared by the
-  `vector(768)` column and the HNSW index (`commit_embedding_hnsw_idx`, cosine).
-  The single source of truth is `EMBEDDING_DIMENSIONS` in
-  `src/shared/utils/embedding.ts`, imported by both `db/schema.ts` and the
-  embedding client.
-- **Allowlist:** only `text-embedding-3-small` and `text-embedding-3-large` are
-  exposed on OpenRouter; both support the OpenAI `dimensions` override and are
-  requested at 768 dims.
-- **Ollama:** Ollama's OpenAI-compatible endpoint does not implement the OpenAI
-  `dimensions` override, so the parameter is omitted (`embeddingDimensionsParam:
-  false` in the provider registry). The selected Ollama model must natively emit
-  768 dims. The tested local model is `nomic-embed-text` (768 dims); the response
-  is still length-checked.
-- **Guarding:** every response is validated against `EMBEDDING_DIMENSIONS`
-  (including Ollama), so a wrong-width vector fails the batch loudly instead of
-  hitting the `vector(768)` column.
-- **Model changes** make every existing row pending for the new space. The old
-  vectors are retained until replaced, but retrieval ignores them; changing the
-  model triggers a background reindex across all projects.
+- **768** is a database constraint shared by `vector(768)` and the HNSW index.
+  `EMBEDDING_DIMENSIONS` in `src/shared/utils/embedding.ts` is the single source
+  of truth.
+- OpenRouter/OpenAI models are requested at 768 dims via the `dimensions`
+  override; Ollama does not implement it, so its model must natively emit 768
+  (`nomic-embed-text`).
+- Every response is length-checked before it hits the column.
 
 ## When embeddings happen
 
-1. **Inline, non-blocking** — after ingestion upserts new chunks,
-   `embedNewChunks(projectId)` runs fire-and-forget (`void ... .catch(...)`).
-   Retrieval never waits on it. On failure (no key, quota, outage) chunks stay
-   persisted with `content_hash`; the next run or backfill catches up.
-2. **Batch backfill** — `pnpm embed:backfill` (`backend/scripts/embed-backfill.ts`)
-   walks every project and embeds pending rows in batches (`EMBEDDING_BATCH_SIZE`,
-   default 100) — one HTTP call per batch.
-3. **Background reindex** — changing `embeddingProvider` or `embeddingModel` in
-   settings enqueues a `reindex-embeddings` job. It resolves the new space once,
-   then re-embeds pending rows across every project; a failure in one project is
-   logged and does not stop the others.
-
-## Reliability & scaling
-
-- **Bounded cost per run:** only SHAs not already stored are embedded
-  (`getChunksByShas` skips existing) — same-range re-runs are free.
-- **Graceful degradation:** embedding failures leave rows pending; ingestion never
-  fails because of the embed step.
-- **Resumable:** every step is idempotent and safe to re-run (dedupe by SHA).
-- **Batched writes:** each embedding batch is written with one UNNEST-based
-  `UPDATE`. The arrays are bound as parameters, so the SQL text stays fixed and
-  only the payload scales with batch size.
+1. **Inline during ingest** — per commit, right after the summary.
+2. **Reindex job** — changing `embeddingProvider`/`embeddingModel` enqueues
+   `reindex-embeddings`; it resolves the new space once and updates pending rows
+   from stored summaries. A failure in one project is logged and does not stop
+   the others.
+3. **Backfill** — `pnpm embed:backfill` is the bulk reindex path.
 
 ## Status
 
-- **Shipped:** clone-derived file scopes, message-based corpus, content +
-  model-identity staleness gate, inline non-blocking embed, batch backfill,
-  background model-change reindex, OpenRouter provider wiring, `vector(768)`.
-- **Not shipped (future):** RAG prompt enrichment and any retrieval consumer
-  beyond the current chat path.
+- **Shipped:** diff-grounded summaries, source diffs from native git and GitHub
+  API patches, message gate, cross-branch reuse, 768-dim vectors, reindex job,
+  HNSW + GIN indexes.
+- **Deliberately not stored:** raw diffs. Citations redirect to the commit.

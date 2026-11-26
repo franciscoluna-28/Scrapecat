@@ -29,7 +29,7 @@ serverless hosts don't provide. Demo mode removes both requirements:
 
 | Area | Self-hosted | Demo mode (`DEMO_MODE=true`) |
 |---|---|---|
-| Ingestion | `git clone` + `git log`/`diff-tree` | GitHub REST API (Octokit) |
+| Ingestion | `git clone` + `git diff` | GitHub REST API (Octokit) `files[].patch` |
 | Runtime needs | git binary + disk | HTTPS + PostgreSQL only |
 | GitHub token | Typically required | Optional (anonymous public access) |
 | Repo scope | Any repo you can access | **Public repos only** |
