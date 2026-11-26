@@ -7,7 +7,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { fastifyRequestContext } from "@fastify/request-context";
 import { env } from "@/shared/config/env";
-import { shutdownJobQueue } from "@/shared/queue";
+import { shutdownJobs } from "@/shared/queue";
 
 /**
  * Builds the Fastify instance and registers everything that is not a route:
@@ -36,9 +36,9 @@ export async function createServer(instance?: FastifyInstance) {
     done();
   });
 
-  // Release queue resources on shutdown.
+  // Release job worker resources on shutdown.
   app.addHook("onClose", async () => {
-    await shutdownJobQueue();
+    await shutdownJobs();
   });
 
   app.setErrorHandler<FastifyError>((error, _request, reply) => {

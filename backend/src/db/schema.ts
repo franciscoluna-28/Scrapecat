@@ -3,6 +3,7 @@ import {
   boolean,
   customType,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -285,6 +286,52 @@ export const reports = pgTable(
   }),
 );
 
+export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type JobProgress = {
+  stage: string;
+  message: string;
+  done?: number;
+  total?: number;
+};
+
+export type JobError = {
+  message: string;
+  code?: string;
+};
+
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: text("type").notNull(),
+    status: text("status").$type<JobStatus>().default("queued").notNull(),
+    payload: jsonb("payload").$type<unknown>().default({}).notNull(),
+    result: jsonb("result").$type<unknown>(),
+    progress: jsonb("progress").$type<JobProgress>(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    runAt: timestamp("run_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: jsonb("error").$type<JobError>(),
+    // Only one queued/running job may hold a key; terminal rows are archived
+    // and a later enqueue with the same key starts a fresh job.
+    idempotencyKey: text("idempotency_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    dueIdx: index("jobs_status_run_at_idx").on(table.status, table.runAt),
+    activeKeyIdx: uniqueIndex("jobs_active_idempotency_key_idx")
+      .on(table.idempotencyKey)
+      .where(
+        sql`${table.idempotencyKey} is not null and ${table.status} in ('queued', 'running')`,
+      ),
+  }),
+);
+
 export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
+export type JobRow = typeof jobs.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

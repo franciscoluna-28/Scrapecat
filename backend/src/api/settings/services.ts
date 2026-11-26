@@ -8,7 +8,7 @@ import {
   isEmbeddingModelAllowed,
 } from "@/shared/integrations/providers/catalog";
 import { logger } from "@/shared/logger";
-import { getJobQueue } from "@/shared/queue";
+import { enqueueJob, runJobInline, waitForJob } from "@/shared/queue";
 import {
   JOB_NAMES,
   REINDEX_EMBEDDINGS_JOB_ID,
@@ -25,10 +25,25 @@ type EmbeddingReindexResult = {
 
 async function scheduleEmbeddingReindex() {
   try {
-    const queue = getJobQueue();
-    await queue.enqueue(JOB_NAMES.reindexEmbeddings, REINDEX_EMBEDDINGS_JOB_ID, {});
-    void queue
-      .runAndWait<EmbeddingReindexResult>(REINDEX_EMBEDDINGS_JOB_ID)
+    if (env.isVercel) {
+      void runJobInline<EmbeddingReindexResult>(
+        JOB_NAMES.reindexEmbeddings,
+        {},
+      ).catch((error) => {
+        logger.warn(
+          { err: (error as Error)?.message ?? String(error) },
+          "embedding reindex failed",
+        );
+      });
+      return;
+    }
+
+    const job = await enqueueJob({
+      type: JOB_NAMES.reindexEmbeddings,
+      idempotencyKey: REINDEX_EMBEDDINGS_JOB_ID,
+      payload: {},
+    });
+    void waitForJob<EmbeddingReindexResult>(job.id)
       .then(async (result) => {
         const current = await getAISettings();
         if (

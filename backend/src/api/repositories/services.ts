@@ -9,7 +9,7 @@ import {
 import { logger } from "@/shared/logger";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
-import { getJobQueue } from "@/shared/queue";
+import { enqueueJob, runJobInline, waitForJob } from "@/shared/queue";
 import { JOB_NAMES, ingestBranchJobId } from "@/shared/queue/jobs";
 import { PROJECT_LOG_MESSAGES } from "@/rag/indexing/log-events";
 import { requestContext } from "@fastify/request-context";
@@ -74,25 +74,32 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
-  const queue = getJobQueue();
-  // The heavy ingest runs as a deduped job; same window for now (full branch),
-  // so the id is stable per project+branch and concurrent callers attach.
-  const ingest = (ref: string): Promise<IngestResult> => {
+  // The heavy ingest runs as a deduped durable job; the id is stable per
+  // project+branch so concurrent callers attach to the same run.
+  const ingest = async (ref: string): Promise<IngestResult> => {
     const jobId = ingestBranchJobId(projectId, ref);
-    return queue
-      .enqueue(JOB_NAMES.ingestBranch, jobId, {
-        gitProvider: project.gitProvider,
-        owner: project.providerOwner,
-        repo: project.repositoryName,
-        branch: ref,
-        projectId,
-        requestId: requestContext.get("reqId"),
-      })
-      .then(() =>
-        queue.runAndWait<IngestResult>(jobId, (p) =>
-          onProgress?.(p.stage as Parameters<IngestProgress>[0], p.message, p.done, p.total),
-        ),
-      );
+    const payload = {
+      gitProvider: project.gitProvider,
+      owner: project.providerOwner,
+      repo: project.repositoryName,
+      branch: ref,
+      projectId,
+      requestId: requestContext.get("reqId"),
+    };
+    const report = (p: { stage: string; message: string; done?: number; total?: number }) =>
+      onProgress?.(p.stage as Parameters<IngestProgress>[0], p.message, p.done, p.total);
+
+    // Serverless hosts cannot run the background worker; run inline there.
+    if (env.isVercel) {
+      return runJobInline<IngestResult>(JOB_NAMES.ingestBranch, payload, report);
+    }
+
+    const job = await enqueueJob({
+      type: JOB_NAMES.ingestBranch,
+      idempotencyKey: jobId,
+      payload,
+    });
+    return waitForJob<IngestResult>(job.id, report);
   };
 
   try {

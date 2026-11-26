@@ -1,6 +1,7 @@
 import "dotenv/config.js";
 import { buildApp } from "@/build-app";
 import { env } from "@/shared/config/env";
+import { startJobWorker, stopJobWorker } from "@/shared/queue/worker";
 import { logger } from "@/shared/logger";
 import {
   startReportScheduler,
@@ -17,6 +18,7 @@ async function main() {
       `backend running at http://${env.HOST}:${env.PORT}`,
     );
     startReportScheduler();
+    if (env.WORKER_ENABLED) await startJobWorker();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
@@ -29,6 +31,7 @@ async function main() {
     logger.info({ signal }, "shutting down");
     try {
       stopReportScheduler();
+      await stopJobWorker();
       await app.close();
       process.exit(0);
     } catch (err) {

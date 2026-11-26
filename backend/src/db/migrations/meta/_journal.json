@@ -225,6 +225,13 @@
       "when": 1794513087876,
       "tag": "0031_colorful_rachel_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795657110171,
+      "tag": "0032_nebulous_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,9 @@ vi.mock("@/api/settings/stores/settings-store", () => ({
 }));
 
 vi.mock("@/shared/queue", () => ({
-  getJobQueue: vi.fn(() => ({ enqueue: vi.fn(), runAndWait: vi.fn() })),
+  enqueueJob: vi.fn(),
+  waitForJob: vi.fn(),
+  runJobInline: vi.fn(),
 }));
 
 import { env } from "@/shared/config/env";

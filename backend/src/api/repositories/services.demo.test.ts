@@ -7,8 +7,8 @@ vi.hoisted(() => {
 const mockGetProjectById = vi.fn();
 const mockCountChunks = vi.fn();
 const mockGetDefaultBranch = vi.fn();
-const mockEnqueue = vi.fn();
-const mockRunAndWait = vi.fn();
+const mockEnqueueJob = vi.fn();
+const mockWaitForJob = vi.fn();
 
 vi.mock("@/api/repositories/stores/projects-store", () => ({
   projectsStore: {
@@ -37,7 +37,9 @@ vi.mock("@/shared/integrations/git-provider/token", () => ({
 }));
 
 vi.mock("@/shared/queue", () => ({
-  getJobQueue: () => ({ enqueue: mockEnqueue, runAndWait: mockRunAndWait }),
+  enqueueJob: (...args: unknown[]) => mockEnqueueJob(...args),
+  waitForJob: (...args: unknown[]) => mockWaitForJob(...args),
+  runJobInline: vi.fn(),
 }));
 
 vi.mock("@/rag/indexing/jobs", () => ({}));
@@ -62,8 +64,8 @@ describe("prepareProjectBranch in demo mode", () => {
     });
     mockCountChunks.mockReset().mockResolvedValue(0);
     mockGetDefaultBranch.mockReset().mockResolvedValue("main");
-    mockEnqueue.mockReset().mockResolvedValue(undefined);
-    mockRunAndWait.mockReset().mockResolvedValue({
+    mockEnqueueJob.mockReset().mockResolvedValue({ id: "job-1" });
+    mockWaitForJob.mockReset().mockResolvedValue({
       branch: "feature/x",
       commitsFound: 1,
       chunksWritten: 1,
@@ -75,7 +77,7 @@ describe("prepareProjectBranch in demo mode", () => {
     const result = await prepareProjectBranch(PROJECT_ID, "feature/x");
 
     expect(result.chunksWritten).toBe(0);
-    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockEnqueueJob).not.toHaveBeenCalled();
   });
 
   it("allows the provider's real default branch", async () => {
@@ -83,6 +85,6 @@ describe("prepareProjectBranch in demo mode", () => {
 
     await prepareProjectBranch(PROJECT_ID, "feature/x");
 
-    expect(mockEnqueue).toHaveBeenCalled();
+    expect(mockEnqueueJob).toHaveBeenCalled();
   });
 });

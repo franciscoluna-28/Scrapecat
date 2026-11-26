@@ -66,22 +66,13 @@ export const envSchema = z.object({
   CHAT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   REPORT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   REPO_ARCHIVE_DIR: z.string().default("repos"),
-  CORS_ORIGIN: z.string().default("http://localhost:3000"),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  // Archive warm cache. `fs` keeps today's persistent local clone; `s3` stores
-  // each branch as a tar.gz object and uses disposable job-scoped scratch;
-  // `memory` is tests-only.
-  ARCHIVE_STORE: z.enum(["fs", "s3", "memory"]).default("fs"),
-  S3_BUCKET: z.string().default(""),
-  S3_ENDPOINT: z.string().default(""),
-  S3_REGION: z.string().default("us-east-1"),
-  S3_FORCE_PATH_STYLE: z
+  // Set false on API-only replicas that share the database with a worker.
+  WORKER_ENABLED: z
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
-  S3_ACCESS_KEY_ID: z.string().default(""),
-  S3_SECRET_ACCESS_KEY: z.string().default(""),
-  S3_PREFIX: z.string().default("archives"),
+  CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetSettings = vi.fn();
 const mockUpsertSettings = vi.fn();
-const mockEnqueue = vi.fn();
-const mockRunAndWait = vi.fn();
+const mockEnqueueJob = vi.fn();
+const mockWaitForJob = vi.fn();
 
 vi.mock("@/api/settings/stores/settings-store", () => ({
   settingsStore: {
@@ -13,10 +13,9 @@ vi.mock("@/api/settings/stores/settings-store", () => ({
 }));
 
 vi.mock("@/shared/queue", () => ({
-  getJobQueue: vi.fn(() => ({
-    enqueue: mockEnqueue,
-    runAndWait: mockRunAndWait,
-  })),
+  enqueueJob: (...args: unknown[]) => mockEnqueueJob(...args),
+  waitForJob: (...args: unknown[]) => mockWaitForJob(...args),
+  runJobInline: vi.fn(),
 }));
 
 import { env } from "@/shared/config/env";
@@ -33,8 +32,8 @@ describe("AI settings service", () => {
   beforeEach(() => {
     mockGetSettings.mockReset().mockResolvedValue(null);
     mockUpsertSettings.mockReset().mockResolvedValue(undefined);
-    mockEnqueue.mockReset().mockResolvedValue(undefined);
-    mockRunAndWait.mockReset().mockResolvedValue({
+    mockEnqueueJob.mockReset().mockResolvedValue({ id: "job-1" });
+    mockWaitForJob.mockReset().mockResolvedValue({
       provider: "openrouter",
       model: "openai/text-embedding-3-small",
       projects: 0,
@@ -94,7 +93,7 @@ describe("AI settings service", () => {
       })
       .mockResolvedValueOnce(updatedRow)
       .mockResolvedValue(updatedRow);
-    mockRunAndWait.mockResolvedValue({
+    mockWaitForJob.mockResolvedValue({
       provider: input.embeddingProvider,
       model: input.embeddingModel,
       projects: 0,
@@ -106,12 +105,12 @@ describe("AI settings service", () => {
       id: GLOBAL_SETTINGS_ID,
       ...input,
     });
-    expect(mockEnqueue).toHaveBeenCalledWith(
-      JOB_NAMES.reindexEmbeddings,
-      REINDEX_EMBEDDINGS_JOB_ID,
-      {},
-    );
-    expect(mockRunAndWait).toHaveBeenCalledWith(REINDEX_EMBEDDINGS_JOB_ID);
+    expect(mockEnqueueJob).toHaveBeenCalledWith({
+      type: JOB_NAMES.reindexEmbeddings,
+      idempotencyKey: REINDEX_EMBEDDINGS_JOB_ID,
+      payload: {},
+    });
+    expect(mockWaitForJob).toHaveBeenCalledWith("job-1");
   });
 
   it("does not reindex when only chat settings change", async () => {
@@ -133,8 +132,8 @@ describe("AI settings service", () => {
       });
 
     await expect(updateAISettings(input)).resolves.toEqual(input);
-    expect(mockEnqueue).not.toHaveBeenCalled();
-    expect(mockRunAndWait).not.toHaveBeenCalled();
+    expect(mockEnqueueJob).not.toHaveBeenCalled();
+    expect(mockWaitForJob).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown chat provider before writing", async () => {
