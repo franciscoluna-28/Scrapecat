@@ -3,7 +3,10 @@ import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { type AIResponse, aiClient, resolveChatModel } from "@/rag/answer/ai";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import {
+  commitEmbeddingsStore,
+  type CommitDocument,
+} from "@/rag/indexing/commit-embeddings-store";
 import { prepareProjectBranch } from "@/api/repositories/services";
 import {
   createReportsStore,
@@ -36,9 +39,6 @@ import {
 const REPORT_RUN_COOLDOWN_MS = 60_000;
 
 type ProjectRow = typeof projects.$inferSelect;
-type CommitChunkRow = Awaited<
-  ReturnType<typeof commitChunksStore.listCommitsForProject>
->[number];
 
 export const REPORT_ERROR_MESSAGES = {
   projectNotFound: "Project not found",
@@ -95,7 +95,7 @@ export type ReportDTO = ReportSummaryDTO & {
 type ReportsServiceDeps = {
   store: ReturnType<typeof createReportsStore>;
   projects: Pick<typeof projectsStore, "getProjectById">;
-  commits: Pick<typeof commitChunksStore, "listCommitsForProject">;
+  commits: Pick<typeof commitEmbeddingsStore, "listCommitsForProject">;
   prepareBranch: typeof prepareProjectBranch;
   ai: Pick<typeof aiClient, "generate">;
   resolveModel: typeof resolveChatModel;
@@ -121,7 +121,7 @@ async function defaultBranchExists(
 const defaultDeps: ReportsServiceDeps = {
   store: createReportsStore(),
   projects: projectsStore,
-  commits: commitChunksStore,
+  commits: commitEmbeddingsStore,
   prepareBranch: prepareProjectBranch,
   ai: aiClient,
   resolveModel: resolveChatModel,
@@ -176,14 +176,15 @@ function toReportDTO(row: ReportView): ReportDTO {
   };
 }
 
-function toCitation(row: CommitChunkRow): ChatCitation {
+function toCitation(row: CommitDocument): ChatCitation {
   return {
     commitSha: row.commitSha,
-    commitMessage: row.commitMessage,
+    commitMessage: row.message,
+    summary: row.summary,
     author: row.author,
     committedAt: row.committedAt.toISOString(),
-    filesChanged: row.metadata?.filesChanged ?? [],
-    commitUrl: row.metadata?.commitUrl ?? null,
+    filesChanged: row.filesChanged,
+    commitUrl: row.commitUrl || null,
   };
 }
 
@@ -349,7 +350,7 @@ export function createReportsService(
       );
       const branch = prepared.branch || schedule.branch;
       const commits = await deps.commits.listCommitsForProject({
-        projectId: schedule.projectId,
+        repoId: schedule.projectId,
         branch,
         startDate: periodStart,
         endDate: new Date(periodEnd.getTime() - 1),

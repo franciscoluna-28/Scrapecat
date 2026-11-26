@@ -57,24 +57,16 @@ function makeScheduleView(row: ReportScheduleRow) {
 
 function makeCommitRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: "commit-1",
-    projectId: PROJECT_ID,
-    commitSha: "abc123",
+    repoId: PROJECT_ID,
     branch: "main",
-    commitMessage: "feat: ship reports",
+    commitSha: "abc123",
+    message: "feat: ship reports",
+    summary: "Ships the reports dashboard and scheduler.",
     author: "dev",
-    embedding: null,
-    embeddingProvider: null,
-    embeddingModel: null,
-    contentHash: null,
-    embeddingHash: null,
-    metadata: {
-      filesChanged: ["src/reports/service.ts"],
-      commitUrl: "https://github.com/owner/repo/commit/abc123",
-    },
     committedAt: new Date("2026-01-09T10:00:00.000Z"),
-    createdAt: NOW,
-    updatedAt: NOW,
+    filesChanged: ["src/reports/service.ts"],
+    commitUrl: "https://github.com/owner/repo/commit/abc123",
+    distance: null,
     ...overrides,
   };
 }
@@ -344,7 +336,7 @@ describe("createReportsService", () => {
       now: NOW,
     });
     expect(deps.commits.listCommitsForProject).toHaveBeenCalledWith({
-      projectId: PROJECT_ID,
+      repoId: PROJECT_ID,
       branch: "main",
       startDate: new Date("2026-01-03T12:00:00.000Z"),
       endDate: new Date("2026-01-10T11:59:59.999Z"),

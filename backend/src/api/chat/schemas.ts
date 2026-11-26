@@ -4,6 +4,7 @@ import { BRANCH_PATTERN } from "@/shared/utils";
 const ChatCitation = Type.Object({
   commitSha: Type.String(),
   commitMessage: Type.String(),
+  summary: Type.Optional(Type.String()),
   author: Type.Union([Type.String(), Type.Null()]),
   committedAt: Type.String(),
   filesChanged: Type.Array(Type.String()),

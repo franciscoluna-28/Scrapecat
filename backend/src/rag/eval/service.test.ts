@@ -46,11 +46,14 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       getProjectByOwnerRepo: vi.fn(async () => project),
       upsertProject: vi.fn(async () => ({ project, created: true })),
     },
-    chunks: {
-      getChunksByShas: vi.fn(
-        async () => new Map([["abc", { commitSha: "abc", metadata: {} }]]),
+    commits: {
+      getByShas: vi.fn(
+        async () =>
+          new Map([
+            ["abc", { summary: "summary", filesChanged: [], message: "message" }],
+          ]),
       ),
-      countChunksForProject: vi.fn(async () => 1),
+      countCommitsForProject: vi.fn(async () => 1),
     },
     prepareBranch: vi.fn(async () => ({
       branch: "dev",
@@ -90,9 +93,9 @@ describe("evalService.run", () => {
 
   it("fails when judged SHAs are not indexed", async () => {
     const deps = makeDeps({
-      chunks: {
-        getChunksByShas: vi.fn(async () => new Map()),
-        countChunksForProject: vi.fn(async () => 0),
+      commits: {
+        getByShas: vi.fn(async () => new Map()),
+        countCommitsForProject: vi.fn(async () => 0),
       },
     });
     const service = createEvalService(deps as never);

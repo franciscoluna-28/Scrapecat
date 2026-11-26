@@ -8,7 +8,7 @@ import {
 } from "@/rag/eval/metrics";
 import { resolveEmbeddingSpace } from "@/rag/indexing/embeddings";
 import { prepareProjectBranch } from "@/api/repositories/services";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
 
 type ProjectRow = NonNullable<
@@ -63,9 +63,9 @@ export type EvalReport = {
 
 type EvalServiceDeps = {
   projects: Pick<typeof projectsStore, "getProjectByOwnerRepo" | "upsertProject">;
-  chunks: Pick<
-    typeof commitChunksStore,
-    "getChunksByShas" | "countChunksForProject"
+  commits: Pick<
+    typeof commitEmbeddingsStore,
+    "getByShas" | "countCommitsForProject"
   >;
   prepareBranch: typeof prepareProjectBranch;
   resolveSpace: typeof resolveEmbeddingSpace;
@@ -74,7 +74,7 @@ type EvalServiceDeps = {
 
 const defaultDeps: EvalServiceDeps = {
   projects: projectsStore,
-  chunks: commitChunksStore,
+  commits: commitEmbeddingsStore,
   prepareBranch: prepareProjectBranch,
   resolveSpace: resolveEmbeddingSpace,
   retriever,
@@ -247,8 +247,8 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
     projectId: string,
   ): Promise<DatasetCheck> {
     const judged = [...new Set(dataset.cases.flatMap((c) => c.relevantShas))];
-    const found = await deps.chunks.getChunksByShas({
-      projectId,
+    const found = await deps.commits.getByShas({
+      repoId: projectId,
       shas: judged,
       branch: dataset.project.branch,
     });
@@ -274,10 +274,9 @@ export function createEvalService(overrides: Partial<EvalServiceDeps> = {}) {
         );
       }
 
-      const embedded = await deps.chunks.countChunksForProject({
-        projectId,
+      const embedded = await deps.commits.countCommitsForProject({
+        repoId: projectId,
         branch: dataset.project.branch,
-        embeddingSpace: space,
       });
       if (embedded === 0) {
         warnings.push(

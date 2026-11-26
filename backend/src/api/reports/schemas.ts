@@ -20,6 +20,7 @@ export const ReportStatusSchema = Type.Union(
 export const ReportCitationSchema = Type.Object({
   commitSha: Type.String(),
   commitMessage: Type.String(),
+  summary: Type.Optional(Type.String()),
   author: Type.Union([Type.String(), Type.Null()]),
   committedAt: Type.String({ format: "date-time" }),
   filesChanged: Type.Array(Type.String()),

@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { checkDatabase } from "@/api/system/services";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 
 export async function health(_req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ status: "ok" });
@@ -22,8 +22,8 @@ export async function getMeta(_req: FastifyRequest, reply: FastifyReply) {
       providerOwner: p.providerOwner,
       repositoryName: p.repositoryName,
       defaultBranch: p.defaultBranch,
-      commitCount: await commitChunksStore.countChunksForProject({
-        projectId: p.id,
+      commitCount: await commitEmbeddingsStore.countCommitsForProject({
+        repoId: p.id,
       }),
     })),
   );

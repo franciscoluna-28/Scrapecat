@@ -14,7 +14,8 @@ export function resolvePersona(value?: string | null): Persona {
 const SYSTEM_PROMPT = `You are Scrapecat, an engineering intelligence assistant. You answer questions about a repository's engineering history — what changed, who changed it, and when.
 
 Rules:
-- Answer ONLY from the retrieved commits provided in the context. Never invent facts, dates, or commits.
+- Answer ONLY from the retrieved commit summaries provided in the context. Never invent facts, dates, or commits.
+- The summary is the code-grounded description of the change. The commit message is metadata and may be vague or wrong; the summary wins.
 - Treat the present moment as the date given in the context. Interpret relative time ("now", "currently", "this week", "this month", "lately") against that date and against the commit dates provided.
 - For present-tense questions ("What feature is being built?", "What are we working on?", "What's the current state?"), answer from the MOST RECENT commits in the context — the ones closest to the last commit date. Never present old commits as current work.
 - Group related commits into feature-level summaries under the descriptive headings specified by the tone section below.
@@ -64,10 +65,11 @@ export function formatCitationForPrompt(c: ChatCitation): string {
   const files = c.filesChanged.slice(0, MAX_FILES_SHOWN);
   const lines = [
     `- SHA: ${c.commitSha}`,
+    c.summary ? `  Summary: ${c.summary}` : null,
     `  Message: ${c.commitMessage}`,
     `  Author: ${c.author ?? "unknown"}`,
     `  Date: ${c.committedAt}`,
-  ];
+  ].filter((line): line is string => line !== null);
   if (files.length > 0) {
     const extra = c.filesChanged.length > MAX_FILES_SHOWN
       ? `, +${c.filesChanged.length - MAX_FILES_SHOWN} more`
@@ -94,7 +96,7 @@ export function buildUserMessage(
     scope?.endDate ? `To: ${scope.endDate.toISOString()}` : null,
   ].filter(Boolean).join("\n");
   return [
-    "Summarize the retrieved commits below at a feature level. Group related changes under descriptive headings that fit the audience described in your instructions, and focus on the most impactful changes. Do not list commits individually.",
+    "Summarize the retrieved commits below at a feature level, using their code-grounded summaries. Group related changes under descriptive headings that fit the audience described in your instructions, and focus on the most impactful changes. Do not list commits individually.",
     "If the question is phrased in the present tense or refers to the current moment, answer from the commits closest to the \"To\" date in the scope below — those are the most recent work.",
     "If no commits were retrieved, explicitly say that no indexed commits matched the requested branch/date scope. Do not infer that nothing changed outside that scope.",
     "",

@@ -1,6 +1,6 @@
 import { env } from "@/shared/config/env";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 import { branchSyncStore } from "@/rag/indexing/branch-sync-store";
 import { gitRepositoryService } from "@/rag/git/git-repository-service";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
@@ -55,7 +55,10 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
   const project = await projectsStore.getProjectById(projectId);
   if (!project) throw new Error("Project not found");
 
-  const existing = await commitChunksStore.countChunksForProject({ projectId, branch });
+  const existing = await commitEmbeddingsStore.countCommitsForProject({
+    repoId: projectId,
+    branch,
+  });
 
   // Demo only ingests trunk branches (main/master) — or the repo's real
   // default. Resolve the default server-side rather than trusting stored,

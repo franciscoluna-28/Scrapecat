@@ -15,7 +15,7 @@ import {
 } from "@/shared/demo-branches";
 import { githubApiClient } from "@/rag/github/github-api";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 import type { Static } from "@sinclair/typebox";
 import {
   RepoOwnerParams,
@@ -210,7 +210,7 @@ export async function listBranches(
 
 /**
  * Commit preview. Demo mode reads the GitHub REST API (no git binary); the
- * self-hosted path is now served from Postgres (`commit_chunks`, the read
+ * self-hosted path is now served from Postgres (`commit_embeddings`, the read
  * model) — the API never touches git or local disk. Unknown repos simply have
  * no ingested commits yet.
  */
@@ -270,8 +270,8 @@ export async function listCommits(
     if (!project) return reply.send({ commits: [] });
 
     const gitProvider = project.gitProvider;
-    const rows = await commitChunksStore.listCommitsForProject({
-      projectId: project.id,
+    const rows = await commitEmbeddingsStore.listCommitsForProject({
+      repoId: project.id,
       branch: branch || project.defaultBranch,
       startDate: parseDate(startDate),
       endDate: parseDate(endDate),
@@ -279,10 +279,10 @@ export async function listCommits(
     return reply.send({
       commits: rows.slice(0, limit).map((c) => ({
         sha: c.commitSha,
-        message: c.commitMessage,
+        message: c.message,
         author: c.author ?? "",
         date: c.committedAt.toISOString(),
-        url: c.metadata?.commitUrl ?? commitUrl(gitProvider, owner, repo, c.commitSha),
+        url: c.commitUrl || commitUrl(gitProvider, owner, repo, c.commitSha),
       })),
     });
   } catch (error: any) {
@@ -336,8 +336,8 @@ export async function countCommits(
     });
     if (!project) return reply.send({ count: 0 });
 
-    const rows = await commitChunksStore.listCommitsForProject({
-      projectId: project.id,
+    const rows = await commitEmbeddingsStore.listCommitsForProject({
+      repoId: project.id,
       branch: branch || project.defaultBranch,
       startDate: parseDate(startDate),
       endDate: parseDate(endDate),

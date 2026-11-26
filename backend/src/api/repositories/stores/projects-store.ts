@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
-import { commitChunks, projects, type GitProvider } from "@/db/schema";
+import { commitEmbeddings, projects, type GitProvider } from "@/db/schema";
 
 export type ProjectInput = {
   gitProvider?: GitProvider;
@@ -47,8 +47,8 @@ export function createProjectsStore(client: DbOrTx = db) {
      */
     async listProjectsWithIndexedBranches() {
       const indexedBranches = sql<string[]>`coalesce(
-        array_agg(distinct ${commitChunks.branch} order by ${commitChunks.branch})
-          filter (where ${commitChunks.branch} is not null),
+        array_agg(distinct ${commitEmbeddings.branch} order by ${commitEmbeddings.branch})
+          filter (where ${commitEmbeddings.branch} is not null),
         '{}'::text[]
       )`;
 
@@ -65,16 +65,16 @@ export function createProjectsStore(client: DbOrTx = db) {
           indexedBranches,
         })
         .from(projects)
-        .leftJoin(commitChunks, eq(commitChunks.projectId, projects.id))
+        .leftJoin(commitEmbeddings, eq(commitEmbeddings.repoId, projects.id))
         .groupBy(projects.id)
         .orderBy(projects.repositoryName);
     },
 
     async listIndexedBranches(projectId: string) {
       const rows = await client
-        .selectDistinct({ branch: commitChunks.branch })
-        .from(commitChunks)
-        .where(eq(commitChunks.projectId, projectId));
+        .selectDistinct({ branch: commitEmbeddings.branch })
+        .from(commitEmbeddings)
+        .where(eq(commitEmbeddings.repoId, projectId));
       return rows.map((row) => row.branch).filter(Boolean).sort();
     },
 

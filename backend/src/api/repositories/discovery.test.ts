@@ -26,13 +26,15 @@ vi.mock("@/api/repositories/stores/projects-store", async (importOriginal) => {
   };
 });
 
-vi.mock("@/rag/indexing/commit-chunks-store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/rag/indexing/commit-chunks-store")>();
+vi.mock("@/rag/indexing/commit-embeddings-store", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/rag/indexing/commit-embeddings-store")>();
   return {
     ...actual,
-    commitChunksStore: {
-      ...actual.commitChunksStore,
-      listCommitsForProject: (...args: unknown[]) => mockListCommitsForProject(...args),
+    commitEmbeddingsStore: {
+      ...actual.commitEmbeddingsStore,
+      listCommitsForProject: (...args: unknown[]) =>
+        mockListCommitsForProject(...args),
     },
   };
 });
@@ -202,11 +204,15 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
   it("returns commits from Postgres (the read model)", async () => {
     mockListCommitsForProject.mockResolvedValue([
       {
+        repoId: "p1",
+        branch: "main",
         commitSha: "abc",
-        commitMessage: "fix",
+        message: "fix",
+        summary: "Fixes the issue.",
         author: "dev",
         committedAt: new Date("2024-01-15T00:00:00.000Z"),
-        metadata: { commitUrl: "https://github.com/owner1/repo1/commit/abc" },
+        filesChanged: [],
+        commitUrl: "https://github.com/owner1/repo1/commit/abc",
       },
     ]);
 
@@ -257,7 +263,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
     });
 
     expect(mockListCommitsForProject).toHaveBeenCalledWith({
-      projectId: "p1",
+      repoId: "p1",
       branch: "main",
       startDate: new Date("2024-01-01T00:00:00.000Z"),
       endDate: new Date("2024-01-31T00:00:00.000Z"),
@@ -335,7 +341,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
     });
 
     expect(mockListCommitsForProject).toHaveBeenCalledWith({
-      projectId: "p1",
+      repoId: "p1",
       branch: "main",
       startDate: new Date("2024-01-01T00:00:00.000Z"),
       endDate: new Date("2024-01-31T00:00:00.000Z"),

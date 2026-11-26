@@ -16,9 +16,9 @@ vi.mock("@/api/repositories/stores/projects-store", () => ({
   },
 }));
 
-vi.mock("@/rag/indexing/commit-chunks-store", () => ({
-  commitChunksStore: {
-    countChunksForProject: (...args: unknown[]) => mockCountChunks(...args),
+vi.mock("@/rag/indexing/commit-embeddings-store", () => ({
+  commitEmbeddingsStore: {
+    countCommitsForProject: (...args: unknown[]) => mockCountChunks(...args),
   },
 }));
 
