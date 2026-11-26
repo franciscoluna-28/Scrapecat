@@ -117,7 +117,7 @@ query embedding.
 
 ## Status
 
-- **Shipped:** archive-cloned file scopes, message-based corpus, content +
+- **Shipped:** clone-derived file scopes, message-based corpus, content +
   model-identity staleness gate, inline non-blocking embed, batch backfill,
   background model-change reindex, OpenRouter provider wiring, `vector(768)`.
 - **Not shipped (future):** RAG prompt enrichment and any retrieval consumer

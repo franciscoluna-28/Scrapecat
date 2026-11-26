@@ -14,7 +14,7 @@ visitors are allowed to do*.
 ## Why demo mode exists
 
 Self-hosted Scrapecat ingests commits by cloning a repo with the native `git`
-binary into a local archive. That needs a git binary and persistent disk, which
+binary into a temporary workspace. That needs a git binary and disk, which
 serverless hosts don't provide. Demo mode removes both requirements:
 
 - **No git binary, no disk.** Commits are read from the public GitHub REST API
@@ -123,7 +123,7 @@ the application had a bug.
   container.
 - **PostgreSQL with pgvector** is required in all cases (Neon, Supabase, or any
   managed Postgres with the `vector` extension).
-- Serverless hosts are stateless: demo mode keeps no local archive, so nothing is
+- Serverless hosts are stateless: demo mode keeps no local clone, so nothing is
   lost between invocations. All state lives in Postgres.
 
 ## Cost
@@ -138,5 +138,5 @@ The demo is designed to run on free tiers:
 ## Not the self-hosted product
 
 Demo restrictions are opt-in via environment variables. With `DEMO_MODE` unset,
-Scrapecat behaves as the full self-hosted product: archive-based ingestion, all
+Scrapecat behaves as the full self-hosted product: clone-based ingestion, all
 branches, private repos, and BYOK. See `README.md`.

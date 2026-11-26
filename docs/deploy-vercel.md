@@ -2,9 +2,8 @@
 
 The backend deploys as a single Vercel Function (Fluid compute) using Vercel's
 zero-config Fastify support. This is the **demo / serverless profile**
-(`DEMO_MODE=true`, GitHub REST API ingestion) — the self-hosted archive mode is
-not available on Vercel because functions have no persistent disk or `git`
-binary.
+(`DEMO_MODE=true`, GitHub REST API ingestion) — the self-hosted clone mode is
+not available on Vercel because functions have no `git` binary.
 
 ## Why the extra build step
 

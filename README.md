@@ -17,7 +17,7 @@ Built by a former founding engineer to stop generating reports and communicating
 ## Tech Stack
 - **Backend:** Fastify 5 (Node.js), Drizzle ORM + PostgreSQL (pgvector)
 - **Frontend:** Next.js 16 (React 19), TanStack React Query, Tailwind CSS v4, shadcn/ui + AI Elements
-- **Data Source:** GitHub and GitLab APIs for discovery, native git archive for self-hosted commit ingestion, GitHub REST for demo ingestion
+- **Data Source:** GitHub and GitLab APIs for discovery, ephemeral native git clones for self-hosted commit ingestion, GitHub REST for demo ingestion
 - **Intelligence:** OpenRouter, OpenAI, DeepSeek, Groq, OpenCode Go, or Ollama (local LLMs), with protocol-aware provider routing
 - **Package Manager:** pnpm workspaces
 
@@ -42,7 +42,7 @@ AI is increasing commit velocity, not reducing it. Scrapecat is the missing laye
 ```mermaid
 flowchart LR
     subgraph ingest["Ingest"]
-        A["Git archive<br/>or GitHub API"] --> B["Dedupe commits by SHA"]
+        A["Git clone<br/>or GitHub API"] --> B["Dedupe commits by SHA"]
         B --> C[("Postgres + pgvector<br/>commit_chunks + embeddings")]
     end
     subgraph answer["Answer"]
@@ -54,7 +54,7 @@ flowchart LR
     end
 ```
 
-Ingestion is batch/archive-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval fuses vector and keyword results over Postgres (the read model) and abstains when the evidence is weak.
+Ingestion is batch/clone-based (see [`docs/architecture.md`](./docs/architecture.md)); retrieval fuses vector and keyword results over Postgres (the read model) and abstains when the evidence is weak.
 
 ## Demo Mode (public concept demo)
 

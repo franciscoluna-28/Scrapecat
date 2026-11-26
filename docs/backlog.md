@@ -20,7 +20,7 @@ None open. P1-1–P1-5 are complete — see [Done](#done--completed).
 
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
-| P2-3 | **Project deletion + archive cleanup** | storage | There is no project-delete route or store method today, and no archive-removal step (`backend/AGENTS.md`). Add `DELETE /api/v1/projects/:id` (cascade in Postgres) plus removal of the `fs` clone under `REPO_ARCHIVE_DIR` so a deleted project does not leave regenerable state behind. |
+| P2-3 | **Project deletion** | storage | There is no project-delete route or store method today. Add `DELETE /api/v1/projects/:id`; `commit_chunks`, chat data, and `project_branches` already cascade in Postgres, and repo clones are ephemeral so nothing else needs cleaning up. |
 | P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete repeat the session lookup + `canAccessSession` check (`backend/src/api/chat/routes.ts:56-107`). Add a `preHandler` + `req.chatSession` decorator so one lookup serves all session routes. Authorization behavior itself is already fixed by P2-5a. |
 | P2-6 | **SSE reply plugin** | chat | `backend/src/api/chat/routes.ts:109-183` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
 | P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `chat`, `credentials`, `repositories`, `settings`, and `reports` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`backend/src/startup/create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
@@ -40,6 +40,7 @@ tracked in [`frontend-tech-debt.md`](./frontend-tech-debt.md).
 | P3-4 | **External integrations** | product | Slack/Linear/Jira/Notion cross-referencing (`README.md:33`). Blocked behind an external-integration abstraction that doesn't exist yet. |
 | P3-5 | **Enterprise security** | product | E2E encryption, SSO, org-level RBAC (`README.md:34`). |
 | P3-6 | **Bounded pending embedding reads** | projects | `embedNewChunks` loads all pending chunks before batching (`listPendingChunks(projectId, space)`); writes are set-based but the read is unbounded. Ingest re-checks pending embeddings on every run, so a large persistent backlog is read on each re-ingest. Acceptable for current repo sizes; revisit for very large histories. See `architecture.md` → "Unbounded pending embedding reads". |
+| P3-9 | **Persistent repo clone cache** | ingestion | Deferred. The clone is ephemeral (`os.tmpdir()`) and Postgres is the durable read model; `git ls-remote` + `project_branches` skip unchanged branches, and blobless clones keep moved-branch downloads to commits/trees. If measured clone time dominates ingest, add a self-healing per-`provider/owner/repo` cache (shared object store across branches, incremental `git fetch`, no distributed cache). See `architecture.md` → "Why no persistent clone cache". |
 
 
 ## Production scale
@@ -50,7 +51,7 @@ Known limits that only bite past a single trusted deployment:
 |---|---|---|
 | **No multi-tenant identity** | Intentional for open-source self-hosted; chat sessions and demo writes are already authorization-scoped, but there is no account/tenant isolation | P3-2 |
 | **Single-process worker** | Jobs are durable in Postgres, but the default worker runs in one process; horizontal scaling needs stale-lock recovery instead of fail-on-boot | — |
-| **No project delete** | Projects and their archives can only be removed manually, so storage grows unbounded | P2-3 |
+| **No project delete** | Projects can only be removed manually, so rows accumulate in Postgres | P2-3 |
 | **Unbounded pending-embedding reads** | Memory scales with the whole backlog, not the batch size | P3-6 |
 | **No ingest transactions** | Partial writes become unsafe once ingests run concurrently across tenants | P3-1 |
 
@@ -63,7 +64,7 @@ the serverless Vercel path is unchanged.
 
 Hybrid retrieval (P1-4) and in-app daily/weekly summaries (P1-5) have landed, so
 the next product work is the GitHub-only cleanup (P2-10) and project
-deletion/archive cleanup (P2-3). Scheduled re-ingest is covered by report runs
+deletion (P2-3). Scheduled re-ingest is covered by report runs
 (P2-2), so a webhook or separate refresh worker is not planned.
 
 Provider expansion is deferred; GitLab is being removed (P2-10) so the product
@@ -99,7 +100,7 @@ authorization half (P2-5a) already landed.
 | P0-4 | **Chat-turn idempotency** | chat | `chat_messages.client_message_id` + partial unique index `(session_id, role, client_message_id)`; `ON CONFLICT DO NOTHING` dedupes retried sends and replays a completed turn. The frontend generates one id per logical send. Projects/credentials/git connections already upsert on natural keys, so no generic layer was needed. The original `idempotency_keys` table, hashing, locks, TTLs, replay responses, and header contract were overengineering for this app; only the extreme case — duplicate user chat turns — is handled. |
 | P1-2 | **Embedding model-change invalidation** | projects | `commit_chunks` stores `embedding_provider`/`embedding_model`; pending and semantic-search gates require the current space plus `embedding_hash = content_hash`. Changing the embedding model enqueues a background reindex across projects; old-model vectors are never searched. |
 | P2-1 | **GitLab adapter** | integrations | `GitlabAdapter` over a thin `fetch` client (`gitlab-client.ts`), `REGISTRY.gitlab` entry, provider-aware URLs/clone auth, `GITLAB_HOST` for self-hosted, and a frontend provider selector. `GET /api/v1/repositories` merges connected providers server-side, tags each row with `provider`, and the dialog shows provider icons + a compact connect panel. Demo ingestion stays GitHub-only and rejects other providers explicitly. |
-| P2-2 | **Scheduled re-ingest** | ingestion | Scheduled report runs refresh their project branch through `prepareProjectBranch` before reading the period's commits, so self-hosted archives stay current and demo mode serves stored rows. No webhook or separate refresh worker is planned; report schedules cover the daily-summary path. |
+| P2-2 | **Scheduled re-ingest** | ingestion | Scheduled report runs refresh their project branch through `prepareProjectBranch` before reading the period's commits, so self-hosted clones stay current and demo mode serves stored rows. No webhook or separate refresh worker is planned; report schedules cover the daily-summary path. |
 | P2-5a | **Chat-session ownership enforcement** | chat | Read, stream, and delete return 404 for a session owned by another anonymous id; the header is trimmed/capped and input is bounded. Landed in `cf3c6fd` and re-hardened in `96236fe`. |
 | P2-9 | **Credential provider body validation** | backend | `CredentialProviderSchema` derives its literals from `PROVIDER_REGISTRY` and validates `AddCredentialBody`/`VerifyCredentialBody` at the route boundary; the service check remains as defense in depth. Unsupported providers now return 400. |
 | P2-9a | **Git provider param validation** | backend | `GitProviderParams` already enforces the `GitProviderSchema` union (`github`/`gitlab`), so the redundant `unimplementedProvider` guard was removed from the connection handlers. |

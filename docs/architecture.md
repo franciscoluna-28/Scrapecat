@@ -88,7 +88,7 @@ branch).
 ```mermaid
 flowchart LR
     P["Report poller<br/>(60s)"] --> C["Claim due schedule<br/>(conditional update)"]
-    C --> R["prepareProjectBranch<br/>(refresh archive, dedupe by SHA)"]
+    C --> R["prepareProjectBranch<br/>(tip check, refresh clone, dedupe by SHA)"]
     R --> W["Read commits since last success"]
     W --> L["buildReportMessages<br/>+ aiClient.generate()"]
     L --> S[("reports<br/>summary + sourceCommits")]
@@ -121,7 +121,7 @@ advisory lock at startup, so a second replica serves API only.
 ## Commit ingestion
 
 Batched, run as a deduped durable job. The job selects a `CommitSource` — the
-self-hosted local clone (`createGitCommitSource`) or the demo GitHub API
+self-hosted ephemeral workspace (`createGitCommitSource`) or the demo GitHub API
 (`createApiCommitSource`) — and a shared orchestrator (`ingestCommits`) runs the
 pipeline either way. Callers enqueue `ingest-branch` and await it; the in-process
 worker claims it from Postgres, and the stable idempotency key makes concurrent
@@ -129,15 +129,19 @@ callers for the same project+branch attach to the same run.
 
 ```mermaid
 flowchart TD
-    J["ingest-branch job"] --> P["prepareProjectBranch → enqueueJob + waitForJob"]
-    P --> W["worker claims job (FOR UPDATE SKIP LOCKED)"]
-    W --> E["ensureArchive(owner, repo, branch)"]
-    E --> G["native git clone/fetch → repos/{owner}/{repo}/{branch}/"]
+    P["prepareProjectBranch"] --> T["git ls-remote tip vs project_branches"]
+    T -->|unchanged| C["serve stored rows"]
+    T -->|changed| Q["enqueueJob + waitForJob"]
+    Q --> W["worker claims job (FOR UPDATE SKIP LOCKED)"]
+    W --> E["createWorkspace (blobless, no checkout)"]
+    E --> G["clone → os.tmpdir()/scrapecat/<uuid>"]
     G --> R["listCommitsInRange(dir, ref, since, until)"]
     R --> S["per-commit file scope (git diff-tree --name-status)"]
     S --> CL["guardrail: skip empty/junk, flag misleading"]
     CL --> U["upsert commit_chunks (dedupe by SHA)"]
     U --> EM["embedNewChunks (batch, non-blocking)"]
+    EM --> ST["save tip in project_branches"]
+    EM --> D["dispose workspace (finally)"]
 ```
 
 - **Two sources:** `createGitCommitSource` (self-hosted; native git + per-commit
@@ -145,12 +149,35 @@ flowchart TD
   REST with best-effort file scopes, a single batch, no guardrail) both feed the
   same `ingestCommits` orchestrator.
 - **Why batch:** the workload needs everything from a rate-limited API; one clone
-  collapses it into a single idempotent fetch. GitHub REST is used only for
-  **discovery** (repo/branch listing, connection check) and the clone itself.
+  collapses it into a single idempotent fetch, and the `git ls-remote` tip check
+  skips the clone entirely when the branch has not moved. GitHub REST is used
+  only for **discovery** (repo/branch listing, connection check).
 - **Dedupe by SHA:** re-running a window writes nothing new; already-synced
   commits are skipped before file-scope work.
-- **Failure handling:** the only remote step is clone/fetch (retryable).
+- **Failure handling:** the only remote step is the clone (retryable).
   Embeddings are a separate, non-blocking step and never fail ingestion.
+
+### Why no persistent clone cache
+
+The clone is a workbench, not a cache. Postgres (`commit_chunks`, embeddings,
+`project_branches`) is the durable read model and answers every query. A clone
+only needs to exist while an ingest job reads git objects, so it is deleted in a
+`finally` and swept on boot after a crash.
+
+This is deliberate at the current scale:
+
+- `git ls-remote` + `project_branches.tip_sha` make an unchanged branch cost no
+  clone at all.
+- A moved branch pays one blobless clone (`--filter=blob:none`) — commits and
+  trees, not the repo's file blobs.
+- There is no volume to provision, no cache repair, no project-delete cleanup,
+  and no per-repo locking.
+
+A persistent repo-level cache would only optimize repeated large-history
+ingests. If measured clone time ever dominates, add it then: key it by
+`provider/owner/repo` so branches share one object store, keep it blobless with
+incremental `git fetch`, and self-heal a broken dir by re-cloning. Do not build
+a distributed cache. Tracked as P3-9.
 
 ### Why native git (not a JS git library)
 
@@ -161,12 +188,12 @@ baked into the image (`backend/Dockerfile.dev`). Do **not** replace it with
 - **Off-loop, bounded memory** — a separate C process keeps pack/delta work off
   the V8 heap, which is what makes the in-process job worker safe and large
   clones non-OOMing.
-- **Protocol maturity** — shallow/single-branch clone, incremental fetch,
-  packfiles, `http.extraheader` auth, fast `log`/`diff-tree` on huge repos.
+- **Protocol maturity** — single-branch/blobless clone, packfiles,
+  `http.extraheader` auth, fast `log`/`diff-tree` on huge repos.
 - **Reproducibility** — pinning git gives identical behavior across dev,
   replicas, and prod.
-- **Regenerable cache** — the clone under `REPO_ARCHIVE_DIR` is disposable; a
-  lost volume only costs the next fetch.
+- **Ephemeral by design** — the blobless clone lives in `os.tmpdir()` and is
+  deleted in a `finally`; a crash is swept on the next worker boot.
 
 Serverless cannot run the binary at all — which is why the demo uses the GitHub
 REST API. The clean split: self-hosted ships git; serverless does not and uses
@@ -332,10 +359,9 @@ and is unchanged (see [`deploy-vercel.md`](deploy-vercel.md)). Full instructions
 ### No project deletion
 
 There is no `DELETE /api/v1/projects/:id` route or store method. Removing a
-project currently requires direct database work, and there is no archive-removal
-step, so even a manual cascade would leave the `fs` clone behind. Add the
-endpoint, Postgres cascade, and local clone removal together (P2-3). The clone
-is regenerable, so the leak is silent rather than corrupting.
+project currently requires direct database work. `project_branches` cascades
+with the project, and no persistent clone is left behind (workspaces are temp
+and swept), so only the endpoint + Postgres cascade are missing (P2-3).
 
 ### Unbounded pending embedding reads
 

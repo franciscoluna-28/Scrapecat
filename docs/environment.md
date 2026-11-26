@@ -32,13 +32,12 @@ DEMO_RESTRICT_KEYS=true
 RATE_LIMIT_MAX=240
 CHAT_RATE_LIMIT_MAX=20
 REPORT_RATE_LIMIT_MAX=5
-REPO_ARCHIVE_DIR=repos
 # Durable Postgres-backed jobs run in-process unless this is false.
 WORKER_ENABLED=true
 LOG_LEVEL=info
 ```
 
-## Jobs and archives
+## Jobs and workspaces
 
 Commit ingestion runs as durable, deduped jobs stored in Postgres (the `jobs`
 table). The worker runs in-process with the API (`src/main.ts`) and claims due
@@ -46,16 +45,17 @@ jobs with `FOR UPDATE SKIP LOCKED`; there is no Redis or RabbitMQ. Set
 `WORKER_ENABLED=false` on API-only replicas that share the database with a
 worker.
 
-`REPO_ARCHIVE_DIR` (default `repos/`) holds the local clone used by self-hosted
-ingestion. The serverless demo reads the GitHub REST API and does not use an
-archive.
+Self-hosted ingestion clones the branch into `os.tmpdir()/scrapecat/<uuid>` with
+`--filter=blob:none --no-checkout`, then deletes it when the job ends. A cheap
+`git ls-remote` tip check against `project_branches` skips the clone when the
+branch has not moved; crashed workspaces are swept on the next worker boot. The
+serverless demo reads the GitHub REST API and does not clone anything.
 
 ### Lifecycle gap: project deletion
 
-Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions),
-but it does **not** delete the `fs` clone under `REPO_ARCHIVE_DIR`. There is no
-delete-project endpoint today, so archives can only be reclaimed manually when
-it matters. Tracked as P2-3.
+Deleting a `projects` row cascades in Postgres (`commit_chunks`, chat sessions,
+`project_branches`). There is no persistent clone to clean up, only the missing
+delete-project endpoint. Tracked as P2-3.
 
 `frontend/.env`:
 

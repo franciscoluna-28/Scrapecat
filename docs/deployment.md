@@ -50,8 +50,8 @@ Configuration:
   block win.
 - `CORS_ORIGIN` must be the public frontend origin.
 - `NEXT_PUBLIC_API_URL` is the backend URL **as seen by the browser**.
-- Postgres data lives in the `postgres_data` volume; cloned archives live in
-  `repo_archives`.
+- Postgres data lives in the `postgres_data` volume. Repo clones are ephemeral
+  workspaces under the container's temp dir, deleted after each job.
 - Durable jobs are stored in Postgres and run in the backend process. Set
   `WORKER_ENABLED=false` for API-only replicas that share the database with a
   worker.

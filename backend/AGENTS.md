@@ -85,6 +85,7 @@ Uses `postgres` (postgres-js). Drizzle ORM with the PostgreSQL dialect + pgvecto
 
 Tables defined in `src/db/schema.ts`:
 - **projects** — provider-generic projects (uuid PK, `git_provider` enum `github`/`gitlab`, `provider_project_id`, `provider_owner`, repo name, default branch; unique on `(git_provider, provider_project_id)`)
+- **project_branches** — per-branch ingest state (`project_id`+`branch` PK, `tip_sha`, `last_commit_at`, `last_ingested_at`); drives the tip-skip check and incremental `since` window
 - **chat_sessions** — chat threads per project (uuid PK, `project_id` FK, title, nullable `anonymous_id` for per-visitor isolation)
 - **commit_chunks** — one row per commit: message, author, optional `embedding` (vector(768)) whose source is `commit_message`, `embedding_provider`/`embedding_model` (vector-space identity), `content_hash`/`embedding_hash` (content staleness gate), `metadata` jsonb; unique on `(project_id, commit_sha, branch)` + HNSW index on embedding. A row is current only when its provider/model match the active settings and `embedding_hash = content_hash`.
 - **app_settings** — global AI model settings: `chat_provider`/`chat_model` (the RAG answer model) and `embedding_provider`/`embedding_model`.
@@ -97,14 +98,14 @@ All DB access goes through per-domain store modules — `src/api/repositories/st
 
 Commit ingestion runs as durable, deduped jobs backed by the Postgres `jobs` table (`src/shared/queue/`). Job names and id builders live in `src/shared/queue/jobs.ts` (`JOB_NAMES`, `ingestBranchJobId`, `REINDEX_EMBEDDINGS_JOB_ID`); producers and handlers import them instead of string literals. Project log messages live in `src/rag/indexing/log-events.ts`. Callers `enqueueJob(...)` then `waitForJob(...)`; the stable idempotency key makes concurrent callers for the same project+branch attach to the same run. The worker (`worker.ts`) claims due jobs with `FOR UPDATE SKIP LOCKED` in the API process (`main.ts`, gated by `WORKER_ENABLED`); serverless runs the handler inline. This first version targets one process and one database, not replicas or horizontal scale: the worker takes a Postgres advisory lock at startup (a second replica serves API only), and on boot it fails any `running` rows left by a crash (queued rows survive) rather than re-queuing them or recovering stale locks at runtime. There are two interchangeable paths, selected by `DEMO_MODE`:
 
-- **Self-hosted (default)** — clone/fetch a local `git` repository under `REPO_ARCHIVE_DIR`.
+- **Self-hosted (default)** — clone the branch into a temporary workspace, delete it when the job ends.
 - **Demo / serverless (`DEMO_MODE=true`)** — read public commits over the GitHub REST API with Octokit; no `git` binary or persistent disk, so it runs on serverless hosts.
 
-- **Local clone** (`src/rag/git/archive-service.ts`): `ensureArchive` clones/fetches with the native `git` binary (`--single-branch --no-checkout`, `repos/{owner}/{repo}/{branch}/`, `GITHUB_TOKEN` via `http.extraheader`). GitHub remains the source of truth. **Known gap:** there is no project-delete endpoint, so removing a project currently requires direct database work and would still orphan its `fs` clone. The cache is regenerable, so cleanup is manual. Tracked as P2-3.
+- **Workspace** (`src/rag/git/workspace.ts`): `createWorkspace` clones with the native `git` binary (`--single-branch --no-checkout --filter=blob:none`, `GITHUB_TOKEN` via `http.extraheader`) into `os.tmpdir()/scrapecat/<uuid>`, and `disposeWorkspace` removes it in the job handler's `finally`. `remoteTipSha` uses `git ls-remote` + `project_branches` to skip the clone entirely when the tip is already indexed. Crashed jobs are swept on worker boot. No persistent clone lives on disk — the clone is a per-job workbench, Postgres is the durable read model. See `docs/architecture.md` → "Why no persistent clone cache".
 - **Native git only** (`src/rag/git/git.ts`): always shell out to the system `git` via `execFile` and keep it installed in the images (`backend/Dockerfile.dev`, `backend/Dockerfile`). Never swap in a JS git library (`isomorphic-git`, `nodegit`, …) — the off-event-loop, bounded-memory subprocess model is load-bearing (it underpins the in-process ingestion and large-repo safety). Rationale: `docs/architecture.md` → "Why native git".
 - **Reader** (`git-reader.ts`): `listCommitsInRange` reads commits in a date window from the local `.git` with native `git log`. Files-changed per commit comes from native `git diff-tree` (`git-diff.ts`); the file names are stored in `metadata.filesChanged` (the chat prompt grounds on these, since a commit message can be uninformative).
 - **Ingest orchestrator** (`ingest.ts`): `ingestCommits(source, opts)` owns the shared pipeline — dedupe by SHA (before any file-scope work; `commit_message` is the embedding source) → batched upsert of `commit_chunks` → `embedNewChunks`. A `CommitSource` supplies `listCommits`, `toChunkInputs`, and `batchSize`; the source also resolves its own `tipSha`. Changing `embeddingProvider`/`embeddingModel` enqueues `reindex-embeddings`, which re-embeds pending rows across projects.
-- **Git source** (`git-source.ts`): `createGitCommitSource` — ensure archive → list window commits → per-commit file scope (`git diff-tree`, concurrency 8) → guardrail; upserts in batches of 50. `commitUrl` is `https://github.com/{owner}/{repo}/commit/{sha}`.
+- **Git source** (`git-source.ts`): `createGitCommitSource` — create workspace → list window commits → per-commit file scope (`git diff-tree`, concurrency 8) → guardrail; upserts in batches of 50. `commitUrl` is `https://github.com/{owner}/{repo}/commit/{sha}`.
 - **Demo API reads** (`github-api.ts`): `listCommitsFromApi` paginates `GET /repos/:owner/:repo/commits` (public-only; optionally uses `GITHUB_TOKEN` but works anonymously at 60 req/hr) and `getChangedFilesForShas` best-effort enriches file scopes. Shared Octokit construction lives in `src/shared/integrations/git-provider/octokit.ts`.
 - **API source** (`api-source.ts`): `createApiCommitSource` feeds the same orchestrator using the API reads. File scopes are best-effort and the whole window upserts in a single batch; guardrail does **not** run here, so demo chunks carry no `metadata.validation`. Demo mode is hardened so it never calls user-scoped endpoints (`/user`, `/user/repos`) or exposes the token owner — see `src/api/credentials/git-connections.ts`.
 - **Database-first** (`src/api/repositories/services.ts`): `prepareProjectBranch` serves from `commit_chunks` when the branch is already ingested (no GitHub call); otherwise it enqueues the durable `ingest-branch` job and awaits it. In demo it never throws — a rate-limit/network failure falls back to stored rows. Same fallback applies to the self-hosted path.
@@ -125,7 +126,7 @@ Provider identifiers use the plain names (`openrouter`, `deepseek`, `openai`, `g
 
 ## Git provider abstraction (`src/shared/integrations/git-provider/`)
 
-Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `searchPublicRepositories`, `listBranches`, `getDefaultBranch`, `getRepositoryId`, `verifyConnection`. **Discovery only** — commits are read from the local archive with the native `git` binary (`src/rag/`), never from this interface. The default branch is resolved via the provider API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
+Interface `GitProvider` in `provider.ts` with methods: `listRepositories`, `searchPublicRepositories`, `listBranches`, `getDefaultBranch`, `getRepositoryId`, `verifyConnection`. **Discovery only** — commits are read from an ephemeral clone with the native `git` binary (`src/rag/`), never from this interface. The default branch is resolved via the provider API (`default_branch`) — never hardcode `main`, since repos like next.js default to `canary`.
 
 `GithubAdapter` (`github-adapter.ts`) uses `@octokit/core` with throttling and retry plugins; shared construction lives in `octokit.ts` (`createOctokit(token?)`, token optional for anonymous public access). `GitlabAdapter` (`gitlab-adapter.ts`) uses a thin native-`fetch` client in `gitlab-client.ts` (auth, timeout, bounded retry, `x-next-page` pagination) — deliberately not a GitLab SDK, since the discovery surface is small and we need retry/backoff the SDK does not provide. `GITLAB_HOST` selects the instance (default `https://gitlab.com`) and is used for API, web, and clone URLs; nested `group/subgroup/project` paths are URL-encoded. The factory `getGitProvider(provider, token?)` in `index.ts` returns the interface via the registry's `createAdapter`; the provider comes from the project/request (`project.gitProvider`), never a global env setting. The app-layer `GitProviderId` is defined in `registry.ts`, independent of the DB enum. Provider wiring lives in `registry.ts` (`getGitProviderConfig`): host, token env var, commit/clone URLs, clone auth header, and adapter factory. Unimplemented providers throw instead of silently falling back to GitHub. Token resolution goes through `resolveGitToken(provider)`; connection storage/verification lives in `src/api/credentials/`. Demo commit reads do not use this interface — they live in `src/rag/github/github-api.ts`, and demo mode rejects non-GitHub providers (`src/api/repositories/discovery.ts`, `api-source.ts`).
 
@@ -169,8 +170,8 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 |---|---|
 | `ENCRYPTION_KEY` | Required; any base64 32-byte string |
 | `OPENROUTER_API_KEY` | For OpenRouter (warned if missing) |
-| `GITHUB_TOKEN` | GitHub personal access token (warned if missing); used for the archive clone |
-| `GITLAB_TOKEN` | GitLab personal access token (`read_api`, `read_repository`); discovery + archive clone |
+| `GITHUB_TOKEN` | GitHub personal access token (warned if missing); used for the clone |
+| `GITLAB_TOKEN` | GitLab personal access token (`read_api`, `read_repository`); discovery + clone |
 | `GITLAB_HOST` | GitLab instance origin (default `https://gitlab.com`); set for self-hosted |
 | `AI_MODEL` | Default model override |
 | `AI_TIMEOUT_MS` | LLM/embedding request timeout in milliseconds (default `120000`) |
@@ -181,13 +182,12 @@ Test env defaults are seeded in `vitest.setup.ts` (`ENCRYPTION_KEY`, `DATABASE_U
 | `OPENCODE_GO_API_KEY` | For the OpenCode Go chat provider |
 | `DATABASE_URL` | PostgreSQL connection string (default `postgres://scrapecat:scrapecat@localhost:5432/scrapecat`) |
 | `CORS_ORIGIN` | CORS origin (default `http://localhost:3000`) |
-| `REPO_ARCHIVE_DIR` | Directory for cloned repo archives (default `repos/`) |
 | `WORKER_ENABLED` | Run the in-process durable job worker (default `true`); set `false` for API-only replicas |
 
 ## Deep dives
 
 - `src/shared/queue/` — Postgres-backed job store, in-process worker, handler registry, and the `ingest-branch`/`reindex-embeddings` jobs
-- `src/rag/` — local clone, git reading, ingestion orchestrator
+- `src/rag/` — ephemeral workspace, git reading, ingestion orchestrator
 - `src/shared/integrations/providers/` — provider registry, model catalog (id → protocol), AI SDK model factory
 - `src/shared/integrations/git-provider/github-adapter.ts` — Octokit setup with throttling/retry (discovery only)
 - `src/shared/integrations/git-provider/gitlab-client.ts` + `gitlab-adapter.ts` — GitLab REST client (auth/retry/pagination), self-hosted host, field mapping
