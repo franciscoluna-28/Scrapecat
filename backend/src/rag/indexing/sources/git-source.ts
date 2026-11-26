@@ -1,6 +1,6 @@
 import { timed } from "@/shared/timing";
 import { commitUrl, type GitProviderId } from "@/shared/integrations/git-provider";
-import { ensureArchive } from "@/rag/git/archive-service";
+import { createWorkspace, disposeWorkspace } from "@/rag/git/workspace";
 import { listCommitsInRange } from "@/rag/git/git-reader";
 import { getCommitsChangedFiles } from "@/rag/git/git-diff";
 import { classifyCommit } from "@/rag/indexing/guardrail";
@@ -10,9 +10,10 @@ import type { CommitSource, SourceCommit, SourceContext } from "@/rag/indexing/s
 const BATCH_SIZE = 50;
 
 /**
- * Self-hosted commit source: clones/fetches the local git archive, reads the
- * commit window with native `git log`, and derives each batch's file scopes in a
- * single `git diff-tree --stdin` process — all off the event loop, bounded memory.
+ * Self-hosted commit source: clones the branch into a throwaway workspace,
+ * reads the commit window with native `git log`, and derives each batch's file
+ * scopes in a single `git diff-tree --stdin` process — all off the event loop,
+ * bounded memory. Callers must `dispose()` the source when the job ends.
  *
  * Guardrail runs here (and only here): empty/no-op commits are skipped and
  * uninformative or contradictory messages are flagged in `metadata.validation`.
@@ -24,30 +25,30 @@ export function createGitCommitSource(opts: {
   branch: string;
 }): CommitSource {
   const { gitProvider, owner, repo, branch } = opts;
-  let archiveDir = "";
+  let workspaceDir = "";
 
   return {
     batchSize: BATCH_SIZE,
 
     async listCommits({ since, until }) {
-      const archive = await timed("ingest.ensureArchive", { owner, repo, branch }, () =>
-        ensureArchive({ gitProvider, owner, repo, branch }),
+      const workspace = await timed("ingest.createWorkspace", { owner, repo, branch }, () =>
+        createWorkspace({ gitProvider, owner, repo, branch }),
       );
-      archiveDir = archive.dir;
+      workspaceDir = workspace.dir;
 
       const commits = await timed(
         "ingest.listCommitsInRange",
         { owner, repo, branch, since: since?.toISOString(), until: until?.toISOString() },
         () =>
           listCommitsInRange({
-            dir: archive.dir,
+            dir: workspace.dir,
             ref: branch,
             since,
             until,
           }),
       );
 
-      return { commits, tipSha: archive.tipSha };
+      return { commits, tipSha: workspace.tipSha };
     },
 
     async toChunkInputs(commits: SourceCommit[], ctx: SourceContext) {
@@ -56,7 +57,7 @@ export function createGitCommitSource(opts: {
         { owner, repo, branch, count: commits.length },
         () =>
           getCommitsChangedFiles({
-            dir: archiveDir,
+            dir: workspaceDir,
             shas: commits.map((c) => c.sha),
           }),
       );
@@ -91,6 +92,12 @@ export function createGitCommitSource(opts: {
       }
 
       return { inputs, skipped };
+    },
+
+    async dispose() {
+      if (!workspaceDir) return;
+      await disposeWorkspace(workspaceDir);
+      workspaceDir = "";
     },
   };
 }

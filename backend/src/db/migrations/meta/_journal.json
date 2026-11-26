@@ -232,6 +232,13 @@
       "when": 1795657110171,
       "tag": "0032_nebulous_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795662607288,
+      "tag": "0033_salty_firedrake",
+      "breakpoints": true
     }
   ]
 }

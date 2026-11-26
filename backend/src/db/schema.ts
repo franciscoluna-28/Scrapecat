@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -97,6 +98,26 @@ export const projects = pgTable(
       table.gitProvider,
       table.providerProjectId,
     ),
+  }),
+);
+
+export const projectBranches = pgTable(
+  "project_branches",
+  {
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    branch: text("branch").notNull(),
+    tipSha: text("tip_sha").notNull(),
+    lastCommitAt: timestamp("last_commit_at", { withTimezone: true }),
+    lastIngestedAt: timestamp("last_ingested_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.projectId, table.branch] }),
   }),
 );
 
@@ -334,4 +355,5 @@ export const jobs = pgTable(
 export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
 export type JobRow = typeof jobs.$inferSelect;
+export type ProjectBranchRow = typeof projectBranches.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

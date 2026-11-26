@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockEnsureArchive = vi.fn();
+const mockCreateWorkspace = vi.fn();
+const mockDisposeWorkspace = vi.fn();
 const mockListCommitsInRange = vi.fn();
 const mockGetCommitsChangedFiles = vi.fn();
 
-vi.mock("@/rag/git/archive-service", () => ({
-  ensureArchive: (...args: unknown[]) => mockEnsureArchive(...args),
+vi.mock("@/rag/git/workspace", () => ({
+  createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
+  disposeWorkspace: (...args: unknown[]) => mockDisposeWorkspace(...args),
 }));
 
 vi.mock("@/rag/git/git-reader", () => ({
@@ -36,18 +38,19 @@ const commit = {
 };
 
 beforeEach(() => {
-  mockEnsureArchive.mockReset().mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
+  mockCreateWorkspace.mockReset().mockResolvedValue({ dir: "/repo", tipSha: "tip123" });
+  mockDisposeWorkspace.mockReset().mockResolvedValue(undefined);
   mockListCommitsInRange.mockReset().mockResolvedValue([commit]);
   mockGetCommitsChangedFiles.mockReset().mockResolvedValue(new Map([["a", DIFF]]));
 });
 
 describe("createGitCommitSource", () => {
-  it("ensures the archive and returns commits with the archive tip", async () => {
+  it("clones the workspace and returns commits with its tip", async () => {
     const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
 
     const { commits, tipSha } = await source.listCommits({});
 
-    expect(mockEnsureArchive).toHaveBeenCalledWith({
+    expect(mockCreateWorkspace).toHaveBeenCalledWith({
       gitProvider: "github",
       owner: "owner",
       repo: "repo",
@@ -55,6 +58,17 @@ describe("createGitCommitSource", () => {
     });
     expect(commits).toEqual([commit]);
     expect(tipSha).toBe("tip123");
+  });
+
+  it("disposes the workspace once", async () => {
+    const source = createGitCommitSource({ gitProvider: "github", owner: "owner", repo: "repo", branch: "main" });
+    await source.listCommits({});
+
+    await source.dispose?.();
+    await source.dispose?.();
+
+    expect(mockDisposeWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockDisposeWorkspace).toHaveBeenCalledWith("/repo");
   });
 
   it("builds chunk inputs with file scope, github url, and validation", async () => {

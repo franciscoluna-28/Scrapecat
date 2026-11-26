@@ -124,7 +124,10 @@ async function tick(): Promise<void> {
 }
 
 /** Starts the single-process worker. Safe to call more than once. */
-export async function startJobWorker(): Promise<void> {
+export async function startJobWorker(opts: {
+  /** Runs after the lock is held, before the loop claims work. */
+  onLockAcquired?: () => Promise<void>;
+} = {}): Promise<void> {
   if (running) return;
 
   if (!(await acquireWorkerLock())) {
@@ -136,6 +139,7 @@ export async function startJobWorker(): Promise<void> {
   }
 
   try {
+    await opts.onLockAcquired?.();
     const interrupted = await failInterruptedJobs();
     if (interrupted > 0) {
       logger.info({ interrupted }, "failed jobs interrupted by restart");

@@ -2,6 +2,7 @@ import "dotenv/config.js";
 import { buildApp } from "@/build-app";
 import { env } from "@/shared/config/env";
 import { startJobWorker, stopJobWorker } from "@/shared/queue/worker";
+import { sweepStaleWorkspaces } from "@/rag/git/workspace";
 import { logger } from "@/shared/logger";
 import {
   startReportScheduler,
@@ -18,7 +19,9 @@ async function main() {
       `backend running at http://${env.HOST}:${env.PORT}`,
     );
     startReportScheduler();
-    if (env.WORKER_ENABLED) await startJobWorker();
+    if (env.WORKER_ENABLED) {
+      await startJobWorker({ onLockAcquired: sweepStaleWorkspaces });
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -43,4 +43,6 @@ export interface CommitSource {
     commits: SourceCommit[],
     ctx: SourceContext,
   ): Promise<{ inputs: CommitChunkInput[]; skipped: number }>;
+  /** Releases source-owned resources (e.g. the ephemeral git clone). */
+  dispose?(): Promise<void>;
 }

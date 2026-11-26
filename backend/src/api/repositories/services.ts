@@ -1,6 +1,8 @@
 import { env } from "@/shared/config/env";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
 import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { branchSyncStore } from "@/rag/indexing/branch-sync-store";
+import { remoteTipSha } from "@/rag/git/workspace";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
 import {
   isDemoBranchAllowed,
@@ -14,6 +16,10 @@ import { JOB_NAMES, ingestBranchJobId } from "@/shared/queue/jobs";
 import { PROJECT_LOG_MESSAGES } from "@/rag/indexing/log-events";
 import { requestContext } from "@fastify/request-context";
 import "@/rag/indexing/jobs";
+
+// Re-index from the last known commit, minus a day of slack for author vs
+// committer dates and force-pushes. Dedupe by SHA makes the overlap harmless.
+const INGEST_OVERLAP_MS = 24 * 60 * 60 * 1000;
 
 export async function listProjects() {
   const rows = await projectsStore.listProjectsWithIndexedBranches();
@@ -74,6 +80,32 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
     return { branch, commitsFound: existing, chunksWritten: 0, tipSha: "" };
   }
 
+  // Self-hosted: skip the clone entirely when the remote tip is already
+  // indexed. Otherwise re-index from the last commit (minus an overlap for
+  // author/committer date skew and force-pushes).
+  let since: Date | undefined;
+  if (!env.isDemoMode) {
+    try {
+      const tip = await remoteTipSha({
+        gitProvider: project.gitProvider,
+        owner: project.providerOwner,
+        repo: project.repositoryName,
+        branch,
+      });
+      const state = await branchSyncStore.get({ projectId, branch });
+      if (state?.tipSha === tip && existing > 0) {
+        return { branch, commitsFound: existing, chunksWritten: 0, tipSha: tip };
+      }
+      const anchor = state?.lastCommitAt ?? state?.lastIngestedAt;
+      if (anchor) since = new Date(anchor.getTime() - INGEST_OVERLAP_MS);
+    } catch (error) {
+      logger.warn(
+        { projectId, branch, err: (error as Error).message },
+        PROJECT_LOG_MESSAGES.ingestTipCheckFailed,
+      );
+    }
+  }
+
   // The heavy ingest runs as a deduped durable job; the id is stable per
   // project+branch so concurrent callers attach to the same run.
   const ingest = async (ref: string): Promise<IngestResult> => {
@@ -84,6 +116,7 @@ export async function prepareProjectBranch(projectId: string, branch: string, on
       repo: project.repositoryName,
       branch: ref,
       projectId,
+      since: since?.toISOString(),
       requestId: requestContext.get("reqId"),
     };
     const report = (p: { stage: string; message: string; done?: number; total?: number }) =>
