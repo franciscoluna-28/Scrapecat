@@ -13,6 +13,10 @@ export type ApiCommit = {
 export type ApiFileChange = {
   filepath: string;
   status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+  binary: boolean;
 };
 
 export type ListCommitsOptions = {
@@ -137,17 +141,17 @@ export function createGithubApiClient(
   }
 
   /**
-   * Best-effort file scopes for a set of commits. Skipped entirely when no
-   * token is configured: this costs one request per commit and the anonymous
-   * 60/hr budget is too small. Individual failures are swallowed so indexing
-   * never fails on rate limits.
+   * Best-effort file scopes + patches for a set of commits. This costs one
+   * request per commit; a token raises the rate limit, but anonymous public
+   * reads work too. Individual failures are swallowed so indexing never fails
+   * on a single rate-limited commit.
    */
   async function getChangedFilesForShas(
     opts: GetChangedFilesOptions,
   ): Promise<Map<string, ApiFileChange[]>> {
     const { owner, repo, shas } = opts;
     const result = new Map<string, ApiFileChange[]>();
-    if (!deps.token || shas.length === 0) return result;
+    if (shas.length === 0) return result;
 
     let next = 0;
     const workers = Array.from(
@@ -164,7 +168,14 @@ export function createGithubApiClient(
             if (Array.isArray(files)) {
               result.set(
                 sha,
-                files.map((f) => ({ filepath: f.filename, status: f.status })),
+                files.map((f) => ({
+                  filepath: f.filename,
+                  status: f.status,
+                  additions: Number(f.additions) || 0,
+                  deletions: Number(f.deletions) || 0,
+                  patch: typeof f.patch === "string" ? f.patch : undefined,
+                  binary: typeof f.patch !== "string",
+                })),
               );
             }
           } catch {

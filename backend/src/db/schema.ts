@@ -59,27 +59,6 @@ export const tsvector = customType<{ data: string; driverData: string }>({
   },
 });
 
-export type CommitChunkMetadata = {
-  filesChanged?: string[];
-  fileStats?: {
-    filepath: string;
-    status: "added" | "deleted" | "modified";
-    additions: number;
-    deletions: number;
-  }[];
-  additions?: number;
-  deletions?: number;
-  commitUrl?: string;
-  prNumber?: number;
-  prTitle?: string;
-  prUrl?: string;
-  summary?: { model?: string; at?: string };
-  validation?: {
-    status?: "confirmed" | "flagged" | "skipped";
-    notes?: string[];
-  };
-};
-
 export const projects = pgTable(
   "projects",
   {
@@ -121,54 +100,57 @@ export const projectBranches = pgTable(
   }),
 );
 
-export const commitChunks = pgTable(
-  "commit_chunks",
+export const commitEmbeddings = pgTable(
+  "commit_embeddings",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    projectId: uuid("project_id")
+    repoId: uuid("repo_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
+    branch: text("branch").notNull(),
     commitSha: text("commit_sha").notNull(),
-    branch: text("branch").notNull().default("main"),
-    commitMessage: text("commit_message").notNull(),
     author: text("author"),
+    committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
+    message: text("message").notNull(),
+    commitUrl: text("commit_url").notNull(),
+    filesChanged: text("files_changed")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    diffHash: text("diff_hash").notNull(),
+    summary: text("summary").notNull(),
+    summaryVersion: text("summary_version").notNull(),
+    summaryModel: text("summary_model").notNull(),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
     embeddingProvider: text("embedding_provider"),
     embeddingModel: text("embedding_model"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
-    metadata: jsonb("metadata")
-      .$type<CommitChunkMetadata>()
-      .default({}),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
-      sql`setweight(to_tsvector('english', coalesce(commit_message, '')), 'A') || setweight(to_tsvector('simple', coalesce(metadata->>'filesChanged', '')), 'B')`,
+      sql`setweight(to_tsvector('english', coalesce(summary, '')), 'A') || setweight(to_tsvector('simple', coalesce(array_to_string(files_changed, ' '), '')), 'B') || setweight(to_tsvector('english', coalesce(message, '')), 'C')`,
     ),
-    committedAt: timestamp("committed_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => {
-    return {
-      projectShaIdx: uniqueIndex("commit_project_sha_branch_idx").on(
-        table.projectId,
-        table.commitSha,
-        table.branch,
-      ),
-      embeddingIdx: index("commit_embedding_hnsw_idx").using(
-        "hnsw",
-        table.embedding.op("vector_cosine_ops"),
-      ),
-      searchVectorIdx: index("commit_search_vector_gin_idx").using(
-        "gin",
-        table.searchVector,
-      ),
-      windowIdx: index("commit_project_branch_committed_at_idx").on(
-        table.projectId,
-        table.branch,
-        table.committedAt,
-      ),
-    };
-  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.repoId, table.branch, table.commitSha] }),
+    repoCommitIdx: index("commit_embeddings_repo_commit_idx").on(
+      table.repoId,
+      table.commitSha,
+    ),
+    windowIdx: index("commit_embeddings_repo_branch_committed_at_idx").on(
+      table.repoId,
+      table.branch,
+      table.committedAt,
+    ),
+    embeddingIdx: index("commit_embeddings_hnsw_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
+    searchVectorIdx: index("commit_embeddings_search_vector_gin_idx").using(
+      "gin",
+      table.searchVector,
+    ),
+  }),
 );
 
 export const credentials = pgTable(
@@ -189,6 +171,7 @@ export const credentials = pgTable(
 export type ChatCitation = {
   commitSha: string;
   commitMessage: string;
+  summary?: string;
   author: string | null;
   committedAt: string;
   filesChanged: string[];
@@ -356,4 +339,5 @@ export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
 export type JobRow = typeof jobs.$inferSelect;
 export type ProjectBranchRow = typeof projectBranches.$inferSelect;
+export type CommitEmbeddingRow = typeof commitEmbeddings.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];

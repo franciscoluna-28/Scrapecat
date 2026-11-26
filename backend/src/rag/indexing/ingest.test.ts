@@ -1,139 +1,183 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockGetChunksByShas = vi.fn();
-const mockUpsertCommitChunks = vi.fn();
-const mockEmbedNewChunks = vi.fn();
+const mockGetByKey = vi.fn();
+const mockFindReusable = vi.fn();
+const mockUpsert = vi.fn();
+const mockResolveModel = vi.fn();
+const mockSummarize = vi.fn();
+const mockResolveSpace = vi.fn();
+const mockEmbed = vi.fn();
 
-vi.mock("@/rag/indexing/commit-chunks-store", () => ({
-  commitChunksStore: {
-    getChunksByShas: (...args: unknown[]) => mockGetChunksByShas(...args),
-    upsertCommitChunks: (...args: unknown[]) => mockUpsertCommitChunks(...args),
+vi.mock("@/rag/indexing/commit-embeddings-store", () => ({
+  commitEmbeddingsStore: {
+    getByKey: (...args: unknown[]) => mockGetByKey(...args),
+    findReusableSummary: (...args: unknown[]) => mockFindReusable(...args),
+    upsertCommit: (...args: unknown[]) => mockUpsert(...args),
   },
 }));
 
-vi.mock("@/rag/indexing/embed-chunks", () => ({
-  embedNewChunks: (...args: unknown[]) => mockEmbedNewChunks(...args),
+vi.mock("@/rag/indexing/commit-summary-service", () => ({
+  commitSummaryService: {
+    resolveModel: (...args: unknown[]) => mockResolveModel(...args),
+    summarize: (...args: unknown[]) => mockSummarize(...args),
+  },
+  COMMIT_SUMMARY_VERSION: "v1",
+  fallbackCommitSummary: () => "structural fallback",
 }));
 
-import { ingestCommits, type CommitSource, type SourceCommit } from "@/rag/indexing/ingest";
-import type { CommitChunkInput } from "@/rag/indexing/commit-chunks-store";
+vi.mock("@/rag/indexing/embeddings", () => ({
+  resolveEmbeddingSpace: (...args: unknown[]) => mockResolveSpace(...args),
+  embedTexts: (...args: unknown[]) => mockEmbed(...args),
+}));
 
-function commit(sha: string): SourceCommit {
-  return { sha, message: `msg ${sha}`, author: "t", date: "2026-01-01T00:00:00Z" };
-}
+import { ingestCommits } from "@/rag/indexing/ingest";
+import type { CommitSource, SourceCommit } from "@/rag/indexing/source";
+import type { CommitDiff } from "@/rag/git/commit-diff";
+import { commitEmbeddingText, contentHashOf } from "@/shared/utils";
 
-function input(c: SourceCommit, projectId: string, branch: string): CommitChunkInput {
+const commit: SourceCommit = {
+  sha: "abc123",
+  message: "feat: lol",
+  author: "dev",
+  date: "2026-01-01T00:00:00Z",
+  parentSha: null,
+  url: "https://github.com/owner/repo/commit/abc123",
+};
+
+const diff: CommitDiff = {
+  stat: "src/auth/session.ts | +10 -5",
+  patch: "diff --git a/src/auth/session.ts b/src/auth/session.ts\n@@ -1 +1 @@\n-old\n+new",
+  filesChanged: ["src/auth/session.ts"],
+  additions: 10,
+  deletions: 5,
+  binaryFiles: 0,
+  truncated: false,
+  hash: "diff-hash",
+};
+
+const model = { provider: "openrouter", model: { id: "test/summarizer" } } as never;
+const space = { provider: "openrouter", model: "openai/text-embedding-3-small" };
+const call = {
+  gitProvider: "github" as const,
+  owner: "owner",
+  repo: "repo",
+  branch: "main",
+  projectId: "project-1",
+};
+
+function source(overrides: Partial<CommitSource> = {}): CommitSource {
   return {
-    projectId,
-    commitSha: c.sha,
-    branch,
-    commitMessage: c.message,
-    author: c.author,
-    metadata: {},
-    committedAt: new Date(c.date),
+    listCommits: vi.fn(async () => ({ commits: [commit], tipSha: "tip" })),
+    readDiff: vi.fn(async () => diff),
+    ...overrides,
   };
 }
-
-function makeSource(
-  commits: SourceCommit[],
-  opts: { batchSize?: number; tipSha?: string; skippedShas?: string[] } = {},
-): CommitSource {
-  const skipped = new Set(opts.skippedShas ?? []);
-  return {
-    batchSize: opts.batchSize ?? 50,
-    listCommits: vi.fn(async () => ({ commits, tipSha: opts.tipSha ?? "tip123" })),
-    toChunkInputs: vi.fn(async (batch: SourceCommit[], ctx) => {
-      const inputs = batch
-        .filter((c) => !skipped.has(c.sha))
-        .map((c) => input(c, ctx.projectId, ctx.branch));
-      return { inputs, skipped: batch.length - inputs.length };
-    }),
-  };
-}
-
-const call = { owner: "owner", repo: "repo", branch: "main", projectId: "proj" };
 
 beforeEach(() => {
-  mockGetChunksByShas.mockReset().mockResolvedValue(new Map());
-  mockUpsertCommitChunks.mockReset().mockResolvedValue(undefined);
-  mockEmbedNewChunks.mockReset().mockResolvedValue({ embedded: 1 });
+  mockGetByKey.mockReset().mockResolvedValue(null);
+  mockFindReusable.mockReset().mockResolvedValue(null);
+  mockUpsert.mockReset().mockResolvedValue(undefined);
+  mockResolveModel.mockReset().mockResolvedValue(model);
+  mockSummarize
+    .mockReset()
+    .mockResolvedValue({ summary: "Centralizes auth validation.", model: "test/summarizer" });
+  mockResolveSpace.mockReset().mockResolvedValue(space);
+  mockEmbed.mockReset().mockResolvedValue([[0.1, 0.2]]);
 });
 
 describe("ingestCommits", () => {
-  it("enriches and upserts new commits, then embeds", async () => {
-    const source = makeSource([commit("a")], { tipSha: "tip123" });
+  it("summarizes, embeds, and stores a new commit", async () => {
+    const result = await ingestCommits(source(), call);
 
-    const result = await ingestCommits(source, call);
-
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
-    expect(mockUpsertCommitChunks).toHaveBeenCalledWith([
-      input(commit("a"), "proj", "main"),
-    ]);
-    expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
-  });
-
-  it("keeps ingested chunks when embedding fails", async () => {
-    mockEmbedNewChunks.mockRejectedValue(
-      new Error("401 Missing Authentication header"),
+    expect(mockSummarize).toHaveBeenCalledOnce();
+    const summary = "Centralizes auth validation.";
+    const contentHash = contentHashOf(
+      commitEmbeddingText(diff.filesChanged, summary),
     );
-    const source = makeSource([commit("a")]);
-
-    const result = await ingestCommits(source, call);
-
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 1, tipSha: "tip123" });
-    expect(mockUpsertCommitChunks).toHaveBeenCalled();
-    expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: "project-1",
+        branch: "main",
+        commitSha: "abc123",
+        message: "feat: lol",
+        summary,
+        summaryVersion: "v1",
+        summaryModel: "test/summarizer",
+        diffHash: "diff-hash",
+        filesChanged: ["src/auth/session.ts"],
+        contentHash,
+        embedding: { vector: [0.1, 0.2], ...space },
+      }),
+    );
+    expect(result).toEqual({
+      commitsFound: 1,
+      chunksWritten: 1,
+      summarized: 1,
+      embedded: 1,
+      tipSha: "tip",
+    });
   });
 
-  it("dedupes against stored chunks before enriching them", async () => {
-    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as never]]));
-    const source = makeSource([commit("a")]);
+  it("reuses a summary from another branch", async () => {
+    mockFindReusable.mockResolvedValue({
+      summary: "Reused auth summary.",
+      summaryModel: "test/summarizer",
+      embedding: null,
+      embeddingHash: null,
+      embeddingProvider: null,
+      embeddingModel: null,
+    });
 
-    const result = await ingestCommits(source, call);
+    await ingestCommits(source(), call);
 
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
-    expect(source.toChunkInputs).not.toHaveBeenCalled();
-    expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
+    expect(mockSummarize).not.toHaveBeenCalled();
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: "Reused auth summary." }),
+    );
   });
 
-  it("batches enrichment and upsert by source.batchSize", async () => {
-    const source = makeSource([commit("a"), commit("b"), commit("c")], { batchSize: 2 });
+  it("skips summarization and embedding when the row is current", async () => {
+    const summary = "Current summary.";
+    const contentHash = contentHashOf(
+      commitEmbeddingText(diff.filesChanged, summary),
+    );
+    mockGetByKey.mockResolvedValue({
+      diffHash: "diff-hash",
+      summaryVersion: "v1",
+      summaryModel: "test/summarizer",
+      summary,
+      embeddingHash: contentHash,
+      embeddingProvider: space.provider,
+      embeddingModel: space.model,
+    });
 
-    await ingestCommits(source, call);
+    const result = await ingestCommits(source(), call);
 
-    expect(source.toChunkInputs).toHaveBeenCalledTimes(2);
-    expect(mockUpsertCommitChunks).toHaveBeenCalledTimes(2);
-    const sizes = mockUpsertCommitChunks.mock.calls.map((c) => c[0].length);
-    expect(sizes).toEqual([2, 1]);
+    expect(mockSummarize).not.toHaveBeenCalled();
+    expect(mockEmbed).not.toHaveBeenCalled();
+    expect(mockUpsert.mock.calls[0][0]).not.toHaveProperty("embedding");
+    expect(result.embedded).toBe(1);
   });
 
-  it("re-checks pending embeddings when the source writes nothing", async () => {
-    const source = makeSource([commit("a")], { skippedShas: ["a"] });
+  it("skips commits with no summarizable diff", async () => {
+    const result = await ingestCommits(
+      source({ readDiff: vi.fn(async () => null) }),
+      call,
+    );
 
-    const result = await ingestCommits(source, call);
-
-    expect(result).toEqual({ commitsFound: 1, chunksWritten: 0, tipSha: "tip123" });
-    expect(mockUpsertCommitChunks).not.toHaveBeenCalled();
-    // Chunks may exist from an earlier run where the provider was unavailable.
-    expect(mockEmbedNewChunks).toHaveBeenCalledWith("proj");
+    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(result.chunksWritten).toBe(0);
   });
 
-  it("reports commitsFound from the full list, not just new commits", async () => {
-    mockGetChunksByShas.mockResolvedValue(new Map([["a", {} as never]]));
-    const source = makeSource([commit("a"), commit("b")]);
+  it("keeps the summary when embedding fails", async () => {
+    mockEmbed.mockRejectedValue(new Error("provider down"));
 
-    const result = await ingestCommits(source, call);
+    const result = await ingestCommits(source(), call);
 
-    expect(result.commitsFound).toBe(2);
-    expect(result.chunksWritten).toBe(1);
-  });
-
-  it("emits commits → ingest → embedding progress stages in order", async () => {
-    const stages: string[] = [];
-    const source = makeSource([commit("a")], { batchSize: 1 });
-
-    await ingestCommits(source, { ...call, onProgress: (stage) => stages.push(stage) });
-
-    expect(stages).toEqual(["commits", "ingest", "embedding"]);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ embedding: expect.anything() }),
+    );
+    expect(result.summarized).toBe(1);
+    expect(result.embedded).toBe(0);
   });
 });

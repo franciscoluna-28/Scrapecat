@@ -3,19 +3,13 @@ import {
   gitRepositoryService,
   type GitRepositoryHandle,
 } from "@/rag/git/git-repository-service";
-import { classifyCommit } from "@/rag/indexing/guardrail";
-import { type CommitChunkInput } from "@/rag/indexing/commit-chunks-store";
-import type { CommitSource, SourceCommit, SourceContext } from "@/rag/indexing/source";
-
-const BATCH_SIZE = 50;
+import type { CommitDiff } from "@/rag/git/commit-diff";
+import type { CommitSource, SourceCommit } from "@/rag/indexing/source";
 
 /**
- * Self-hosted commit source: opens a throwaway git workspace, reads the commit
- * window with native `git log`, and derives each batch's file scopes through
- * the repository service. Callers must `dispose()` the source when the job ends.
- *
- * Guardrail runs here (and only here): empty/no-op commits are skipped and
- * uninformative or contradictory messages are flagged in `metadata.validation`.
+ * Self-hosted commit source: opens a throwaway git workspace and exposes the
+ * commit window plus a diff reader. Callers must `dispose()` the source when
+ * the job ends.
  */
 export function createGitCommitSource(opts: {
   gitProvider: GitProviderId;
@@ -32,8 +26,6 @@ export function createGitCommitSource(opts: {
   }
 
   return {
-    batchSize: BATCH_SIZE,
-
     async listCommits({ since, until }) {
       const active = await gitRepositoryService.open({
         gitProvider,
@@ -43,43 +35,20 @@ export function createGitCommitSource(opts: {
       });
       repository = active;
       const commits = await active.listCommits({ since, until });
-      return { commits, tipSha: active.tipSha };
+      return {
+        commits: commits.map((commit) => ({
+          ...commit,
+          url: active.commitUrl(commit.sha),
+        })),
+        tipSha: active.tipSha,
+      };
     },
 
-    async toChunkInputs(commits: SourceCommit[], ctx: SourceContext) {
-      const active = requireRepository();
-      const diffBySha = await active.changedFiles(commits.map((c) => c.sha));
-
-      const inputs: CommitChunkInput[] = [];
-      let skipped = 0;
-
-      for (const c of commits) {
-        const stats = diffBySha.get(c.sha);
-        if (!stats) {
-          skipped += 1;
-          continue;
-        }
-        const guard = classifyCommit({ message: c.message, filesChanged: stats.filesChanged });
-        if (guard.status === "skipped") {
-          skipped += 1;
-          continue;
-        }
-        inputs.push({
-          projectId: ctx.projectId,
-          commitSha: c.sha,
-          branch: ctx.branch,
-          commitMessage: c.message,
-          author: c.author,
-          metadata: {
-            filesChanged: stats.files.map((f) => f.filepath),
-            commitUrl: active.commitUrl(c.sha),
-            validation: { status: guard.status, notes: guard.notes },
-          },
-          committedAt: new Date(c.date),
-        });
-      }
-
-      return { inputs, skipped };
+    async readDiff(commit: SourceCommit): Promise<CommitDiff | null> {
+      return requireRepository().diff({
+        sha: commit.sha,
+        parentSha: commit.parentSha ?? null,
+      });
     },
 
     async dispose() {

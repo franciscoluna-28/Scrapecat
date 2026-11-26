@@ -239,6 +239,20 @@
       "when": 1795662607288,
       "tag": "0033_salty_firedrake",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795721564277,
+      "tag": "0034_zippy_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795721578077,
+      "tag": "0035_fuzzy_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

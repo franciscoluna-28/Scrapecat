@@ -78,7 +78,7 @@ export async function embedTexts(
     if (!emb) throw new Error(`Embedding response missing index ${i}`);
     if (emb.length !== EMBEDDING_DIMENSIONS) {
       throw new Error(
-        `Embedding model "${model}" returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS} (commit_chunks.embedding is vector(${EMBEDDING_DIMENSIONS}))`,
+        `Embedding model "${model}" returned ${emb.length} dims, expected ${EMBEDDING_DIMENSIONS} (commit_embeddings.embedding is vector(${EMBEDDING_DIMENSIONS}))`,
       );
     }
     return emb;

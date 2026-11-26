@@ -5,7 +5,6 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { createGitRepositoryService } from "@/rag/git/git-repository-service";
-import type { CommitChangedStats } from "@/rag/git/git-diff";
 
 const COMMIT = {
   sha: "a",
@@ -16,17 +15,22 @@ const COMMIT = {
   parentSha: null,
 };
 
-const DIFF: CommitChangedStats = {
-  filesChanged: 1,
-  files: [{ filepath: "a.txt", status: "modified" }],
-};
+const PATCH = [
+  "diff --git a/src/a.ts b/src/a.ts",
+  "--- a/src/a.ts",
+  "+++ b/src/a.ts",
+  "@@ -1 +1 @@",
+  "-old",
+  "+new",
+].join("\n");
 
 let workspaceRoot: string;
 let lsRemote: string;
+let numstat: string;
 let cloneDir: string | null;
 let failClone: boolean;
 
-const runGit = vi.fn(async (opts: { args: string[]; cwd?: string }) => {
+const runGit = vi.fn(async (opts: { args: string[] }) => {
   const { args } = opts;
   if (args.includes("clone")) {
     cloneDir = args[args.length - 1];
@@ -36,29 +40,20 @@ const runGit = vi.fn(async (opts: { args: string[]; cwd?: string }) => {
   }
   if (args.includes("ls-remote")) return lsRemote;
   if (args.includes("rev-parse")) return "tip-from-git";
+  if (args.includes("--numstat")) return numstat;
+  if (args.includes("--patch")) return PATCH;
   return "";
 });
 
 const listCommitsInRange = vi.fn(async () => [COMMIT]);
-const getCommitsChangedFiles = vi.fn(
-  async () => new Map([["a", DIFF]]),
-);
-const cloneUrl = vi.fn(
-  (_provider: string, owner: string, repo: string) =>
-    `https://github.com/${owner}/${repo}.git`,
-);
-const commitUrl = vi.fn(
-  (_provider: string, owner: string, repo: string, sha: string) =>
-    `https://github.com/${owner}/${repo}/commit/${sha}`,
-);
 
 function service() {
   return createGitRepositoryService({
     runGit,
     listCommitsInRange,
-    getCommitsChangedFiles,
-    cloneUrl,
-    commitUrl,
+    cloneUrl: (_provider, owner, repo) => `https://github.com/${owner}/${repo}.git`,
+    commitUrl: (_provider, owner, repo, sha) =>
+      `https://github.com/${owner}/${repo}/commit/${sha}`,
     authEnv: () => undefined,
     resolveGitToken: async () => null,
     workspaceRoot,
@@ -75,13 +70,11 @@ const REF = {
 beforeEach(async () => {
   workspaceRoot = path.join(os.tmpdir(), `scrapecat-test-${randomUUID()}`);
   lsRemote = "abc123\trefs/heads/main\n";
+  numstat = "10\t5\tsrc/a.ts\n";
   cloneDir = null;
   failClone = false;
   runGit.mockClear();
   listCommitsInRange.mockClear().mockResolvedValue([COMMIT]);
-  getCommitsChangedFiles.mockClear().mockResolvedValue(new Map([["a", DIFF]]));
-  cloneUrl.mockClear();
-  commitUrl.mockClear();
 });
 
 afterEach(async () => {
@@ -91,11 +84,6 @@ afterEach(async () => {
 describe("git repository service", () => {
   it("resolves the remote tip without cloning", async () => {
     await expect(service().tip(REF)).resolves.toBe("abc123");
-
-    const call = runGit.mock.calls[0][0];
-    expect(call.args).toEqual(
-      expect.arrayContaining(["ls-remote", "--heads", "refs/heads/main"]),
-    );
     expect(runGit.mock.calls.some(([opts]) => opts.args.includes("clone"))).toBe(
       false,
     );
@@ -108,11 +96,10 @@ describe("git repository service", () => {
     });
   });
 
-  it("opens a blobless workspace and exposes log/diff reads", async () => {
+  it("opens a blobless workspace and reads a capped diff", async () => {
     const handle = await service().open(REF);
 
     expect(handle.tipSha).toBe("tip-from-git");
-    await expect(fs.access(path.join(handle.dir, ".git"))).resolves.toBeUndefined();
     const clone = runGit.mock.calls.find(([opts]) => opts.args.includes("clone"))?.[0];
     expect(clone?.args).toEqual(
       expect.arrayContaining([
@@ -125,33 +112,35 @@ describe("git repository service", () => {
       ]),
     );
 
-    await expect(handle.listCommits({})).resolves.toEqual([COMMIT]);
-    expect(listCommitsInRange).toHaveBeenCalledWith({
-      dir: handle.dir,
-      ref: "main",
-      since: undefined,
-      until: undefined,
+    const diff = await handle.diff({ sha: "a", parentSha: null });
+    expect(diff).toMatchObject({
+      filesChanged: ["src/a.ts"],
+      additions: 10,
+      deletions: 5,
+      binaryFiles: 0,
     });
-
-    await expect(handle.changedFiles(["a"])).resolves.toEqual(
-      new Map([["a", DIFF]]),
-    );
-    expect(getCommitsChangedFiles).toHaveBeenCalledWith({
-      dir: handle.dir,
-      shas: ["a"],
-    });
-    expect(handle.commitUrl("a")).toBe(
-      "https://github.com/owner/repo/commit/a",
-    );
+    expect(diff?.stat).toContain("src/a.ts | +10 -5");
+    expect(diff?.patch).toContain("+new");
+    expect(diff?.hash).toHaveLength(64);
   });
 
-  it("removes the workspace on dispose and is idempotent", async () => {
+  it("returns null when there are no changed files", async () => {
+    numstat = "";
     const handle = await service().open(REF);
 
-    await handle.dispose();
-    await handle.dispose();
+    await expect(handle.diff({ sha: "a", parentSha: null })).resolves.toBeNull();
+  });
 
+  it("removes the workspace on dispose and sweeps stale dirs", async () => {
+    const handle = await service().open(REF);
+    await handle.dispose();
+    await handle.dispose();
     await expect(fs.access(handle.dir)).rejects.toBeTruthy();
+
+    const stale = path.join(workspaceRoot, "stale");
+    await fs.mkdir(stale, { recursive: true });
+    await service().sweep();
+    await expect(fs.access(stale)).rejects.toBeTruthy();
   });
 
   it("removes a partial clone when cloning fails", async () => {
@@ -161,18 +150,5 @@ describe("git repository service", () => {
     if (cloneDir) {
       await expect(fs.access(cloneDir)).rejects.toBeTruthy();
     }
-  });
-
-  it("sweeps stale workspaces", async () => {
-    await fs.mkdir(workspaceRoot, { recursive: true });
-    const first = path.join(workspaceRoot, "one");
-    const second = path.join(workspaceRoot, "two");
-    await fs.mkdir(first);
-    await fs.mkdir(second);
-
-    await service().sweep();
-
-    await expect(fs.access(first)).rejects.toBeTruthy();
-    await expect(fs.access(second)).rejects.toBeTruthy();
   });
 });

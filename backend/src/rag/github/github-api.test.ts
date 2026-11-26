@@ -90,12 +90,32 @@ describe("createGithubApiClient", () => {
       shas: ["a", "b"],
     });
 
-    expect(map.get("a")).toEqual([{ filepath: "a.txt", status: "modified" }]);
-    expect(map.get("b")).toEqual([{ filepath: "b.txt", status: "modified" }]);
+    expect(map.get("a")).toEqual([
+      {
+        filepath: "a.txt",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        patch: undefined,
+        binary: true,
+      },
+    ]);
+    expect(map.get("b")).toEqual([
+      {
+        filepath: "b.txt",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        patch: undefined,
+        binary: true,
+      },
+    ]);
   });
 
-  it("skips file scopes without a token", async () => {
-    const request = vi.fn();
+  it("fetches file scopes anonymously when no token is present", async () => {
+    const request = vi.fn(async () => ({
+      data: { files: [{ filename: "a.txt", status: "modified" }] },
+    }));
     const client = makeClient(request, null);
 
     const map = await client.getChangedFilesForShas({
@@ -104,8 +124,17 @@ describe("createGithubApiClient", () => {
       shas: ["a"],
     });
 
-    expect(map.size).toBe(0);
-    expect(request).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(map.get("a")).toEqual([
+      {
+        filepath: "a.txt",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        patch: undefined,
+        binary: true,
+      },
+    ]);
   });
 
   it("swallows individual file-scope failures", async () => {
@@ -122,6 +151,15 @@ describe("createGithubApiClient", () => {
     });
 
     expect(map.has("a")).toBe(false);
-    expect(map.get("b")).toEqual([{ filepath: "b.txt", status: "added" }]);
+    expect(map.get("b")).toEqual([
+      {
+        filepath: "b.txt",
+        status: "added",
+        additions: 0,
+        deletions: 0,
+        patch: undefined,
+        binary: true,
+      },
+    ]);
   });
 });

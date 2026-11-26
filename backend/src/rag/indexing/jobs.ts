@@ -2,9 +2,9 @@ import { env } from "@/shared/config/env";
 import { ingestCommits, type IngestProgress } from "@/rag/indexing/ingest";
 import { createGitCommitSource } from "@/rag/indexing/sources/git-source";
 import { createApiCommitSource } from "@/rag/indexing/sources/api-source";
-import { commitChunksStore } from "@/rag/indexing/commit-chunks-store";
+import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 import { branchSyncStore } from "@/rag/indexing/branch-sync-store";
-import { reindexAllProjects } from "@/rag/indexing/embed-chunks";
+import { reindexAllProjects } from "@/rag/indexing/reindex-embeddings";
 import { registerJobHandler } from "@/shared/queue";
 import { JOB_NAMES } from "@/shared/queue/jobs";
 import type { GitProviderId } from "@/shared/integrations/git-provider";
@@ -36,6 +36,7 @@ registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report) => {
   if (env.isDemoMode) {
     const source = createApiCommitSource({ gitProvider, owner, repo, branch });
     return ingestCommits(source, {
+      gitProvider,
       owner,
       repo,
       branch,
@@ -49,6 +50,7 @@ registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report) => {
   const source = createGitCommitSource({ gitProvider, owner, repo, branch });
   try {
     const result = await ingestCommits(source, {
+      gitProvider,
       owner,
       repo,
       branch,
@@ -57,7 +59,10 @@ registerJobHandler(JOB_NAMES.ingestBranch, async (payload, report) => {
       requestId,
       onProgress,
     });
-    const lastCommitAt = await commitChunksStore.getLatestCommitDate({ projectId, branch });
+    const lastCommitAt = await commitEmbeddingsStore.getLatestCommitDate({
+      repoId: projectId,
+      branch,
+    });
     await branchSyncStore.markIngested({
       projectId,
       branch,

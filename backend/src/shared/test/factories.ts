@@ -1,10 +1,6 @@
 import { vi } from "vitest";
 import type { ChatCitation } from "@/db/schema";
-import type {
-  CommitChunkInput,
-  CommitSearchResult,
-} from "@/rag/indexing/commit-chunks-store";
-import type { SourceCommit } from "@/rag/indexing/ingest";
+import type { SourceCommit } from "@/rag/indexing/source";
 import type { AISettingsInput } from "@/api/settings/schemas";
 import type { AISettings } from "@/api/settings/services";
 import type { GitProvider } from "@/shared/integrations/git-provider/provider";
@@ -73,42 +69,6 @@ export function makeSourceCommit(
     author: "dev",
     date: DEFAULT_DATE.toISOString(),
     parentSha: null,
-    ...overrides,
-  };
-}
-
-export function makeChunkInput(
-  overrides: Partial<CommitChunkInput> = {},
-): CommitChunkInput {
-  return {
-    projectId: "project-1",
-    commitSha: "abc123",
-    branch: "main",
-    commitMessage: "fix: handle empty commit",
-    author: "dev",
-    metadata: {
-      filesChanged: ["src/chat/routes.ts"],
-      commitUrl: "https://github.com/owner/repo/commit/abc123",
-    },
-    committedAt: DEFAULT_DATE,
-    ...overrides,
-  };
-}
-
-export function makeChunkSearchResult(
-  overrides: Partial<CommitSearchResult> = {},
-): CommitSearchResult {
-  return {
-    id: "chunk-1",
-    commitSha: "abc123",
-    commitMessage: "fix: handle empty commit",
-    author: "dev",
-    committedAt: DEFAULT_DATE,
-    metadata: {
-      filesChanged: ["src/chat/routes.ts"],
-      commitUrl: "https://github.com/owner/repo/commit/abc123",
-    },
-    distance: 0.2,
     ...overrides,
   };
 }

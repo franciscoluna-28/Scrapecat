@@ -4,17 +4,17 @@ import {
   githubApiClient,
   type GithubApiClient,
 } from "@/rag/github/github-api";
-import { type CommitChunkInput } from "@/rag/indexing/commit-chunks-store";
-import type { CommitSource, SourceContext } from "@/rag/indexing/source";
+import {
+  buildDiff,
+  isExcludedPath,
+  type CommitDiff,
+  type CommitDiffFile,
+} from "@/rag/git/commit-diff";
+import type { CommitSource, SourceCommit } from "@/rag/indexing/source";
 
 /**
- * Demo / serverless commit source: reads commits from the public GitHub REST
- * API via Octokit instead of a local `git` archive. No `git` binary, no
- * persistent disk — only Postgres and outbound HTTPS.
- *
- * Public repos only. File scopes are best-effort and use a single batch, so the
- * whole window upserts once (matching the previous API path). No guardrail runs
- * here — demo chunks carry no `metadata.validation`.
+ * Demo / serverless commit source: commits and file patches come from the
+ * public GitHub REST API. No `git` binary, no disk.
  */
 export function createApiCommitSource(
   opts: {
@@ -31,36 +31,54 @@ export function createApiCommitSource(
   }
 
   return {
-    batchSize: Infinity,
-
     async listCommits({ since, until }) {
-      const commits = await timed("ingestApi.listCommits", { owner, repo, branch }, () =>
-        api.listCommits({ owner, repo, branch, since, until }),
+      const commits = await timed(
+        "ingestApi.listCommits",
+        { owner, repo, branch },
+        () => api.listCommits({ owner, repo, branch, since, until }),
       );
-      return { commits, tipSha: commits[0]?.sha ?? "" };
+      return {
+        commits: commits.map((commit) => ({
+          ...commit,
+          url: commit.url || commitUrl(gitProvider, owner, repo, commit.sha),
+        })),
+        tipSha: commits[0]?.sha ?? "",
+      };
     },
 
-    async toChunkInputs(commits, ctx: SourceContext) {
+    async readDiff(commit: SourceCommit): Promise<CommitDiff | null> {
       const filesBySha = await timed(
-        "ingestApi.getChangedFiles",
-        { owner, repo, branch, count: commits.length },
-        () => api.getChangedFilesForShas({ owner, repo, shas: commits.map((c) => c.sha) }),
+        "ingestApi.getCommitDiff",
+        { owner, repo, sha: commit.sha },
+        () =>
+          api.getChangedFilesForShas({
+            owner,
+            repo,
+            shas: [commit.sha],
+          }),
       );
+      const raw = filesBySha.get(commit.sha) ?? [];
+      const filtered = raw.filter((file) => !isExcludedPath(file.filepath));
+      if (filtered.length === 0) return null;
 
-      const inputs: CommitChunkInput[] = commits.map((c) => ({
-        projectId: ctx.projectId,
-        commitSha: c.sha,
-        branch: ctx.branch,
-        commitMessage: c.message,
-        author: c.author,
-        metadata: {
-          filesChanged: (filesBySha.get(c.sha) ?? []).map((f) => f.filepath),
-          commitUrl: c.url ?? commitUrl(gitProvider, owner, repo, c.sha),
-        },
-        committedAt: new Date(c.date),
+      const files: CommitDiffFile[] = filtered.map((file) => ({
+        path: file.filepath,
+        additions: file.additions,
+        deletions: file.deletions,
+        binary: file.binary,
       }));
+      const patch = filtered
+        .filter((file) => file.patch)
+        .map(
+          (file) =>
+            `diff --git a/${file.filepath} b/${file.filepath}\n` +
+            `--- a/${file.filepath}\n` +
+            `+++ b/${file.filepath}\n` +
+            `${file.patch}`,
+        )
+        .join("\n");
 
-      return { inputs, skipped: 0 };
+      return buildDiff(files, patch);
     },
   };
 }

@@ -13,9 +13,11 @@ import {
   type LocalCommit,
 } from "@/rag/git/git-reader";
 import {
-  getCommitsChangedFiles,
-  type CommitChangedStats,
-} from "@/rag/git/git-diff";
+  buildDiff,
+  parseNumstat,
+  DIFF_PATHSPECS,
+  type CommitDiff,
+} from "@/rag/git/commit-diff";
 
 export type GitRepositoryRef = {
   gitProvider: GitProviderId;
@@ -32,7 +34,10 @@ export type GitRepositoryHandle = {
     since?: Date;
     until?: Date;
   }): Promise<LocalCommit[]>;
-  changedFiles(shas: string[]): Promise<Map<string, CommitChangedStats>>;
+  diff(commit: {
+    sha: string;
+    parentSha: string | null;
+  }): Promise<CommitDiff | null>;
   commitUrl(sha: string): string;
   dispose(): Promise<void>;
 };
@@ -44,7 +49,6 @@ type GitRepositoryServiceDeps = {
   commitUrl: typeof commitUrl;
   resolveGitToken: typeof resolveGitToken;
   listCommitsInRange: typeof listCommitsInRange;
-  getCommitsChangedFiles: typeof getCommitsChangedFiles;
   workspaceRoot: string;
 };
 
@@ -58,7 +62,6 @@ const defaultDeps: GitRepositoryServiceDeps = {
   commitUrl,
   resolveGitToken,
   listCommitsInRange,
-  getCommitsChangedFiles,
   workspaceRoot: path.join(os.tmpdir(), "scrapecat"),
 };
 
@@ -171,11 +174,44 @@ export function createGitRepositoryService(
               until: opts.until,
             }),
         ),
-      changedFiles: (shas) =>
+      diff: (commit) =>
         timed(
-          "ingest.getChangedFiles",
-          { owner, repo, branch, count: shas.length },
-          () => deps.getCommitsChangedFiles({ dir, shas }),
+          "ingest.getCommitDiff",
+          { owner, repo, branch, sha: commit.sha },
+          async () => {
+            const baseArgs = commit.parentSha
+              ? ["diff", "--no-renames", commit.parentSha, commit.sha]
+              : [
+                  "diff-tree",
+                  "--root",
+                  "--no-commit-id",
+                  "--no-renames",
+                  "-r",
+                  commit.sha,
+                ];
+            const pathspecs = ["--", ...DIFF_PATHSPECS];
+            const numstat = await deps.runGit({
+              cwd: dir,
+              args: [...baseArgs, "--numstat", "--no-color", "--no-ext-diff", ...pathspecs],
+              label: "git diff --numstat",
+            });
+            const files = parseNumstat(numstat);
+            if (files.length === 0) return null;
+
+            const patch = await deps.runGit({
+              cwd: dir,
+              args: [
+                ...baseArgs,
+                "--patch",
+                "--unified=3",
+                "--no-color",
+                "--no-ext-diff",
+                ...pathspecs,
+              ],
+              label: "git diff --patch",
+            });
+            return buildDiff(files, patch);
+          },
         ),
       commitUrl: (sha) => deps.commitUrl(gitProvider, owner, repo, sha),
       async dispose() {

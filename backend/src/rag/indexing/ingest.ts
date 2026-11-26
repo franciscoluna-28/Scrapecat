@@ -1,14 +1,32 @@
+import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logger";
-import { timed } from "@/shared/timing";
 import {
-  commitChunksStore,
-  type CommitChunkInput,
-} from "@/rag/indexing/commit-chunks-store";
-import { embedNewChunks } from "@/rag/indexing/embed-chunks";
+  commitUrl,
+  type GitProviderId,
+} from "@/shared/integrations/git-provider";
+import { contentHashOf, commitEmbeddingText } from "@/shared/utils";
+import {
+  commitEmbeddingsStore,
+  type EmbeddingWrite,
+} from "@/rag/indexing/commit-embeddings-store";
+import {
+  commitSummaryService,
+  COMMIT_SUMMARY_VERSION,
+  fallbackCommitSummary,
+} from "@/rag/indexing/commit-summary-service";
+import {
+  embedTexts,
+  resolveEmbeddingSpace,
+  type EmbeddingSpace,
+} from "@/rag/indexing/embeddings";
+import type { ResolvedChatModel } from "@/rag/answer/ai";
+import type { CommitSource, SourceCommit } from "@/rag/indexing/source";
 
 export type IngestResult = {
   commitsFound: number;
   chunksWritten: number;
+  summarized: number;
+  embedded: number;
   tipSha: string;
 };
 
@@ -19,63 +37,40 @@ export type IngestProgress = (
   total?: number,
 ) => void;
 
-/** A commit as seen by a source, before file scope / guardrail are applied. */
-export type SourceCommit = {
-  sha: string;
-  message: string;
-  author: string;
-  date: string;
-  parentSha?: string | null;
-  /** Provider commit URL when the source has one (API); git builds its own. */
-  url?: string;
-};
+async function resolveSpaceSafe(): Promise<EmbeddingSpace | null> {
+  try {
+    return await resolveEmbeddingSpace();
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error)?.message ?? String(error) },
+      "embedding space unavailable; summaries will be stored without vectors",
+    );
+    return null;
+  }
+}
 
-export type SourceContext = {
-  owner: string;
-  repo: string;
-  branch: string;
-  projectId: string;
-};
-
-/**
- * A place commits come from. The orchestrator (`ingestCommits`) owns the common
- * pipeline — dedupe by SHA, batched upsert, embedding, progress, logging — while
- * each source owns only how commits are listed and turned into chunk rows.
- *
- * The source-specific parts are deliberate and preserved:
- * - `listCommits` also resolves the source's own `tipSha`.
- * - `toChunkInputs` owns file-scope fetching and (git-only) guardrail.
- * - `batchSize` controls upsert granularity: 50 for git, unbounded for the API
- *   path (a single upsert, matching its previous behavior).
- */
-export interface CommitSource {
-  batchSize: number;
-  listCommits(opts: {
-    since?: Date;
-    until?: Date;
-  }): Promise<{ commits: SourceCommit[]; tipSha: string }>;
-  toChunkInputs(
-    commits: SourceCommit[],
-    ctx: SourceContext,
-  ): Promise<{ inputs: CommitChunkInput[]; skipped: number }>;
-  /** Releases source-owned resources (e.g. the ephemeral git clone). */
-  dispose?(): Promise<void>;
+async function resolveSummaryModelSafe(): Promise<ResolvedChatModel | null> {
+  try {
+    return await commitSummaryService.resolveModel();
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error)?.message ?? String(error) },
+      "summary model unavailable; using structural summaries",
+    );
+    return null;
+  }
 }
 
 /**
- * Ingests the commit window for a repo branch into `commit_chunks`.
+ * Ingests the commit window: diff -> summary -> embedding -> commit_embeddings.
  *
- * 1. List commits from the source within `[startDate, endDate]`.
- * 2. Dedupe by SHA against already-stored chunks — *before* any file-scope work,
- *    so existing commits are never re-diffed.
- * 3. Enrich + upsert in `source.batchSize` batches (git: 50; API: one batch).
- * 4. Trigger embedding when anything was written.
- *
- * `onProgress` reports stages so the caller can persist + stream live status.
+ * The diff is the source of truth; the message is a gated hint inside the
+ * summary service. Embedding failures never fail ingestion.
  */
 export async function ingestCommits(
   source: CommitSource,
   opts: {
+    gitProvider: GitProviderId;
     owner: string;
     repo: string;
     branch: string;
@@ -87,103 +82,176 @@ export async function ingestCommits(
   },
 ): Promise<IngestResult> {
   const { owner, repo, branch, projectId, startDate, endDate, onProgress } = opts;
-  const base = { owner, repo, branch, projectId, ...(opts.requestId ? { reqId: opts.requestId } : {}) };
+  const base = {
+    owner,
+    repo,
+    branch,
+    projectId,
+    ...(opts.requestId ? { reqId: opts.requestId } : {}),
+  };
 
-  const { commits, tipSha } = await source.listCommits({ since: startDate, until: endDate });
-  onProgress?.("commits", `Found ${commits.length} commits`, commits.length, commits.length);
-
-  const existing = await timed("ingest.getChunksByShas", { ...base, shas: commits.length }, () =>
-    commitChunksStore.getChunksByShas({
-      projectId,
-      shas: commits.map((c) => c.sha),
-      branch,
-    }),
+  const { commits, tipSha } = await source.listCommits({
+    since: startDate,
+    until: endDate,
+  });
+  onProgress?.(
+    "commits",
+    `Found ${commits.length} commits`,
+    commits.length,
+    commits.length,
   );
 
-  const newCommits = commits.filter((c) => !existing.has(c.sha));
-  logger.info(
-    {
-      ...base,
-      commitsFound: commits.length,
-      alreadyStored: commits.length - newCommits.length,
-    },
-    "ingest.prepareChunks complete",
-  );
+  const space = env.EMBEDDING_ENABLED ? await resolveSpaceSafe() : null;
+  const model = await resolveSummaryModelSafe();
+  const targetModel = model?.model.id ?? null;
 
-  const batchSize = source.batchSize;
-  let chunksWritten = 0;
-  let skipped = 0;
+  let written = 0;
+  let summarized = 0;
+  let embedded = 0;
 
-  for (let i = 0; i < newCommits.length; i += batchSize) {
-    const batch = newCommits.slice(i, i + batchSize);
-    const batchStart = performance.now();
-
-    const { inputs, skipped: batchSkipped } = await source.toChunkInputs(batch, {
-      owner,
-      repo,
+  for (const commit of commits) {
+    const existing = await commitEmbeddingsStore.getByKey({
+      repoId: projectId,
       branch,
-      projectId,
+      commitSha: commit.sha,
     });
-    skipped += batchSkipped;
 
-    if (inputs.length > 0) {
-      await commitChunksStore.upsertCommitChunks(inputs);
-      chunksWritten += inputs.length;
+    const diff = await source.readDiff(commit);
+    if (!diff) continue;
+
+    let summary: string;
+    let summaryModel: string;
+    let reusable = null as Awaited<
+      ReturnType<typeof commitEmbeddingsStore.findReusableSummary>
+    >;
+
+    const canReuseExisting =
+      existing &&
+      existing.diffHash === diff.hash &&
+      existing.summaryVersion === COMMIT_SUMMARY_VERSION &&
+      existing.summary &&
+      (!targetModel || existing.summaryModel === targetModel);
+
+    if (canReuseExisting) {
+      summary = existing.summary;
+      summaryModel = existing.summaryModel;
+    } else {
+      reusable = await commitEmbeddingsStore.findReusableSummary({
+        repoId: projectId,
+        commitSha: commit.sha,
+        diffHash: diff.hash,
+        summaryVersion: COMMIT_SUMMARY_VERSION,
+        ...(targetModel ? { summaryModel: targetModel } : {}),
+        excludeBranch: branch,
+      });
+
+      if (reusable) {
+        summary = reusable.summary;
+        summaryModel = reusable.summaryModel;
+      } else if (model) {
+        const result = await commitSummaryService.summarize({
+          commit,
+          diff,
+          model,
+        });
+        summary = result.summary;
+        summaryModel = result.model;
+      } else {
+        summary = fallbackCommitSummary(diff);
+        summaryModel = "fallback";
+      }
     }
 
-    const processed = Math.min(i + batch.length, newCommits.length);
-    logger.info(
-      {
-        ...base,
-        batchIndex: i / batchSize,
-        processed,
-        total: newCommits.length,
-        chunksWritten,
-        skipped,
-        durationMs: Math.round(performance.now() - batchStart),
-      },
-      "ingest batch complete",
-    );
+    const contentText = commitEmbeddingText(diff.filesChanged, summary);
+    const contentHash = contentHashOf(contentText);
+    const existingEmbeddingIsCurrent =
+      space &&
+      existing?.embeddingHash === contentHash &&
+      existing.embeddingProvider === space.provider &&
+      existing.embeddingModel === space.model;
+
+    let embedding: EmbeddingWrite | undefined;
+    if (existingEmbeddingIsCurrent) {
+      embedded += 1;
+    } else if (
+      space &&
+      reusable?.embedding &&
+      reusable.embeddingHash === contentHash &&
+      reusable.embeddingProvider === space.provider &&
+      reusable.embeddingModel === space.model
+    ) {
+      embedding = {
+        vector: reusable.embedding,
+        provider: space.provider,
+        model: space.model,
+      };
+      embedded += 1;
+    } else if (space) {
+      try {
+        const [vector] = await embedTexts([contentText], space);
+        embedding = { vector, provider: space.provider, model: space.model };
+        embedded += 1;
+      } catch (error) {
+        logger.warn(
+          {
+            ...base,
+            sha: commit.sha,
+            err: (error as Error)?.message ?? String(error),
+          },
+          "commit embedding failed; stored summary without a vector",
+        );
+      }
+    }
+
+    await commitEmbeddingsStore.upsertCommit({
+      repoId: projectId,
+      branch,
+      commitSha: commit.sha,
+      author: commit.author || null,
+      committedAt: new Date(commit.date),
+      message: commit.message,
+      commitUrl:
+        commit.url || commitUrl(opts.gitProvider, owner, repo, commit.sha),
+      filesChanged: diff.filesChanged,
+      diffHash: diff.hash,
+      summary,
+      summaryVersion: COMMIT_SUMMARY_VERSION,
+      summaryModel,
+      contentHash,
+      ...(embedding ? { embedding } : {}),
+    });
+
+    written += 1;
+    summarized += 1;
     onProgress?.(
       "ingest",
-      `Stored ${chunksWritten} of ${newCommits.length} commits`,
-      processed,
-      newCommits.length,
+      `Stored ${written} of ${commits.length} commits`,
+      written,
+      commits.length,
     );
   }
 
-  let embedded = 0;
-  const expectsEmbedding = chunksWritten > 0;
-  if (expectsEmbedding) {
-    onProgress?.("embedding", "Embedding commit summaries");
-  }
-  // Always re-check pending embeddings: a previous run may have stored chunks
-  // before the provider was available. `embedNewChunks` no-ops when none are
-  // pending, and a failure must not fail the whole ingest.
-  try {
-    const result = await timed("ingest.embedNewChunks", base, () => embedNewChunks(projectId));
-    embedded = result.embedded;
-  } catch (error) {
-    logger.warn(
-      { ...base, err: (error as Error)?.message ?? String(error) },
-      "ingest.embeddingSkipped",
-    );
-    if (expectsEmbedding) {
-      onProgress?.("embedding", "Commits stored; embeddings will run later");
-    }
+  if (embedded > 0) {
+    onProgress?.("embedding", `Embedded ${embedded} commits`);
   }
 
   logger.info(
     {
       ...base,
       commitsFound: commits.length,
-      chunksWritten,
-      skipped,
+      chunksWritten: written,
+      summarized,
       embedded,
       tipSha,
     },
     "ingest complete",
   );
 
-  return { commitsFound: commits.length, chunksWritten, tipSha };
+  return {
+    commitsFound: commits.length,
+    chunksWritten: written,
+    summarized,
+    embedded,
+    tipSha,
+  };
 }
