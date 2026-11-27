@@ -2203,6 +2203,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/telemetry/ingestion-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List recent ingestion runs and a windowed summary (runs, commits, embedding input/output tokens) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    windowDays?: number;
+                    projectId?: string;
+                    jobType?: "ingest-branch" | "reindex-embeddings";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            summary: {
+                                windowDays: number;
+                                runs: number;
+                                failedRuns: number;
+                                commitsProcessed: number;
+                                embeddingsProcessed: number;
+                                avgDurationMs: number | null;
+                                embeddingInputTokens: number | null;
+                                embeddingOutputTokens: number | null;
+                            };
+                            runs: {
+                                id: string;
+                                jobType: "ingest-branch" | "reindex-embeddings";
+                                status: "succeeded" | "failed";
+                                projectId: string | null;
+                                branch: string | null;
+                                repositoryName: string | null;
+                                providerOwner: string | null;
+                                gitProvider: ("github" | "gitlab") | null;
+                                /** Format: date-time */
+                                startedAt: string;
+                                /** Format: date-time */
+                                finishedAt: string;
+                                durationMs: number;
+                                gitMs: number | null;
+                                dbMs: number | null;
+                                embeddingMs: number | null;
+                                commitsFound: number | null;
+                                commitsWritten: number | null;
+                                commitsEmbedded: number | null;
+                                embeddingProvider: string | null;
+                                embeddingModel: string | null;
+                                embeddingInputTokens: number | null;
+                                embeddingOutputTokens: number | null;
+                                errorCode: string | null;
+                                errorMessage: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
