@@ -37,9 +37,9 @@ export type CommitEmbeddingInput = {
   commitUrl: string;
   filesChanged: string[];
   diffHash: string;
-  summary: string;
-  summaryVersion: string;
-  summaryModel: string;
+  summary?: string;
+  summaryVersion?: string;
+  summaryModel?: string;
   contentHash: string;
   embedding?: EmbeddingWrite;
 };
@@ -53,7 +53,7 @@ export type CommitDocument = {
   message: string;
   commitUrl: string;
   filesChanged: string[];
-  summary: string;
+  summary: string | null;
   distance: number | null;
 };
 
@@ -146,9 +146,26 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           }
         : {};
 
+      const summaryValues =
+        input.summary !== undefined
+          ? {
+              summary: input.summary,
+              summaryVersion: input.summaryVersion,
+              summaryModel: input.summaryModel,
+            }
+          : {};
+      const summaryUpdate =
+        input.summary !== undefined
+          ? {
+              summary: sql`excluded.summary`,
+              summaryVersion: sql`excluded.summary_version`,
+              summaryModel: sql`excluded.summary_model`,
+            }
+          : {};
+
       // Generated columns reject `array_to_string` (not immutable), so the
       // lexical vector is written here from the same values it indexes.
-      const searchVector = sql`setweight(to_tsvector('english', ${input.summary}), 'A') || setweight(to_tsvector('simple', ${input.filesChanged.join(" ")}), 'B') || setweight(to_tsvector('english', ${input.message}), 'C')`;
+      const searchVector = sql`setweight(to_tsvector('english', ${input.summary ?? ""}), 'A') || setweight(to_tsvector('simple', ${input.filesChanged.join(" ")}), 'B') || setweight(to_tsvector('english', ${input.message}), 'C')`;
 
       await client
         .insert(commitEmbeddings)
@@ -162,11 +179,9 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           commitUrl: input.commitUrl,
           filesChanged: input.filesChanged,
           diffHash: input.diffHash,
-          summary: input.summary,
-          summaryVersion: input.summaryVersion,
-          summaryModel: input.summaryModel,
           contentHash: input.contentHash,
           searchVector,
+          ...summaryValues,
           ...embeddingValues,
         })
         .onConflictDoUpdate({
@@ -182,12 +197,10 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
             commitUrl: sql`excluded.commit_url`,
             filesChanged: sql`excluded.files_changed`,
             diffHash: sql`excluded.diff_hash`,
-            summary: sql`excluded.summary`,
-            summaryVersion: sql`excluded.summary_version`,
-            summaryModel: sql`excluded.summary_model`,
             contentHash: sql`excluded.content_hash`,
             searchVector: sql`excluded.search_vector`,
             updatedAt: sql`now()`,
+            ...summaryUpdate,
             ...embeddingUpdate,
           },
         });
@@ -227,7 +240,7 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           branch: commitEmbeddings.branch,
           commitSha: commitEmbeddings.commitSha,
           filesChanged: commitEmbeddings.filesChanged,
-          summary: commitEmbeddings.summary,
+          message: commitEmbeddings.message,
           contentHash: commitEmbeddings.contentHash,
         })
         .from(commitEmbeddings)
@@ -407,10 +420,15 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
       repoId: string;
       branch?: string;
       shas: string[];
-    }): Promise<Map<string, { summary: string; filesChanged: string[]; message: string }>> {
+    }): Promise<
+      Map<
+        string,
+        { summary: string | null; filesChanged: string[]; message: string }
+      >
+    > {
       const result = new Map<
         string,
-        { summary: string; filesChanged: string[]; message: string }
+        { summary: string | null; filesChanged: string[]; message: string }
       >();
       if (input.shas.length === 0) return result;
 

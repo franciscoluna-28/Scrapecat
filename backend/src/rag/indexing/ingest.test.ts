@@ -1,28 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetByKey = vi.fn();
-const mockFindReusable = vi.fn();
 const mockUpsert = vi.fn();
-const mockResolveModel = vi.fn();
-const mockSummarize = vi.fn();
 const mockResolveSpace = vi.fn();
 const mockEmbed = vi.fn();
 
 vi.mock("@/rag/indexing/commit-embeddings-store", () => ({
   commitEmbeddingsStore: {
     getByKey: (...args: unknown[]) => mockGetByKey(...args),
-    findReusableSummary: (...args: unknown[]) => mockFindReusable(...args),
     upsertCommit: (...args: unknown[]) => mockUpsert(...args),
   },
-}));
-
-vi.mock("@/rag/indexing/commit-summary-service", () => ({
-  commitSummaryService: {
-    resolveModel: (...args: unknown[]) => mockResolveModel(...args),
-    summarize: (...args: unknown[]) => mockSummarize(...args),
-  },
-  COMMIT_SUMMARY_VERSION: "v1",
-  fallbackCommitSummary: () => "structural fallback",
 }));
 
 vi.mock("@/rag/indexing/embeddings", () => ({
@@ -55,7 +42,6 @@ const diff: CommitDiff = {
   hash: "diff-hash",
 };
 
-const model = { provider: "openrouter", model: { id: "test/summarizer" } } as never;
 const space = { provider: "openrouter", model: "openai/text-embedding-3-small" };
 const call = {
   gitProvider: "github" as const,
@@ -64,6 +50,10 @@ const call = {
   branch: "main",
   projectId: "project-1",
 };
+
+const contentHash = contentHashOf(
+  commitEmbeddingText(diff.filesChanged, commit.message),
+);
 
 function source(overrides: Partial<CommitSource> = {}): CommitSource {
   return {
@@ -75,77 +65,40 @@ function source(overrides: Partial<CommitSource> = {}): CommitSource {
 
 beforeEach(() => {
   mockGetByKey.mockReset().mockResolvedValue(null);
-  mockFindReusable.mockReset().mockResolvedValue(null);
   mockUpsert.mockReset().mockResolvedValue(undefined);
-  mockResolveModel.mockReset().mockResolvedValue(model);
-  mockSummarize
-    .mockReset()
-    .mockResolvedValue({ summary: "Centralizes auth validation.", model: "test/summarizer" });
   mockResolveSpace.mockReset().mockResolvedValue(space);
   mockEmbed.mockReset().mockResolvedValue([[0.1, 0.2]]);
 });
 
 describe("ingestCommits", () => {
-  it("summarizes, embeds, and stores a new commit", async () => {
+  it("stores the commit with message-based embeddings and no summary", async () => {
     const result = await ingestCommits(source(), call);
 
-    expect(mockSummarize).toHaveBeenCalledOnce();
-    const summary = "Centralizes auth validation.";
-    const contentHash = contentHashOf(
-      commitEmbeddingText(diff.filesChanged, summary),
-    );
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoId: "project-1",
-        branch: "main",
-        commitSha: "abc123",
-        message: "feat: lol",
-        summary,
-        summaryVersion: "v1",
-        summaryModel: "test/summarizer",
-        diffHash: "diff-hash",
-        filesChanged: ["src/auth/session.ts"],
-        contentHash,
-        embedding: { vector: [0.1, 0.2], ...space },
-      }),
-    );
+    expect(mockUpsert).toHaveBeenCalledWith({
+      repoId: "project-1",
+      branch: "main",
+      commitSha: "abc123",
+      author: "dev",
+      committedAt: new Date("2026-01-01T00:00:00Z"),
+      message: "feat: lol",
+      commitUrl: "https://github.com/owner/repo/commit/abc123",
+      filesChanged: ["src/auth/session.ts"],
+      diffHash: "diff-hash",
+      contentHash,
+      embedding: { vector: [0.1, 0.2], ...space },
+    });
+    expect(mockUpsert.mock.calls[0][0]).not.toHaveProperty("summary");
     expect(result).toEqual({
       commitsFound: 1,
       chunksWritten: 1,
-      summarized: 1,
+      summarized: 0,
       embedded: 1,
       tipSha: "tip",
     });
   });
 
-  it("reuses a summary from another branch", async () => {
-    mockFindReusable.mockResolvedValue({
-      summary: "Reused auth summary.",
-      summaryModel: "test/summarizer",
-      embedding: null,
-      embeddingHash: null,
-      embeddingProvider: null,
-      embeddingModel: null,
-    });
-
-    await ingestCommits(source(), call);
-
-    expect(mockSummarize).not.toHaveBeenCalled();
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: "Reused auth summary." }),
-    );
-  });
-
-  it("skips summarization and embedding when the row is current", async () => {
-    const summary = "Current summary.";
-    const contentHash = contentHashOf(
-      commitEmbeddingText(diff.filesChanged, summary),
-    );
+  it("skips embedding when the stored vector is current", async () => {
     mockGetByKey.mockResolvedValue({
-      diffHash: "diff-hash",
-      summaryVersion: "v1",
-      summaryModel: "test/summarizer",
-      summary,
       embeddingHash: contentHash,
       embeddingProvider: space.provider,
       embeddingModel: space.model,
@@ -153,7 +106,6 @@ describe("ingestCommits", () => {
 
     const result = await ingestCommits(source(), call);
 
-    expect(mockSummarize).not.toHaveBeenCalled();
     expect(mockEmbed).not.toHaveBeenCalled();
     expect(mockUpsert.mock.calls[0][0]).not.toHaveProperty("embedding");
     expect(result.embedded).toBe(1);
@@ -169,7 +121,7 @@ describe("ingestCommits", () => {
     expect(result.chunksWritten).toBe(0);
   });
 
-  it("keeps the summary when embedding fails", async () => {
+  it("keeps the commit when embedding fails", async () => {
     mockEmbed.mockRejectedValue(new Error("provider down"));
 
     const result = await ingestCommits(source(), call);
@@ -177,7 +129,7 @@ describe("ingestCommits", () => {
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.not.objectContaining({ embedding: expect.anything() }),
     );
-    expect(result.summarized).toBe(1);
+    expect(result.summarized).toBe(0);
     expect(result.embedded).toBe(0);
   });
 

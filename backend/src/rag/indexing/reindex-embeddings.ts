@@ -30,7 +30,7 @@ export async function reindexAllProjects(opts?: {
       space,
     });
     for (const row of pending) {
-      const text = commitEmbeddingText(row.filesChanged, row.summary);
+      const text = commitEmbeddingText(row.filesChanged, row.message);
       const contentHash = row.contentHash ?? contentHashOf(text);
       try {
         const [vector] = await embedTexts([text], space);

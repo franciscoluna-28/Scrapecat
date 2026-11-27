@@ -253,6 +253,13 @@
       "when": 1795740966490,
       "tag": "0035_bitter_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795745782832,
+      "tag": "0036_fancy_human_fly",
+      "breakpoints": true
     }
   ]
 }

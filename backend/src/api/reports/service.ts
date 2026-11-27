@@ -180,7 +180,7 @@ function toCitation(row: CommitDocument): ChatCitation {
   return {
     commitSha: row.commitSha,
     commitMessage: row.message,
-    summary: row.summary,
+    summary: row.summary ?? undefined,
     author: row.author,
     committedAt: row.committedAt.toISOString(),
     filesChanged: row.filesChanged,

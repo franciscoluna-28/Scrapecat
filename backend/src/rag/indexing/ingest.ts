@@ -10,17 +10,11 @@ import {
   type EmbeddingWrite,
 } from "@/rag/indexing/commit-embeddings-store";
 import {
-  commitSummaryService,
-  COMMIT_SUMMARY_VERSION,
-  fallbackCommitSummary,
-} from "@/rag/indexing/commit-summary-service";
-import {
   embedTexts,
   resolveEmbeddingSpace,
   type EmbeddingSpace,
 } from "@/rag/indexing/embeddings";
-import type { ResolvedChatModel } from "@/rag/answer/ai";
-import type { CommitSource, SourceCommit } from "@/rag/indexing/source";
+import type { CommitSource } from "@/rag/indexing/source";
 
 export type IngestResult = {
   commitsFound: number;
@@ -43,7 +37,7 @@ async function resolveSpaceSafe(): Promise<EmbeddingSpace | null> {
   } catch (error) {
     logger.warn(
       { err: (error as Error)?.message ?? String(error) },
-      "embedding space unavailable; summaries will be stored without vectors",
+      "embedding space unavailable; commits will be stored without vectors",
     );
     return null;
   }
@@ -69,23 +63,12 @@ function isFatalEmbeddingError(error: unknown): boolean {
   );
 }
 
-async function resolveSummaryModelSafe(): Promise<ResolvedChatModel | null> {
-  try {
-    return await commitSummaryService.resolveModel();
-  } catch (error) {
-    logger.warn(
-      { err: (error as Error)?.message ?? String(error) },
-      "summary model unavailable; using structural summaries",
-    );
-    return null;
-  }
-}
-
 /**
- * Ingests the commit window: diff -> summary -> embedding -> commit_embeddings.
+ * Ingests the commit window: diff -> embedding -> commit_embeddings.
  *
- * The diff is the source of truth; the message is a gated hint inside the
- * summary service. Embedding failures never fail ingestion.
+ * LLM summaries are disabled for now: the original message + files are the
+ * embedding text and the summary columns stay empty. Embedding failures never
+ * fail ingestion.
  */
 export async function ingestCommits(
   source: CommitSource,
@@ -122,11 +105,8 @@ export async function ingestCommits(
   );
 
   const space = env.EMBEDDING_ENABLED ? await resolveSpaceSafe() : null;
-  const model = await resolveSummaryModelSafe();
-  const targetModel = model?.model.id ?? null;
 
   let written = 0;
-  let summarized = 0;
   let embedded = 0;
   let embeddingDisabled = false;
 
@@ -140,50 +120,7 @@ export async function ingestCommits(
     const diff = await source.readDiff(commit);
     if (!diff) continue;
 
-    let summary: string;
-    let summaryModel: string;
-    let reusable = null as Awaited<
-      ReturnType<typeof commitEmbeddingsStore.findReusableSummary>
-    >;
-
-    const canReuseExisting =
-      existing &&
-      existing.diffHash === diff.hash &&
-      existing.summaryVersion === COMMIT_SUMMARY_VERSION &&
-      existing.summary &&
-      (!targetModel || existing.summaryModel === targetModel);
-
-    if (canReuseExisting) {
-      summary = existing.summary;
-      summaryModel = existing.summaryModel;
-    } else {
-      reusable = await commitEmbeddingsStore.findReusableSummary({
-        repoId: projectId,
-        commitSha: commit.sha,
-        diffHash: diff.hash,
-        summaryVersion: COMMIT_SUMMARY_VERSION,
-        ...(targetModel ? { summaryModel: targetModel } : {}),
-        excludeBranch: branch,
-      });
-
-      if (reusable) {
-        summary = reusable.summary;
-        summaryModel = reusable.summaryModel;
-      } else if (model) {
-        const result = await commitSummaryService.summarize({
-          commit,
-          diff,
-          model,
-        });
-        summary = result.summary;
-        summaryModel = result.model;
-      } else {
-        summary = fallbackCommitSummary(diff);
-        summaryModel = "fallback";
-      }
-    }
-
-    const contentText = commitEmbeddingText(diff.filesChanged, summary);
+    const contentText = commitEmbeddingText(diff.filesChanged, commit.message);
     const contentHash = contentHashOf(contentText);
     const existingEmbeddingIsCurrent =
       space &&
@@ -193,19 +130,6 @@ export async function ingestCommits(
 
     let embedding: EmbeddingWrite | undefined;
     if (existingEmbeddingIsCurrent) {
-      embedded += 1;
-    } else if (
-      space &&
-      reusable?.embedding &&
-      reusable.embeddingHash === contentHash &&
-      reusable.embeddingProvider === space.provider &&
-      reusable.embeddingModel === space.model
-    ) {
-      embedding = {
-        vector: reusable.embedding,
-        provider: space.provider,
-        model: space.model,
-      };
       embedded += 1;
     } else if (space && !embeddingDisabled) {
       try {
@@ -223,7 +147,7 @@ export async function ingestCommits(
         } else {
           logger.warn(
             { ...base, sha: commit.sha, err: message },
-            "commit embedding failed; stored summary without a vector",
+            "commit embedding failed; stored commit without a vector",
           );
         }
       }
@@ -240,15 +164,11 @@ export async function ingestCommits(
         commit.url || commitUrl(opts.gitProvider, owner, repo, commit.sha),
       filesChanged: diff.filesChanged,
       diffHash: diff.hash,
-      summary,
-      summaryVersion: COMMIT_SUMMARY_VERSION,
-      summaryModel,
       contentHash,
       ...(embedding ? { embedding } : {}),
     });
 
     written += 1;
-    summarized += 1;
     onProgress?.(
       "ingest",
       `Stored ${written} of ${commits.length} commits`,
@@ -266,7 +186,7 @@ export async function ingestCommits(
       ...base,
       commitsFound: commits.length,
       chunksWritten: written,
-      summarized,
+      summarized: 0,
       embedded,
       tipSha,
     },
@@ -276,7 +196,7 @@ export async function ingestCommits(
   return {
     commitsFound: commits.length,
     chunksWritten: written,
-    summarized,
+    summarized: 0,
     embedded,
     tipSha,
   };

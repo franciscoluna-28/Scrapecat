@@ -117,9 +117,9 @@ export const commitEmbeddings = pgTable(
       .notNull()
       .default(sql`'{}'::text[]`),
     diffHash: text("diff_hash").notNull(),
-    summary: text("summary").notNull(),
-    summaryVersion: text("summary_version").notNull(),
-    summaryModel: text("summary_model").notNull(),
+    summary: text("summary"),
+    summaryVersion: text("summary_version"),
+    summaryModel: text("summary_model"),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
     embeddingProvider: text("embedding_provider"),
     embeddingModel: text("embedding_model"),
