@@ -125,8 +125,11 @@ export const commitEmbeddings = pgTable(
     embeddingModel: text("embedding_model"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
-    // Maintained by the store on upsert: generated columns cannot use
-    // `array_to_string` because it is not immutable.
+    // Postgres full-text index over summary (A), file paths (B), and the
+    // original message (C), backing the lexical retrieval channel. Kept as a
+    // normal column because generated columns require immutable expressions
+    // and `array_to_string(files_changed, ' ')` is not immutable; the store
+    // writes it in the same upsert as the summary.
     searchVector: tsvector("search_vector"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

@@ -145,6 +145,8 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           }
         : {};
 
+      // Generated columns reject `array_to_string` (not immutable), so the
+      // lexical vector is written here from the same values it indexes.
       const searchVector = sql`setweight(to_tsvector('english', ${input.summary}), 'A') || setweight(to_tsvector('simple', ${input.filesChanged.join(" ")}), 'B') || setweight(to_tsvector('english', ${input.message}), 'C')`;
 
       await client

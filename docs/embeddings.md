@@ -27,10 +27,22 @@ these vectors backs RAG retrieval.
 | `embedding` | vector(768) over `files_changed + summary` |
 | `embedding_provider` / `embedding_model` | vector-space identity |
 | `content_hash` / `embedding_hash` | staleness gate |
-| `search_vector` | generated tsvector (summary A, files B, message C) |
+| `search_vector` | tsvector (summary A, files B, message C), written by the store |
 
 No raw diff is stored. The row stores the summary, file list, hashes, and
 `commit_url`; the UI redirects to the provider commit for the code.
+
+### Why `search_vector` is a normal column
+
+`search_vector` is Postgres full-text search over the summary (weight A), file
+paths (B), and the original message (C), with a GIN index. It powers the lexical
+channel, which catches exact paths, symbols, ticket IDs, and identifiers that
+embeddings miss.
+
+It is **not** a generated column: Postgres requires generated expressions to be
+immutable, and `array_to_string(files_changed, ' ')` is stable, not immutable.
+The store writes the vector in the same upsert as the summary and file list, so
+there is one write path and no trigger.
 
 ## Ingestion
 

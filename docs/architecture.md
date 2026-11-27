@@ -66,8 +66,10 @@ sequenceDiagram
 - **Hybrid retrieval** runs semantic and lexical channels in parallel and fuses
   them with reciprocal rank fusion (`src/rag/retrieval/fusion.ts`), so agreement
   between channels wins without score calibration. Semantic hits are capped at
-  `MAX_COSINE_DISTANCE = 0.8`; lexical search covers queries where embeddings
-  are missing or the provider fails. Default limit: `5`; hard ceiling: `20`.
+  `MAX_COSINE_DISTANCE = 0.8`. Lexical search uses a `search_vector` tsvector
+  over summary, file paths, and the original message (GIN-indexed); it covers
+  exact identifiers and queries where embeddings are missing or fail. Default
+  limit: `5`; hard ceiling: `20`.
 - **One semantic ceiling.** Semantic hits above `MAX_COSINE_DISTANCE = 0.8` are
   dropped; there is no corroboration/threshold stack. Abort only when both
   channels return nothing.
