@@ -3,6 +3,7 @@ import {
   createChatService,
   SessionNotFoundError,
 } from "@/api/chat/services";
+import { NO_INDEXED_COMMITS_MESSAGE } from "@/rag/constants";
 
 const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
@@ -146,6 +147,38 @@ describe("createChatService", () => {
       citations: assistantRow.citations,
       createdAt: assistantRow.createdAt.toISOString(),
     });
+  });
+
+  it("returns the deterministic empty-retrieval message without calling the model", async () => {
+    deps.retriever.resolveScope.mockResolvedValue({ citations: [] });
+    deps.store.addMessage
+      .mockReset()
+      .mockResolvedValueOnce(userRow)
+      .mockResolvedValueOnce({
+        ...assistantRow,
+        content: NO_INDEXED_COMMITS_MESSAGE,
+        citations: [],
+      });
+    const tokens: string[] = [];
+
+    const message = await deps.service.streamMessage({
+      sessionId: SESSION_ID,
+      content: "what changed?",
+      onToken: (chunk) => tokens.push(chunk),
+    });
+
+    expect(deps.ai.stream).not.toHaveBeenCalled();
+    expect(tokens.join("")).toBe(NO_INDEXED_COMMITS_MESSAGE);
+    expect(deps.store.addMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        role: "assistant",
+        content: NO_INDEXED_COMMITS_MESSAGE,
+        citations: [],
+      }),
+    );
+    expect(message.content).toBe(NO_INDEXED_COMMITS_MESSAGE);
+    expect(message.citations).toEqual([]);
   });
 
   it("falls back to the project default branch", async () => {

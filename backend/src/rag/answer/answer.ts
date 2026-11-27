@@ -1,5 +1,6 @@
 import type { ChatCitation } from "@/db/schema";
 import { aiClient } from "@/rag/answer/ai";
+import { NO_INDEXED_COMMITS_MESSAGE } from "@/rag/constants";
 import { resolvePersona, type Persona } from "@/rag/context/prompts";
 import { turnResolver, type TurnInput } from "@/rag/answer/turn";
 
@@ -38,6 +39,17 @@ export function createAnswerService(overrides: Partial<AnswerDeps> = {}) {
 
   async function answerQuestion(input: AnswerInput): Promise<AnswerResult> {
     const turn = await deps.resolveTurn(input);
+    if (turn.scope.citations.length === 0) {
+      return {
+        content: NO_INDEXED_COMMITS_MESSAGE,
+        citations: [],
+        branch: turn.branch,
+        persona: resolvePersona(input.persona),
+        startDate: turn.scope.startDate,
+        endDate: turn.scope.endDate,
+      };
+    }
+
     const result = await deps.ai.generate({
       model: turn.model,
       messages: turn.messages,

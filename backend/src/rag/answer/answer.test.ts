@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChatCitation } from "@/db/schema";
 import { createAnswerService } from "@/rag/answer/answer";
+import { NO_INDEXED_COMMITS_MESSAGE } from "@/rag/constants";
 
 const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -73,6 +74,32 @@ describe("createAnswerService", () => {
       startDate,
       endDate,
     });
+  });
+
+  it("returns a deterministic message without calling the model when retrieval is empty", async () => {
+    const resolveTurn = vi.fn().mockResolvedValue({
+      project: { id: PROJECT_ID, repositoryName: "owner/repo" },
+      branch: "main",
+      scope: { citations: [] },
+      model: { provider: "openrouter", model: { id: "test-model" } },
+      messages,
+    });
+    const generate = vi.fn();
+    const service = createAnswerService({
+      resolveTurn: resolveTurn as never,
+      ai: { generate } as never,
+    });
+
+    const result = await service.answerQuestion({
+      projectId: PROJECT_ID,
+      query: "what changed?",
+      persona: "cto",
+    });
+
+    expect(generate).not.toHaveBeenCalled();
+    expect(result.content).toBe(NO_INDEXED_COMMITS_MESSAGE);
+    expect(result.citations).toEqual([]);
+    expect(result.persona).toBe("cto");
   });
 
   it("defaults the persona when the caller does not supply one", async () => {

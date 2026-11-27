@@ -19,3 +19,7 @@ export const {
   MAX_RETRIEVAL_LIMIT,
   TEMPORAL_CONTEXT_LIMIT,
 } = RAG_RETRIEVER_BUDGETS;
+
+/** Returned without calling the model when retrieval found no commits. */
+export const NO_INDEXED_COMMITS_MESSAGE =
+  "No indexed commits matched this branch or date window. If you just connected the repository, ingestion may still be running or may have failed — check the backend logs and jobs.";

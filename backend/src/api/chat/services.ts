@@ -6,6 +6,7 @@ import {
   type ChatSessionRow,
 } from "@/api/chat/chat-store";
 import { retriever } from "@/rag/retrieval/retrieve";
+import { NO_INDEXED_COMMITS_MESSAGE } from "@/rag/constants";
 import { createTurnResolver, type TurnHistoryMessage } from "@/rag/answer/turn";
 import type { ChatMessageDTO } from "@/api/chat/schemas";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
@@ -128,6 +129,40 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
     return { session, ...turn };
   }
 
+  async function persistAssistant(input: {
+    sessionId: string;
+    content: string;
+    branch: string;
+    citations: ChatCitation[];
+    clientMessageId?: string;
+  }): Promise<ChatMessageDTO> {
+    let reply = await deps.store.addMessage({
+      sessionId: input.sessionId,
+      role: "assistant",
+      content: input.content,
+      branch: input.branch,
+      citations: input.citations,
+      ...(input.clientMessageId
+        ? { clientMessageId: input.clientMessageId }
+        : {}),
+    });
+
+    // Lost a race with a concurrent retry; reuse the stored turn.
+    if (!reply && input.clientMessageId) {
+      reply = await deps.store.findMessageByClientId(
+        input.sessionId,
+        "assistant",
+        input.clientMessageId,
+      );
+    }
+    if (!reply) {
+      throw new Error("Failed to persist assistant message");
+    }
+
+    await deps.store.touchSession(input.sessionId);
+    return toMessageDTO(reply);
+  }
+
   async function streamMessage(
     options: ChatStreamOptions,
   ): Promise<ChatMessageDTO> {
@@ -144,6 +179,19 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
 
     const turn = await prepareTurn(options);
 
+    // Empty retrieval means there is no evidence. Do not let the model invent
+    // a generic report; answer deterministically.
+    if (turn.scope.citations.length === 0) {
+      options.onToken(NO_INDEXED_COMMITS_MESSAGE);
+      return persistAssistant({
+        sessionId: options.sessionId,
+        content: NO_INDEXED_COMMITS_MESSAGE,
+        branch: turn.branch,
+        citations: [],
+        clientMessageId: options.clientMessageId,
+      });
+    }
+
     const result = await deps.ai.stream(
       {
         model: turn.model,
@@ -154,32 +202,13 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
       options.onToken,
     );
 
-    let reply = await deps.store.addMessage({
+    return persistAssistant({
       sessionId: options.sessionId,
-      role: "assistant",
       content: result.content,
       branch: turn.branch,
       citations: turn.scope.citations,
-      ...(options.clientMessageId
-        ? { clientMessageId: options.clientMessageId }
-        : {}),
+      clientMessageId: options.clientMessageId,
     });
-
-    // Lost a race with a concurrent retry; reuse the stored turn.
-    if (!reply && options.clientMessageId) {
-      reply = await deps.store.findMessageByClientId(
-        options.sessionId,
-        "assistant",
-        options.clientMessageId,
-      );
-    }
-    if (!reply) {
-      throw new Error("Failed to persist assistant message");
-    }
-
-    await deps.store.touchSession(options.sessionId);
-
-    return toMessageDTO(reply);
   }
 
   async function createSession(projectId: string, anonymousId: string) {
