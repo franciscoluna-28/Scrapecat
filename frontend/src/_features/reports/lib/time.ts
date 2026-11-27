@@ -112,6 +112,38 @@ export function formatRelativeTime(
   return formatter.format(Math.round(diffMs / 86_400_000), "day");
 }
 
+/** Compact token count: "820", "4.2k", "1.2M". */
+function tokenCount(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value < 0) return "—";
+  if (value < 1_000) return `${Math.round(value)}`;
+  if (value < 1_000_000) {
+    const thousands = value / 1_000;
+    return `${thousands.toFixed(thousands < 10 ? 1 : 0)}k`;
+  }
+  return `${(value / 1_000_000).toFixed(1)}M`;
+}
+
+/** Input/output token pair: "4.2k in · 0 out". */
+export function formatTokenUsage(
+  input: number | null,
+  output: number | null,
+): string {
+  if (input === null && output === null) return "—";
+  return `${tokenCount(input)} in · ${tokenCount(output)} out`;
+}
+
+/** Short run duration: "820ms", "1.4s", "2m 5s". */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1_000) return `${Math.round(ms)}ms`;
+
+  const seconds = ms / 1_000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${Math.round(seconds % 60)}s`;
+}
+
 export function formatPeriod(start: string | Date, end: string | Date): string {
   const formatter = new Intl.DateTimeFormat(undefined, {
     month: "short",

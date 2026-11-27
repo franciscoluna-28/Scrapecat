@@ -36,11 +36,14 @@ vi.mock("sonner", () => ({
 import {
   useCreateReportSchedule,
   useDeleteReportSchedule,
+  useIngestionRuns,
   useReport,
   useReports,
   useReportSchedules,
   useRunReportSchedule,
   useUpdateReportSchedule,
+  type IngestionRun,
+  type IngestionRunSummary,
   type ReportDetail,
   type ReportSchedule,
   type ReportSummary,
@@ -150,6 +153,56 @@ describe("report queries", () => {
     expect(mocks.GET).toHaveBeenCalledWith("/api/v1/reports", {
       params: { query: { limit: 10 } },
     });
+  });
+
+  it("loads recent ingestion runs with the query limit", async () => {
+    const run: IngestionRun = {
+      id: "44444444-4444-4444-8444-444444444444",
+      jobType: "ingest-branch",
+      status: "succeeded",
+      projectId: PROJECT_ID,
+      branch: "main",
+      repositoryName: "repo",
+      providerOwner: "owner",
+      gitProvider: "github",
+      startedAt: "2026-01-10T12:00:00.000Z",
+      finishedAt: "2026-01-10T12:00:01.200Z",
+      durationMs: 1200,
+      gitMs: 900,
+      dbMs: 100,
+      embeddingMs: 800,
+      commitsFound: 3,
+      commitsWritten: 3,
+      commitsEmbedded: 2,
+      embeddingProvider: "openrouter",
+      embeddingModel: "openai/text-embedding-3-small",
+      embeddingInputTokens: 4200,
+      embeddingOutputTokens: 0,
+      errorCode: null,
+      errorMessage: null,
+    };
+    const summary: IngestionRunSummary = {
+      windowDays: 7,
+      runs: 1,
+      failedRuns: 0,
+      commitsProcessed: 3,
+      embeddingsProcessed: 2,
+      avgDurationMs: 1200,
+      embeddingInputTokens: 4200,
+      embeddingOutputTokens: 0,
+    };
+    mocks.GET.mockResolvedValue({ data: { summary, runs: [run] } });
+
+    const { result } = renderHook(() => useIngestionRuns(5), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.runs).toEqual([run]));
+    expect(result.current.summary).toEqual(summary);
+    expect(mocks.GET).toHaveBeenCalledWith(
+      "/api/v1/telemetry/ingestion-runs",
+      { params: { query: { limit: 5 } } },
+    );
   });
 
   it("loads a report detail only when selected", async () => {

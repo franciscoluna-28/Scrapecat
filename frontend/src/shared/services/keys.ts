@@ -63,4 +63,8 @@ export const queryKeys = {
     list: ["reports", "list"] as const,
     detail: (id: string) => ["reports", "detail", id] as const,
   },
+  ingestionRuns: {
+    all: ["ingestion-runs"] as const,
+    list: ["ingestion-runs", "list"] as const,
+  },
 };

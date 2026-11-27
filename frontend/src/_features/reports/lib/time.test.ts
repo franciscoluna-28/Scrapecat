@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   browserTimeZone,
   cadenceSummary,
+  formatDuration,
   formatHourLocal,
   formatInTimeZone,
   formatNextRun,
@@ -9,6 +10,7 @@ import {
   formatPeriodDate,
   formatPeriodUtc,
   formatRelativeTime,
+  formatTokenUsage,
   formatUtc,
   formatUtcWithLocal,
   friendlyTimeZoneLabel,
@@ -99,6 +101,23 @@ describe("formatting", () => {
 
   it("formats local hours", () => {
     expect(formatHourLocal(9)).toMatch(/9:00/);
+  });
+
+  it("formats input and output tokens separately", () => {
+    expect(formatTokenUsage(null, null)).toBe("—");
+    expect(formatTokenUsage(0, 0)).toBe("0 in · 0 out");
+    expect(formatTokenUsage(820, 0)).toBe("820 in · 0 out");
+    expect(formatTokenUsage(4_200, 21)).toBe("4.2k in · 21 out");
+    expect(formatTokenUsage(42_000, 1_200)).toBe("42k in · 1.2k out");
+    expect(formatTokenUsage(1_200_000, null)).toBe("1.2M in · — out");
+  });
+
+  it("formats run durations compactly", () => {
+    expect(formatDuration(820)).toBe("820ms");
+    expect(formatDuration(1_420)).toBe("1.4s");
+    expect(formatDuration(42_000)).toBe("42s");
+    expect(formatDuration(125_000)).toBe("2m 5s");
+    expect(formatDuration(-1)).toBe("—");
   });
 
   it("creates a plain summary preview", () => {

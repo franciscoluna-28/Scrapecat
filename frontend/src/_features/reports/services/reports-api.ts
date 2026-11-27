@@ -16,6 +16,12 @@ export type ReportSummary =
 export type ReportDetail =
   paths["/api/v1/reports/{id}"]["get"]["responses"][200]["content"]["application/json"];
 
+export type IngestionRun =
+  paths["/api/v1/telemetry/ingestion-runs"]["get"]["responses"][200]["content"]["application/json"]["runs"][number];
+
+export type IngestionRunSummary =
+  paths["/api/v1/telemetry/ingestion-runs"]["get"]["responses"][200]["content"]["application/json"]["summary"];
+
 export type CreateReportScheduleInput =
   paths["/api/v1/report-schedules"]["post"]["requestBody"]["content"]["application/json"];
 
@@ -57,6 +63,28 @@ export function useReports(limit = 20) {
 
   return {
     reports: query.data?.reports ?? [],
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error ?? null,
+    refetch: query.refetch,
+  };
+}
+
+export function useIngestionRuns(limit = 8) {
+  const query = useQuery({
+    queryKey: queryKeys.ingestionRuns.list,
+    queryFn: () =>
+      unwrap(
+        apiClient.GET("/api/v1/telemetry/ingestion-runs", {
+          params: { query: { limit } },
+        }),
+      ),
+    refetchInterval: 30_000,
+  });
+
+  return {
+    runs: query.data?.runs ?? [],
+    summary: query.data?.summary ?? null,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     error: query.error ?? null,

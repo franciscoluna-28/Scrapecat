@@ -20,6 +20,7 @@ import { ScheduleCard } from "@/src/_features/reports/components/ScheduleCard";
 import { ScheduleDialog } from "@/src/_features/reports/components/ScheduleDialog";
 import { ReportFeed } from "@/src/_features/reports/components/ReportFeed";
 import { ReportDetailSheet } from "@/src/_features/reports/components/ReportDetailSheet";
+import { IngestionRunsSection } from "@/src/_features/reports/components/IngestionRunsSection";
 import {
   useDeleteReportSchedule,
   useReportSchedules,
@@ -57,6 +58,7 @@ export function ReportsDashboard() {
   useEffect(() => {
     if (wasRunning.current && !running) {
       queryClient.invalidateQueries({ queryKey: queryKeys.reports.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.ingestionRuns.all });
     }
     wasRunning.current = running;
   }, [queryClient, running]);
@@ -225,6 +227,8 @@ export function ReportsDashboard() {
         </div>
         <ReportFeed onOpen={openReport} />
       </section>
+
+      <IngestionRunsSection />
         </>
       )}
     </div>
