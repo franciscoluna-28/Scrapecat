@@ -1,17 +1,20 @@
 # Embeddings
 
-How commit documents are produced, stored, and kept cheap. Semantic search over
-these vectors backs RAG retrieval.
+How commit rows are stored and embedded.
 
-## Why this approach
+## Current status: no LLM summaries
 
-1. **The diff is the source of truth.** Commit messages are inconsistent, vague,
-   or wrong. The retrieval document is a short summary generated from the actual
-   diff, not the message.
-2. **Relational first, vector as an index.** Facts live in Postgres columns and
-   arrays; the vector is one indexed column, not the schema.
-3. **Embedding never blocks retrieval.** If the provider is down, the row keeps
-   its summary and the lexical channel still works; the reindex job catches up.
+LLM-generated summaries are **disabled for now**.
+
+- `summary`, `summary_version`, and `summary_model` are nullable and are **not
+  written**.
+- The embedding text is `files_changed + message`.
+- `commit-summary-service.ts` remains in the codebase for a later upgrade; the
+  ingest path does not call it.
+- The diff is still fetched, filtered, and hashed. No raw diff is stored.
+
+The diff/summary pipeline is scaffolded, but the current read model is
+message-based until a fast, trustworthy summary model is chosen.
 
 ## The document: one row per branch-commit
 
@@ -19,48 +22,40 @@ these vectors backs RAG retrieval.
 
 | Field | Source |
 |---|---|
-| `message` | original git message (display + low-weight lexical) |
-| `summary` | LLM-generated, diff-grounded description |
+| `message` | original git message (embedding text + display) |
 | `files_changed` | `git diff --numstat` / GitHub commit API |
 | `diff_hash` | SHA-256 of the cleaned, capped `stat + patch` |
-| `summary_version` / `summary_model` | prompt/model identity |
-| `embedding` | vector(768) over `files_changed + summary` |
+| `summary` | nullable; not written while summaries are disabled |
+| `summary_version` / `summary_model` | nullable; unused while disabled |
+| `embedding` | vector(768) over `files_changed + message` |
 | `embedding_provider` / `embedding_model` | vector-space identity |
 | `content_hash` / `embedding_hash` | staleness gate |
-| `search_vector` | tsvector (summary A, files B, message C), written by the store |
+| `search_vector` | tsvector (summary A when present, files B, message C) |
 
-No raw diff is stored. The row stores the summary, file list, hashes, and
-`commit_url`; the UI redirects to the provider commit for the code.
+No raw diff is stored. Citations redirect to the provider commit.
 
 ### Why `search_vector` is a normal column
 
-`search_vector` is Postgres full-text search over the summary (weight A), file
-paths (B), and the original message (C), with a GIN index. It powers the lexical
-channel, which catches exact paths, symbols, ticket IDs, and identifiers that
-embeddings miss.
-
-It is **not** a generated column: Postgres requires generated expressions to be
-immutable, and `array_to_string(files_changed, ' ')` is stable, not immutable.
-The store writes the vector in the same upsert as the summary and file list, so
-there is one write path and no trigger.
+Postgres requires generated-column expressions to be immutable, and
+`array_to_string(files_changed, ' ')` is stable, not immutable. The store writes
+the vector in the same upsert as the file list and message, so there is one write
+path and no trigger. Its GIN index backs the lexical channel that catches exact
+paths, symbols, ticket IDs, and identifiers.
 
 ## Ingestion
 
 ```
-diff → clean/cap → hash → (reuse | summarize) → embed → upsert
+diff → clean/cap → hash → embed files + message → upsert
 ```
 
 - Diff: first parent, `--unified=3`, lockfiles/build/vendor/generated/minified
   excluded. Per-file and total caps keep the token budget bounded.
-- Message gate: the rule guardrail decides whether the message is trustworthy.
-  A flagged message is omitted from the summary prompt entirely; the diff wins.
-- Summary: one LLM call, 3–4 sentences. If the model fails, a structural
-  file/stat fallback is stored.
-- Reuse: an existing row with the same `(repo_id, commit_sha, diff_hash,
-  summary_version, summary_model)` on another branch is copied instead of
-  calling the model again.
-- Embedding: `files_changed` (capped to 30 unique paths) + `summary`, one call,
-  768 dims.
+- Empty, merge, and binary-only diffs are skipped.
+- No LLM call is made in the current build.
+- Embedding failures never fail ingestion; the commit is stored without a vector
+  and the reindex job catches up.
+- A fatal embedding provider error (401/403/quota) disables embedding attempts
+  for the rest of that ingest run.
 
 ## Staleness gate
 
@@ -70,10 +65,9 @@ A row's embedding is current iff:
 2. `embedding_provider = current provider`
 3. `embedding_model = current model`
 
-`summary_version` / `summary_model` decide whether the summary itself is
-current. Changing the prompt bumps the version; changing the embedding model
-enqueues `reindex-embeddings`, which re-embeds from the stored summaries without
-re-reading git.
+`content_hash` is the hash of `commitEmbeddingText(files_changed, message)`.
+Changing the embedding model enqueues `reindex-embeddings`, which rebuilds
+vectors from the stored message and files without re-reading git.
 
 ## Dimensions and providers
 
@@ -87,16 +81,17 @@ re-reading git.
 
 ## When embeddings happen
 
-1. **Inline during ingest** — per commit, right after the summary.
+1. **Inline during ingest** — per commit.
 2. **Reindex job** — changing `embeddingProvider`/`embeddingModel` enqueues
-   `reindex-embeddings`; it resolves the new space once and updates pending rows
-   from stored summaries. A failure in one project is logged and does not stop
-   the others.
+   `reindex-embeddings`; it rebuilds pending vectors from stored messages.
 3. **Backfill** — `pnpm embed:backfill` is the bulk reindex path.
 
-## Status
+## Later: re-enable summaries
 
-- **Shipped:** diff-grounded summaries, source diffs from native git and GitHub
-  API patches, message gate, cross-branch reuse, 768-dim vectors, reindex job,
-  HNSW + GIN indexes.
-- **Deliberately not stored:** raw diffs. Citations redirect to the commit.
+When a fast, trustworthy summary model is available:
+
+1. Generate the diff-grounded summary and write `summary`, `summary_version`,
+   `summary_model`.
+2. Switch the embedding text back to `files_changed + summary`.
+3. Reuse summaries across branches for the same
+   `(repo_id, commit_sha, diff_hash, summary_version, summary_model)`.

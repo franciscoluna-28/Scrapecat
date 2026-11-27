@@ -55,7 +55,7 @@ sequenceDiagram
 
     C->>API: message + branch
     API->>Q: prepareProjectBranch (ingest if not stored)
-    Q->>DB: upsert commit_embeddings (diff-grounded summary + vector)
+    Q->>DB: upsert commit_embeddings (files + message vector)
     API->>DB: retriever.resolveScope(query, branch, window)
     DB-->>API: ranked citations (lexical + semantic, RRF-fused)
     API->>LLM: system prompt + retrieved commits + question
@@ -76,7 +76,7 @@ sequenceDiagram
 - **Date windows** ("last 30 days", "since June") are parsed into column
   filters; temporal summary queries read the whole window rather than top-k.
   Relative phrases without an explicit date are not silently anchored.
-- **Grounding** is the diff-grounded commit summary plus file scope — see [`embeddings.md`](embeddings.md).
+- **Grounding** is the commit message plus file scope; diff-grounded summaries are currently disabled — see [`embeddings.md`](embeddings.md).
 - **Quality** is measured with golden-set retrieval evals (`pnpm eval`) — see
   [`evaluation.md`](evaluation.md).
 
@@ -139,9 +139,8 @@ flowchart TD
     E --> G["clone → os.tmpdir()/scrapecat/<uuid>"]
     G --> R["listCommitsInRange(dir, ref, since, until)"]
     R --> S["per-commit diff (first parent, numstat + patch, capped)"]
-    S --> SUM["summary service (diff authoritative, message gated)"]
-    SUM --> EM["embed files + summary"]
-    EM --> U["upsert commit_embeddings (reuse across branches)"]
+    S --> EM["embed files + message (summaries disabled)"]
+    EM --> U["upsert commit_embeddings"]
     U --> ST["save tip in project_branches"]
     U --> D["repository.dispose (finally)"]
 ```
@@ -149,15 +148,15 @@ flowchart TD
 - **Two sources:** `createGitCommitSource` (self-hosted; native git diffs) and
   `createApiCommitSource` (demo; GitHub `files[].patch`) both feed the same
   `ingestCommits` orchestrator. Both apply the same exclusions and caps.
-- **Diff is the source of truth:** summaries are generated from the cleaned,
-  capped diff. The commit message is a hint only when the rule gate considers it
-  trustworthy; junk or missing messages are omitted from the prompt.
-- **Dedupe and reuse:** the tip check skips unchanged branches; within a run,
-  `(repo_id, commit_sha, diff_hash, summary_version, summary_model)` is reused
-  across branches so the same commit is summarized once.
+- **Diff is still captured:** the cleaned, capped diff and its hash are stored,
+  but LLM summaries are disabled. The embedding text is currently
+  `files_changed + message`.
+- **Dedupe:** the tip check skips unchanged branches, and the embedding gate
+  skips rows whose vector is already current.
 - **Failure handling:** the only remote step is the clone/diff (retryable).
-  A summary failure falls back to a structural summary; an embedding failure
-  stores the summary without a vector and is retried by reindex.
+  A summary failure cannot occur (summaries are off); an embedding failure
+  stores the commit without a vector and is retried by reindex. A fatal
+  embedding error stops further embedding attempts for that run.
 
 ### Why no persistent clone cache
 
@@ -376,11 +375,11 @@ the whole list.
 
 ### Grounding and stored evidence
 
-The summary is generated from the cleaned, capped diff (first parent, filtered,
-per-file and total caps). The original commit message is stored for display and
-lexical matching, but it is not the evidence: it is included in the summary
-prompt only when the rule gate considers it trustworthy. Raw diffs are not
-stored; citations redirect to `commit_url`.
+The cleaned, capped diff (first parent, filtered, per-file and total caps) is
+hashed and used to build the read row, but LLM summaries are currently disabled.
+The embedding text is the original commit message plus file paths. Raw diffs are
+not stored; citations redirect to `commit_url`. The summary service remains for a
+later upgrade.
 
 ### Idempotency is a natural key, not a layer
 
