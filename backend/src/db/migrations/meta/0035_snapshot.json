@@ -1,6 +1,6 @@
 {
-  "id": "038fd0c7-99b2-4b8b-8c7b-f5cb0a18b8ba",
-  "prevId": "b6b08a4e-73cf-4e69-9cec-e31f41a72ad4",
+  "id": "51fa1463-6a31-4526-8b0e-a7a92cec8846",
+  "prevId": "14642097-5911-48b7-b9fa-a479afe624bb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -374,11 +374,7 @@
           "name": "search_vector",
           "type": "tsvector",
           "primaryKey": false,
-          "notNull": false,
-          "generated": {
-            "as": "setweight(to_tsvector('english', coalesce(summary, '')), 'A') || setweight(to_tsvector('simple', coalesce(array_to_string(files_changed, ' '), '')), 'B') || setweight(to_tsvector('english', coalesce(message, '')), 'C')",
-            "type": "stored"
-          }
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

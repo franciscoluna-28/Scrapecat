@@ -125,9 +125,9 @@ export const commitEmbeddings = pgTable(
     embeddingModel: text("embedding_model"),
     contentHash: text("content_hash"),
     embeddingHash: text("embedding_hash"),
-    searchVector: tsvector("search_vector").generatedAlwaysAs(
-      sql`setweight(to_tsvector('english', coalesce(summary, '')), 'A') || setweight(to_tsvector('simple', coalesce(array_to_string(files_changed, ' '), '')), 'B') || setweight(to_tsvector('english', coalesce(message, '')), 'C')`,
-    ),
+    // Maintained by the store on upsert: generated columns cannot use
+    // `array_to_string` because it is not immutable.
+    searchVector: tsvector("search_vector"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

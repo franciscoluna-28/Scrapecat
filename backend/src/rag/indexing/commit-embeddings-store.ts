@@ -145,6 +145,8 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           }
         : {};
 
+      const searchVector = sql`setweight(to_tsvector('english', ${input.summary}), 'A') || setweight(to_tsvector('simple', ${input.filesChanged.join(" ")}), 'B') || setweight(to_tsvector('english', ${input.message}), 'C')`;
+
       await client
         .insert(commitEmbeddings)
         .values({
@@ -161,6 +163,7 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
           summaryVersion: input.summaryVersion,
           summaryModel: input.summaryModel,
           contentHash: input.contentHash,
+          searchVector,
           ...embeddingValues,
         })
         .onConflictDoUpdate({
@@ -180,6 +183,7 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
             summaryVersion: sql`excluded.summary_version`,
             summaryModel: sql`excluded.summary_model`,
             contentHash: sql`excluded.content_hash`,
+            searchVector: sql`excluded.search_vector`,
             updatedAt: sql`now()`,
             ...embeddingUpdate,
           },

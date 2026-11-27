@@ -1,5 +1,5 @@
 {
-  "id": "b6b08a4e-73cf-4e69-9cec-e31f41a72ad4",
+  "id": "14642097-5911-48b7-b9fa-a479afe624bb",
   "prevId": "9c35c25b-7865-4b1a-ab63-903283434e7c",
   "version": "7",
   "dialect": "postgresql",
@@ -592,11 +592,7 @@
           "name": "search_vector",
           "type": "tsvector",
           "primaryKey": false,
-          "notNull": false,
-          "generated": {
-            "as": "setweight(to_tsvector('english', coalesce(summary, '')), 'A') || setweight(to_tsvector('simple', coalesce(array_to_string(files_changed, ' '), '')), 'B') || setweight(to_tsvector('english', coalesce(message, '')), 'C')",
-            "type": "stored"
-          }
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

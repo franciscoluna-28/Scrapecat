@@ -18,7 +18,7 @@ CREATE TABLE "commit_embeddings" (
 	"embedding_model" text,
 	"content_hash" text,
 	"embedding_hash" text,
-	"search_vector" "tsvector" GENERATED ALWAYS AS (setweight(to_tsvector('english', coalesce(summary, '')), 'A') || setweight(to_tsvector('simple', coalesce(array_to_string(files_changed, ' '), '')), 'B') || setweight(to_tsvector('english', coalesce(message, '')), 'C')) STORED,
+	"search_vector" "tsvector",
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "commit_embeddings_repo_id_branch_commit_sha_pk" PRIMARY KEY("repo_id","branch","commit_sha")
