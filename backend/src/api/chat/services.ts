@@ -1,4 +1,5 @@
 import type { ChatCitation } from "@/db/schema";
+import { httpErrors } from "@/shared/errors";
 import { aiClient, resolveChatModel } from "@/rag/answer/ai";
 import {
   chatStore,
@@ -213,7 +214,7 @@ export function createChatService(overrides: Partial<ChatServiceDeps> = {}) {
 
   async function createSession(projectId: string, anonymousId: string) {
     const project = await deps.projects.getProjectById(projectId);
-    if (!project) throw new Error("Project not found");
+    if (!project) throw httpErrors.notFound("Project not found");
 
     const row = await deps.store.createSession({
       projectId,
@@ -255,6 +256,7 @@ export const chatService = createChatService();
 
 export class SessionNotFoundError extends Error {
   readonly status = 404;
+  readonly statusCode = 404;
   constructor() {
     super("Chat session not found");
   }

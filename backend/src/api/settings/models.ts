@@ -1,6 +1,6 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import type { Static } from "@sinclair/typebox";
-import { ModelsQuery } from "@/api/settings/schemas";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { httpErrors } from "@/shared/errors";
+import { ListModelsRoute } from "@/api/settings/schemas";
 import { env } from "@/shared/config/env";
 import {
   EMBEDDING_MODEL_ALLOWLIST,
@@ -133,39 +133,41 @@ function toApiModel(model: ModelDescriptor, provider: string) {
 }
 
 export async function listModels(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListModelsRoute>,
+  _reply: TypeBoxReply<typeof ListModelsRoute>,
 ) {
-  const { provider, modality = "chat" } = req.query as Static<typeof ModelsQuery>;
+  const { provider, modality = "chat" } = req.query;
 
   if (provider && !isProviderSupported(provider)) {
-    return reply.status(400).send({ error: `Unknown provider: ${provider}` });
+    throw httpErrors.badRequest(`Unknown provider: ${provider}`);
   }
 
   if (provider === "ollama") {
     const models = await fetchOllamaModels(modality);
-    return reply.send({ models });
+    return { models };
   }
 
   if (modality === "embeddings") {
     if (provider && provider !== "openrouter") {
-      return reply.send({ models: [] });
+      return { models: [] };
     }
     const models = await fetchOpenRouterEmbeddingModels();
-    return reply.send({ models });
+    return { models };
   }
 
   if (provider && provider !== "openrouter") {
-    return reply.send({
-      models: getCatalogModels(provider).map((model) => toApiModel(model, provider)),
-    });
+    return {
+      models: getCatalogModels(provider).map((model) =>
+        toApiModel(model, provider),
+      ),
+    };
   }
 
   if (provider === "openrouter") {
     const models = await fetchOpenRouterModels();
-    return reply.send({
+    return {
       models: models.map((model) => toApiModel(model, "openrouter")),
-    });
+    };
   }
 
   const catalogProviders = (
@@ -185,5 +187,5 @@ export async function listModels(
     ),
   ];
 
-  return reply.send({ models: all });
+  return { models: all };
 }

@@ -1,42 +1,63 @@
-import { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import type { Static } from "@sinclair/typebox";
-import { AISettingsBody } from "@/api/settings/schemas";
-import { getAISettings, updateAISettings } from "@/api/settings/services";
-import { env } from "@/shared/config/env";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { demoModeGuard } from "@/shared/guards";
+import {
+  getAISettings,
+  updateAISettings,
+  type AISettings,
+} from "@/api/settings/services";
+import { listModels } from "@/api/settings/models";
+import {
+  AISettingsGetResponse,
+  GetAISettingsRoute,
+  ListModelsRoute,
+  UpdateAISettingsRoute,
+} from "@/api/settings/schemas";
+
+type AISettingsDTO = Static<typeof AISettingsGetResponse>;
+
+/**
+ * The settings row is stored as text; narrowing to the response union keeps the
+ * typed reply honest without pretending the database is constrained.
+ */
+function toSettingsDTO(settings: AISettings): AISettingsDTO {
+  return {
+    chatProvider: settings.chatProvider as AISettingsDTO["chatProvider"],
+    chatModel: settings.chatModel,
+    embeddingProvider:
+      settings.embeddingProvider as AISettingsDTO["embeddingProvider"],
+    embeddingModel: settings.embeddingModel,
+  };
+}
 
 export async function getSettingsRoute(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  _req: TypeBoxRequest<typeof GetAISettingsRoute>,
+  _reply: TypeBoxReply<typeof GetAISettingsRoute>,
 ) {
-  try {
-    const settings = await getAISettings();
-    return reply.send(settings);
-  } catch (error) {
-    console.error("Error fetching AI settings:", error);
-    return reply.status(500).send({ error: "Failed to fetch AI settings" });
-  }
+  return toSettingsDTO(await getAISettings());
 }
 
 export async function updateSettingsRoute(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof UpdateAISettingsRoute>,
+  _reply: TypeBoxReply<typeof UpdateAISettingsRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply
-      .status(403)
-      .send({ error: "AI settings are managed by the server in demo mode" });
-  }
-
-  const body = req.body as Static<typeof AISettingsBody>;
-
-  try {
-    const settings = await updateAISettings(body);
-    return reply.send(settings);
-  } catch (error: any) {
-    if (error?.message?.startsWith("Unsupported")) {
-      return reply.status(400).send({ error: error.message });
-    }
-    console.error("Error updating AI settings:", error);
-    return reply.status(500).send({ error: "Failed to update AI settings" });
-  }
+  return toSettingsDTO(await updateAISettings(req.body));
 }
+
+export const settingsRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.get("/settings/ai", { schema: GetAISettingsRoute }, getSettingsRoute);
+
+  app.put(
+    "/settings/ai",
+    {
+      schema: UpdateAISettingsRoute,
+      preHandler: demoModeGuard(
+        "AI settings are managed by the server in demo mode",
+      ),
+    },
+    updateSettingsRoute,
+  );
+
+  app.get("/models", { schema: ListModelsRoute }, listModels);
+};

@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
-import { GitProviderSchema } from "@/shared/typebox";
+import type { FastifySchema } from "fastify";
+import { ErrorResponse, GitProviderSchema } from "@/shared/typebox";
 import {
   DEFAULT_CADENCE,
   DEFAULT_DAY_OF_WEEK,
@@ -135,3 +136,90 @@ export const ReportsListResponse = Type.Object({
 export const ReportIdParams = Type.Object({
   id: Type.String({ format: "uuid" }),
 });
+
+export const ListReportSchedulesRoute = {
+  description: "List scheduled repository summaries",
+  tags: ["reports"],
+  response: {
+    200: ReportScheduleListResponse,
+    403: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const CreateReportScheduleRoute = {
+  description:
+    "Create a daily or weekly summary schedule for a project branch",
+  tags: ["reports"],
+  body: CreateReportScheduleBody,
+  response: {
+    201: ReportScheduleResponse,
+    400: ErrorResponse,
+    403: ErrorResponse,
+    404: ErrorResponse,
+    409: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const UpdateReportScheduleRoute = {
+  description: "Update a summary schedule",
+  tags: ["reports"],
+  params: ReportScheduleIdParams,
+  body: UpdateReportScheduleBody,
+  response: {
+    200: ReportScheduleResponse,
+    400: ErrorResponse,
+    403: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const DeleteReportScheduleRoute = {
+  description: "Delete a summary schedule",
+  tags: ["reports"],
+  params: ReportScheduleIdParams,
+  response: {
+    204: {},
+    403: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const RunReportScheduleRoute = {
+  description: "Run a summary schedule now without moving its next run",
+  tags: ["reports"],
+  params: ReportScheduleIdParams,
+  response: {
+    202: RunReportScheduleResponse,
+    403: ErrorResponse,
+    404: ErrorResponse,
+    409: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const ListReportsRoute = {
+  description: "List generated repository summaries, newest first",
+  tags: ["reports"],
+  querystring: ReportsQuery,
+  response: {
+    200: ReportsListResponse,
+    403: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const GetReportRoute = {
+  description: "Get a generated repository summary with its source commits",
+  tags: ["reports"],
+  params: ReportIdParams,
+  response: {
+    200: ReportResponse,
+    403: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;

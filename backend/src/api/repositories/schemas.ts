@@ -1,5 +1,7 @@
 import { Type } from "@sinclair/typebox";
+import type { FastifySchema } from "fastify";
 import {
+  ErrorResponse,
   GitProviderSchema,
   OptionalGitProviderSchema,
 } from "@/shared/typebox";
@@ -27,7 +29,7 @@ export const ProjectsResponse = Type.Object({
 });
 
 export const ProjectIdParams = Type.Object({
-  id: Type.String(),
+  id: Type.String({ format: "uuid" }),
 });
 
 export const PrepareBranchBody = Type.Object({
@@ -108,9 +110,9 @@ export const CommitsCountResponse = Type.Object({
 export const RepositoriesQuery = Type.Object({
   // No default: omitting `provider` means "every connected provider".
   provider: Type.Optional(GitProviderSchema),
-  type: Type.Optional(Type.String({ default: "all" })),
-  sort: Type.Optional(Type.String({ default: "updated" })),
-  direction: Type.Optional(Type.String({ default: "desc" })),
+  type: Type.Optional(Type.String({ maxLength: 32, default: "all" })),
+  sort: Type.Optional(Type.String({ maxLength: 32, default: "updated" })),
+  direction: Type.Optional(Type.String({ maxLength: 32, default: "desc" })),
   per_page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 10 })),
 });
 
@@ -134,3 +136,71 @@ export const BranchesResponse = Type.Object({
   branches: Type.Array(Type.String()),
   defaultBranch: Type.String(),
 });
+
+export const ListRepositoriesRoute = {
+  description: "List repositories from every connected git provider",
+  tags: ["repositories"],
+  querystring: RepositoriesQuery,
+  response: {
+    200: RepositoriesResponse,
+    400: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const ListBranchesRoute = {
+  description: "List branches for a repository",
+  tags: ["repositories"],
+  params: RepoOwnerParams,
+  querystring: BranchesQuery,
+  response: { 200: BranchesResponse, 400: ErrorResponse },
+} satisfies FastifySchema;
+
+export const ListCommitsRoute = {
+  description: "List commits for a repository within an optional date range",
+  tags: ["repositories"],
+  params: RepoOwnerParams,
+  querystring: CommitsQuery,
+  response: { 200: CommitsResponse, 400: ErrorResponse },
+} satisfies FastifySchema;
+
+export const CountCommitsRoute = {
+  description:
+    "Count commits for a repository within an optional date range",
+  tags: ["repositories"],
+  params: RepoOwnerParams,
+  querystring: CommitsCountQuery,
+  response: { 200: CommitsCountResponse, 400: ErrorResponse },
+} satisfies FastifySchema;
+
+export const ListProjectsRoute = {
+  description: "List synced GitHub projects",
+  tags: ["projects"],
+  response: { 200: ProjectsResponse, 500: ErrorResponse },
+} satisfies FastifySchema;
+
+export const CreateProjectRoute = {
+  description: "Create or connect a new project",
+  tags: ["projects"],
+  body: CreateProjectBody,
+  response: {
+    201: CreateProjectResponse,
+    400: ErrorResponse,
+    403: ErrorResponse,
+    409: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const PrepareBranchRoute = {
+  description: "Ingest a project branch before chat retrieval",
+  tags: ["projects"],
+  params: ProjectIdParams,
+  body: PrepareBranchBody,
+  response: {
+    200: PrepareBranchResponse,
+    400: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;

@@ -1,164 +1,121 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
-import type { Static } from "@sinclair/typebox";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
 import { env } from "@/shared/config/env";
+import { demoModeGuard } from "@/shared/guards";
+import { reportsService } from "@/api/reports/service";
 import {
-  REPORT_ERROR_MESSAGES,
-  reportsService,
-} from "@/api/reports/service";
-import {
-  CreateReportScheduleBody,
-  ReportIdParams,
-  ReportScheduleIdParams,
-  ReportsQuery,
-  UpdateReportScheduleBody,
+  CreateReportScheduleRoute,
+  DeleteReportScheduleRoute,
+  GetReportRoute,
+  ListReportSchedulesRoute,
+  ListReportsRoute,
+  RunReportScheduleRoute,
+  UpdateReportScheduleRoute,
 } from "@/api/reports/schemas";
 
 const DEMO_ERROR = "Scheduled summaries are disabled in demo mode";
 
-function errorStatus(error: unknown): number {
-  const message = error instanceof Error ? error.message : "";
-  if (
-    message === REPORT_ERROR_MESSAGES.projectNotFound ||
-    message === REPORT_ERROR_MESSAGES.scheduleNotFound ||
-    message === REPORT_ERROR_MESSAGES.reportNotFound
-  ) {
-    return 404;
-  }
-  if (
-    message === REPORT_ERROR_MESSAGES.branchNotFound ||
-    message === REPORT_ERROR_MESSAGES.branchUnavailable ||
-    message === REPORT_ERROR_MESSAGES.invalidTimezone
-  ) {
-    return 400;
-  }
-  if (
-    message === REPORT_ERROR_MESSAGES.duplicateSchedule ||
-    message === REPORT_ERROR_MESSAGES.scheduleRunning ||
-    message === REPORT_ERROR_MESSAGES.scheduleCooldown
-  ) {
-    return 409;
-  }
-  return 500;
-}
-
-function sendError(reply: FastifyReply, error: unknown) {
-  const status = errorStatus(error);
-  if (status === 500) {
-    console.error("Report schedule error:", error);
-    return reply.status(500).send({ error: "Report schedule request failed" });
-  }
-  const message = error instanceof Error ? error.message : "Request failed";
-  return reply.status(status).send({ error: message });
-}
+const REPORT_RATE_LIMIT = {
+  max: env.REPORT_RATE_LIMIT_MAX,
+  timeWindow: "1 minute",
+} as const;
 
 export async function listReportSchedules(
-  _req: FastifyRequest,
-  reply: FastifyReply,
+  _req: TypeBoxRequest<typeof ListReportSchedulesRoute>,
+  _reply: TypeBoxReply<typeof ListReportSchedulesRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  try {
-    return reply.send({ schedules: await reportsService.listSchedules() });
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  return { schedules: await reportsService.listSchedules() };
 }
 
 export async function createReportSchedule(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof CreateReportScheduleRoute>,
+  reply: TypeBoxReply<typeof CreateReportScheduleRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const body = req.body as Static<typeof CreateReportScheduleBody>;
-  try {
-    return reply.code(201).send(await reportsService.createSchedule(body));
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  const schedule = await reportsService.createSchedule(req.body);
+  reply.code(201);
+  return schedule;
 }
 
 export async function updateReportSchedule(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof UpdateReportScheduleRoute>,
+  _reply: TypeBoxReply<typeof UpdateReportScheduleRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const { id } = req.params as Static<typeof ReportScheduleIdParams>;
-  const body = req.body as Static<typeof UpdateReportScheduleBody>;
-  try {
-    return reply.send(await reportsService.updateSchedule(id, body));
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  return reportsService.updateSchedule(req.params.id, req.body);
 }
 
 export async function deleteReportSchedule(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof DeleteReportScheduleRoute>,
+  reply: TypeBoxReply<typeof DeleteReportScheduleRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const { id } = req.params as Static<typeof ReportScheduleIdParams>;
-  try {
-    await reportsService.deleteSchedule(id);
-    return reply.code(204).send();
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  await reportsService.deleteSchedule(req.params.id);
+  reply.code(204);
+  return;
 }
 
 export async function runReportSchedule(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof RunReportScheduleRoute>,
+  reply: TypeBoxReply<typeof RunReportScheduleRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const { id } = req.params as Static<typeof ReportScheduleIdParams>;
-  try {
-    return reply.code(202).send(await reportsService.startScheduleRun(id));
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  const result = await reportsService.startScheduleRun(req.params.id);
+  reply.code(202);
+  return result;
 }
 
 export async function listReports(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListReportsRoute>,
+  _reply: TypeBoxReply<typeof ListReportsRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const query = req.query as Static<typeof ReportsQuery>;
-  try {
-    return reply.send({
-      reports: await reportsService.listReports({
-        projectId: query.projectId,
-        branch: query.branch,
-        limit: query.limit ?? 20,
-      }),
-    });
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  const query = req.query;
+  return {
+    reports: await reportsService.listReports({
+      projectId: query.projectId,
+      branch: query.branch,
+      limit: query.limit ?? 20,
+    }),
+  };
 }
 
 export async function getReport(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof GetReportRoute>,
+  _reply: TypeBoxReply<typeof GetReportRoute>,
 ) {
-  if (env.isDemoMode) {
-    return reply.status(403).send({ error: DEMO_ERROR });
-  }
-  const { id } = req.params as Static<typeof ReportIdParams>;
-  try {
-    return reply.send(await reportsService.getReport(id));
-  } catch (error) {
-    return sendError(reply, error);
-  }
+  return reportsService.getReport(req.params.id);
 }
+
+export const reportRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.addHook("preHandler", demoModeGuard(DEMO_ERROR));
+
+  app.get(
+    "/report-schedules",
+    { schema: ListReportSchedulesRoute },
+    listReportSchedules,
+  );
+
+  app.post(
+    "/report-schedules",
+    { schema: CreateReportScheduleRoute, config: { rateLimit: REPORT_RATE_LIMIT } },
+    createReportSchedule,
+  );
+
+  app.patch(
+    "/report-schedules/:id",
+    { schema: UpdateReportScheduleRoute },
+    updateReportSchedule,
+  );
+
+  app.delete(
+    "/report-schedules/:id",
+    { schema: DeleteReportScheduleRoute },
+    deleteReportSchedule,
+  );
+
+  app.post(
+    "/report-schedules/:id/run",
+    { schema: RunReportScheduleRoute, config: { rateLimit: REPORT_RATE_LIMIT } },
+    runReportSchedule,
+  );
+
+  app.get("/reports", { schema: ListReportsRoute }, listReports);
+
+  app.get("/reports/:id", { schema: GetReportRoute }, getReport);
+};

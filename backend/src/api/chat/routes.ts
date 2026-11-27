@@ -1,26 +1,17 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import type { Static } from "@sinclair/typebox";
-import {
-  CreateSessionBody,
-  ChatSessionsQuery,
-  ChatSessionIdParams,
-  SendMessageBody,
-} from "@/api/chat/schemas";
-import {
-  chatService,
-  SessionNotFoundError,
-} from "@/api/chat/services";
-import { chatStore } from "@/api/chat/chat-store";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import type { preHandlerHookHandler } from "fastify";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { httpErrors } from "@/shared/errors";
 import { env } from "@/shared/config/env";
-
-/** Interval between SSE comment heartbeats (see `streamMessage`). */
-const SSE_HEARTBEAT_MS = 15_000;
-
-function getAnonymousId(req: FastifyRequest): string {
-  const header = req.headers["x-anonymous-id"];
-  const value = Array.isArray(header) ? header[0] : header;
-  return (value ?? "").trim().slice(0, 128) || "anonymous";
-}
+import { chatService, SessionNotFoundError } from "@/api/chat/services";
+import { chatStore } from "@/api/chat/chat-store";
+import {
+  CreateSessionRoute,
+  DeleteChatSessionRoute,
+  GetChatMessagesRoute,
+  ListChatSessionsRoute,
+  SendChatMessageRoute,
+} from "@/api/chat/schemas";
 
 function canAccessSession(
   session: { anonymousId: string | null },
@@ -29,64 +20,59 @@ function canAccessSession(
   return !!session.anonymousId && session.anonymousId === anonymousId;
 }
 
-export async function createSession(req: FastifyRequest, reply: FastifyReply) {
-  const { projectId } = req.body as Static<typeof CreateSessionBody>;
-  const anonymousId = getAnonymousId(req);
-  try {
-    const session = await chatService.createSession(projectId, anonymousId);
-    return reply.status(201).send(session);
-  } catch (error) {
-    const message = (error as Error)?.message ?? "Failed to create chat session";
-    const status = message === "Project not found" ? 404 : 500;
-    return reply.status(status).send({ error: message });
+/**
+ * Ensures the session exists and belongs to this visitor before read/stream/
+ * delete runs. Returns 404 for someone else's session so existence is not
+ * leaked.
+ */
+const requireChatSession: preHandlerHookHandler = async (request) => {
+  const id = (request.params as { id?: string }).id;
+  const session = id ? await chatStore.getSession(id) : null;
+  if (!session || !canAccessSession(session, request.anonymousId)) {
+    throw httpErrors.notFound("Chat session not found");
   }
+};
+
+export async function createSession(
+  req: TypeBoxRequest<typeof CreateSessionRoute>,
+  reply: TypeBoxReply<typeof CreateSessionRoute>,
+) {
+  const session = await chatService.createSession(
+    req.body.projectId,
+    req.anonymousId,
+  );
+  reply.code(201);
+  return session;
 }
 
-export async function listSessions(req: FastifyRequest, reply: FastifyReply) {
-  const { projectId } = req.query as Static<typeof ChatSessionsQuery>;
-  const anonymousId = getAnonymousId(req);
-  try {
-    const sessions = await chatService.listSessions(projectId, anonymousId);
-    return reply.send({ sessions });
-  } catch {
-    return reply.status(500).send({ error: "Failed to list chat sessions" });
-  }
+export async function listSessions(
+  req: TypeBoxRequest<typeof ListChatSessionsRoute>,
+  _reply: TypeBoxReply<typeof ListChatSessionsRoute>,
+) {
+  return {
+    sessions: await chatService.listSessions(
+      req.query.projectId,
+      req.anonymousId,
+    ),
+  };
 }
 
-export async function getMessages(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as Static<typeof ChatSessionIdParams>;
-  const anonymousId = getAnonymousId(req);
-  try {
-    const session = await chatStore.getSession(id);
-    if (!session || !canAccessSession(session, anonymousId)) {
-      return reply.status(404).send({ error: "Chat session not found" });
-    }
-    const messages = await chatService.getMessages(id);
-    if (!messages) {
-      return reply.status(404).send({ error: "Chat session not found" });
-    }
-    return reply.send({ messages });
-  } catch {
-    return reply.status(500).send({ error: "Failed to list chat messages" });
-  }
+export async function getMessages(
+  req: TypeBoxRequest<typeof GetChatMessagesRoute>,
+  _reply: TypeBoxReply<typeof GetChatMessagesRoute>,
+) {
+  const messages = await chatService.getMessages(req.params.id);
+  if (!messages) throw httpErrors.notFound("Chat session not found");
+  return { messages };
 }
 
-export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as Static<typeof ChatSessionIdParams>;
-  const anonymousId = getAnonymousId(req);
-  try {
-    const session = await chatStore.getSession(id);
-    if (!session || !canAccessSession(session, anonymousId)) {
-      return reply.status(404).send({ error: "Chat session not found" });
-    }
-    const deleted = await chatService.deleteSession(id);
-    if (!deleted) {
-      return reply.status(404).send({ error: "Chat session not found" });
-    }
-    return reply.send({ deleted: true });
-  } catch {
-    return reply.status(500).send({ error: "Failed to delete chat session" });
-  }
+export async function removeSession(
+  req: TypeBoxRequest<typeof DeleteChatSessionRoute>,
+  _reply: TypeBoxReply<typeof DeleteChatSessionRoute>,
+) {
+  const deleted = await chatService.deleteSession(req.params.id);
+  if (!deleted) throw httpErrors.notFound("Chat session not found");
+  return { deleted: true };
 }
 
 /**
@@ -95,67 +81,38 @@ export async function removeSession(req: FastifyRequest, reply: FastifyReply) {
  *  - { type: "done", message }    final assistant message incl. citations
  *  - { type: "error", error }     on failure after the stream started
  */
-export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as Static<typeof ChatSessionIdParams>;
+export async function streamMessage(
+  req: TypeBoxRequest<typeof SendChatMessageRoute>,
+  reply: TypeBoxReply<typeof SendChatMessageRoute>,
+) {
   const { content, branch, model, provider, persona, clientMessageId } =
-    req.body as Static<typeof SendMessageBody>;
-  const anonymousId = getAnonymousId(req);
+    req.body;
 
-  const session = await chatStore.getSession(id);
-  if (!session || !canAccessSession(session, anonymousId)) {
-    return reply.status(404).send({ error: "Chat session not found" });
-  }
-
-  reply.hijack();
-  const res = reply.raw;
-
-  // @fastify/cors headers are discarded after hijack — reflect origin inline.
-  const origin = req.raw.headers.origin;
-  if (origin) {
-    const allowed = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
-    if (allowed.includes("*") || allowed.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-    }
-  }
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
-    "x-request-id": req.id,
-  });
-
-  let closed = false;
+  // Abort upstream work when the client disconnects. `@fastify/sse` also fires
+  // this when the handler resolves, which is a harmless no-op by then.
   const abort = new AbortController();
-  let heartbeat: ReturnType<typeof setInterval> | undefined;
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    if (heartbeat) clearInterval(heartbeat);
-    abort.abort();
-    res.end();
-  };
-  res.on("close", close);
+  reply.sse.onClose(() => abort.abort());
 
+  // `chatService` emits tokens synchronously; serialize writes so ordering and
+  // backpressure are preserved across the SSE frames.
+  let writes = Promise.resolve();
   const send = (data: unknown) => {
-    if (!closed) res.write(`data: ${JSON.stringify(data)}\n\n`);
+    writes = writes
+      .then(() => reply.sse.send({ data }))
+      .catch(() => {
+        // The connection closed mid-stream; nothing left to deliver.
+      });
+    return writes;
   };
 
-  // Comment frames keep intermediaries from closing an idle stream and let the
-  // client distinguish "still working" from "provider hung". `parseSseFrame`
-  // ignores frames without a `data:` line.
-  heartbeat = setInterval(() => {
-    if (!closed) res.write(": ping\n\n");
-  }, SSE_HEARTBEAT_MS);
-  if (typeof heartbeat.unref === "function") heartbeat.unref();
-
-  res.write("retry: 3000\n\n");
+  // Preserve the reconnection hint sent before the first token.
+  writes = writes
+    .then(() => reply.sse.send({ data: undefined, retry: 3000 }))
+    .catch(() => {});
 
   try {
     const message = await chatService.streamMessage({
-      sessionId: id,
+      sessionId: req.params.id,
       content,
       branch,
       model,
@@ -164,20 +121,56 @@ export async function streamMessage(req: FastifyRequest, reply: FastifyReply) {
       clientMessageId,
       signal: abort.signal,
       onProgress: (stage, msg, done, total) => {
-        send({ type: "progress", stage, message: msg, done, total });
+        void send({ type: "progress", stage, message: msg, done, total });
       },
       onToken: (chunk) => {
-        send({ type: "token", content: chunk });
+        void send({ type: "token", content: chunk });
       },
     });
-    send({ type: "done", message });
+    await send({ type: "done", message });
   } catch (error) {
     const message =
       error instanceof SessionNotFoundError
         ? "Chat session not found"
-        : (error as Error)?.message ?? "Failed to generate reply";
-    send({ type: "error", error: message, requestId: req.id });
-  } finally {
-    close();
+        : ((error as Error)?.message ?? "Failed to generate reply");
+    await send({ type: "error", error: message, requestId: req.id });
   }
+  // No explicit close: @fastify/sse ends the raw response when the handler
+  // resolves (and Fastify skips its own send because reply.sent is true).
 }
+
+export const chatRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.post("/chat/sessions", { schema: CreateSessionRoute }, createSession);
+
+  app.get("/chat/sessions", { schema: ListChatSessionsRoute }, listSessions);
+
+  app.get(
+    "/chat/sessions/:id/messages",
+    { schema: GetChatMessagesRoute, preHandler: requireChatSession },
+    getMessages,
+  );
+
+  app.delete(
+    "/chat/sessions/:id",
+    { schema: DeleteChatSessionRoute, preHandler: requireChatSession },
+    removeSession,
+  );
+
+  app.post(
+    "/chat/sessions/:id/messages",
+    {
+      schema: SendChatMessageRoute,
+      preHandler: requireChatSession,
+      // `manual` = no Accept negotiation; this endpoint always streams and the
+      // handler decides via reply.sse.*. Keeps our `{ error }` contract.
+      sse: "manual",
+      config: {
+        rateLimit: {
+          max: env.CHAT_RATE_LIMIT_MAX,
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    streamMessage,
+  );
+};

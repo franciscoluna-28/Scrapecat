@@ -1,4 +1,5 @@
 import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
 import {
   isEmbeddingProviderSupported,
   isProviderSupported,
@@ -116,16 +117,20 @@ export async function getAISettings(): Promise<AISettings> {
 
 export async function updateAISettings(input: AISettingsInput): Promise<AISettings> {
   if (!isProviderSupported(input.chatProvider)) {
-    throw new Error(`Unsupported provider: ${input.chatProvider}`);
+    throw httpErrors.badRequest(`Unsupported provider: ${input.chatProvider}`);
   }
   if (!isEmbeddingProviderSupported(input.embeddingProvider)) {
-    throw new Error(`Unsupported embedding provider: ${input.embeddingProvider}`);
+    throw httpErrors.badRequest(
+      `Unsupported embedding provider: ${input.embeddingProvider}`,
+    );
   }
   if (!isChatModelAllowed(input.chatProvider, input.chatModel)) {
-    throw new Error(`Unsupported model: ${input.chatModel}`);
+    throw httpErrors.badRequest(`Unsupported model: ${input.chatModel}`);
   }
   if (!isEmbeddingModelAllowed(input.embeddingProvider, input.embeddingModel)) {
-    throw new Error(`Unsupported embedding model: ${input.embeddingModel}`);
+    throw httpErrors.badRequest(
+      `Unsupported embedding model: ${input.embeddingModel}`,
+    );
   }
 
   const previous = await getAISettings();

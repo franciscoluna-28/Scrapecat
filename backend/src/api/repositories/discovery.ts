@@ -1,5 +1,9 @@
-import { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
 import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
+import { demoProviderGuard } from "@/shared/guards";
+import { logger } from "@/shared/logger";
 import {
   GIT_PROVIDERS,
   getGitProvider,
@@ -16,13 +20,11 @@ import {
 import { githubApiClient } from "@/rag/github/github-api";
 import { projectsStore } from "@/api/repositories/stores/projects-store";
 import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
-import type { Static } from "@sinclair/typebox";
 import {
-  RepoOwnerParams,
-  BranchesQuery,
-  CommitsQuery,
-  CommitsCountQuery,
-  RepositoriesQuery,
+  CountCommitsRoute,
+  ListBranchesRoute,
+  ListCommitsRoute,
+  ListRepositoriesRoute,
 } from "@/api/repositories/schemas";
 
 type RepositoryWithProvider = Repository & { provider: GitProviderId };
@@ -60,18 +62,6 @@ async function demoBranchAllowed(
 }
 
 /**
- * Demo ingestion reads the public GitHub REST API only (no git binary). GitLab
- * is a self-hosted-path provider for now, so reject it up front instead of
- * silently querying GitHub for a GitLab repository.
- */
-function unsupportedInDemo(provider: string): string | null {
-  if (env.isDemoMode && provider !== "github") {
-    return "Demo mode only supports GitHub repositories";
-  }
-  return null;
-}
-
-/**
  * Discovery fans out to every provider the server can actually read from:
  * demo is GitHub-only, otherwise a provider counts when a stored/env token
  * exists. With no tokens at all, keep the anonymous public GitHub fallback.
@@ -85,7 +75,10 @@ async function resolveDiscoveryTargets(): Promise<DiscoveryTarget[]> {
         return { provider, token: await resolveGitToken(provider) };
       } catch (error) {
         // A broken credential for one host must not hide the other host.
-        console.error(`Error resolving ${provider} token:`, error);
+        logger.error(
+          { err: error, provider },
+          "failed to resolve git provider token",
+        );
         return { provider, token: null };
       }
     }),
@@ -109,8 +102,8 @@ async function fetchProviderRepositories(
 }
 
 export async function listRepositories(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListRepositoriesRoute>,
+  _reply: TypeBoxReply<typeof ListRepositoriesRoute>,
 ) {
   const {
     provider: providerQuery,
@@ -118,7 +111,7 @@ export async function listRepositories(
     sort,
     direction,
     per_page,
-  } = req.query as Static<typeof RepositoriesQuery>;
+  } = req.query;
   const filters: DiscoveryFilters = {
     type: type || "all",
     sort: sort || "updated",
@@ -126,86 +119,72 @@ export async function listRepositories(
     perPage: per_page || 10,
   };
 
-  try {
-    // Explicit provider keeps the single-host behavior (still provider-tagged).
-    if (providerQuery) {
-      const unsupported = unsupportedInDemo(providerQuery);
-      if (unsupported) return reply.status(400).send({ error: unsupported });
-
-      const token = await resolveGitToken(providerQuery);
-      const repositories = await fetchProviderRepositories(
-        { provider: providerQuery, token },
-        filters,
-      );
-      return reply.send(repositories);
-    }
-
-    const targets = await resolveDiscoveryTargets();
-    const settled = await Promise.allSettled(
-      targets.map((target) => fetchProviderRepositories(target, filters)),
+  // Explicit provider keeps the single-host behavior (still provider-tagged).
+  if (providerQuery) {
+    const token = await resolveGitToken(providerQuery);
+    return fetchProviderRepositories(
+      { provider: providerQuery, token },
+      filters,
     );
-
-    const repositories: RepositoryWithProvider[] = [];
-    let failures = 0;
-
-    settled.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        repositories.push(...result.value);
-        return;
-      }
-      failures += 1;
-      console.error(
-        `Error fetching ${targets[index]?.provider} repositories:`,
-        result.reason,
-      );
-    });
-
-    // Only fail the request when every provider failed; otherwise show the
-    // hosts that did respond.
-    if (failures === settled.length) {
-      return reply.status(500).send({ error: "Failed to fetch repositories" });
-    }
-
-    repositories.sort((a, b) =>
-      filters.direction === "asc"
-        ? (a.updated_at ?? "").localeCompare(b.updated_at ?? "")
-        : (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
-    );
-
-    return reply.send(repositories);
-  } catch (error) {
-    console.error("Error fetching repositories:", error);
-    return reply.status(500).send({ error: "Failed to fetch repositories" });
   }
+
+  const targets = await resolveDiscoveryTargets();
+  const settled = await Promise.allSettled(
+    targets.map((target) => fetchProviderRepositories(target, filters)),
+  );
+
+  const repositories: RepositoryWithProvider[] = [];
+  let failures = 0;
+
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      repositories.push(...result.value);
+      return;
+    }
+    failures += 1;
+    req.log.error(
+      { err: result.reason, provider: targets[index]?.provider },
+      "failed to fetch repositories from provider",
+    );
+  });
+
+  // Only fail the request when every provider failed; otherwise show the
+  // hosts that did respond.
+  if (failures === settled.length) {
+    throw httpErrors.internalServerError("Failed to fetch repositories");
+  }
+
+  repositories.sort((a, b) =>
+    filters.direction === "asc"
+      ? (a.updated_at ?? "").localeCompare(b.updated_at ?? "")
+      : (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+  );
+
+  return repositories;
 }
 
 export async function listBranches(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListBranchesRoute>,
+  _reply: TypeBoxReply<typeof ListBranchesRoute>,
 ) {
-  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
-  const { provider: providerQuery } = req.query as Static<typeof BranchesQuery>;
+  const { owner, repo } = req.params;
+  const { provider: providerQuery } = req.query;
   // The client passes the project's provider, so discovery needs no DB read.
   const gitProvider = providerQuery ?? "github";
 
-  const unsupported = unsupportedInDemo(gitProvider);
-  if (unsupported) return reply.status(400).send({ error: unsupported });
-
-  try {
-    const provider = getGitProvider(gitProvider, await resolveGitToken(gitProvider));
-    const [allBranches, defaultBranch] = await Promise.all([
-      provider.listBranches(owner, repo),
-      provider.getDefaultBranch(owner, repo),
-    ]);
-    // Demo: expose only trunk branches (or the default) to bound ingestion.
-    const branches = env.isDemoMode
-      ? restrictDemoBranches(allBranches, defaultBranch)
-      : allBranches;
-    return reply.send({ branches, defaultBranch });
-  } catch (error) {
-    console.error("Error fetching branches:", error);
-    return reply.status(500).send({ error: "Failed to fetch branches" });
-  }
+  const provider = getGitProvider(
+    gitProvider,
+    await resolveGitToken(gitProvider),
+  );
+  const [allBranches, defaultBranch] = await Promise.all([
+    provider.listBranches(owner, repo),
+    provider.getDefaultBranch(owner, repo),
+  ]);
+  // Demo: expose only trunk branches (or the default) to bound ingestion.
+  const branches = env.isDemoMode
+    ? restrictDemoBranches(allBranches, defaultBranch)
+    : allBranches;
+  return { branches, defaultBranch };
 }
 
 /**
@@ -215,136 +194,136 @@ export async function listBranches(
  * no ingested commits yet.
  */
 export async function listCommits(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListCommitsRoute>,
+  _reply: TypeBoxReply<typeof ListCommitsRoute>,
 ) {
-  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
-  const {
-    provider: providerQuery,
-    limit,
-    startDate,
-    endDate,
-    branch,
-  } = req.query as Static<typeof CommitsQuery>;
+  const { owner, repo } = req.params;
+  const { provider: providerQuery, limit, startDate, endDate, branch } =
+    req.query;
 
-  try {
-    if (env.isDemoMode) {
-      // Demo has no guaranteed project row; the client supplies the provider.
-      const gitProvider = providerQuery ?? "github";
-      // Demo reads use the GitHub REST API; fail fast for other providers.
-      const unsupported = unsupportedInDemo(gitProvider);
-      if (unsupported) return reply.status(400).send({ error: unsupported });
-      const ref =
-        branch ||
-        (await getGitProvider(gitProvider, await resolveGitToken(gitProvider)).getDefaultBranch(
-          owner,
-          repo,
-        ));
-      if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
-        return reply.send({ commits: [] });
-      }
-      const commits = await githubApiClient.listCommits({
-        owner,
-        repo,
-        branch: ref,
-        since: parseDate(startDate),
-        until: parseDate(endDate),
-        max: limit,
-      });
-      return reply.send({
-        commits: commits.map((c) => ({
-          sha: c.sha,
-          message: c.message,
-          author: c.author,
-          date: c.date,
-          url: c.url,
-        })),
-      });
+  if (env.isDemoMode) {
+    // Demo has no guaranteed project row; the client supplies the provider.
+    const gitProvider = providerQuery ?? "github";
+    const ref =
+      branch ||
+      (await getGitProvider(
+        gitProvider,
+        await resolveGitToken(gitProvider),
+      ).getDefaultBranch(owner, repo));
+    if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
+      return { commits: [] };
     }
-
-    const project = await projectsStore.getProjectByOwnerRepo({
-      gitProvider: providerQuery ?? "github",
-      providerOwner: owner,
-      repositoryName: repo,
+    const commits = await githubApiClient.listCommits({
+      owner,
+      repo,
+      branch: ref,
+      since: parseDate(startDate),
+      until: parseDate(endDate),
+      max: limit,
     });
-    if (!project) return reply.send({ commits: [] });
-
-    const gitProvider = project.gitProvider;
-    const rows = await commitEmbeddingsStore.listCommitsForProject({
-      repoId: project.id,
-      branch: branch || project.defaultBranch,
-      startDate: parseDate(startDate),
-      endDate: parseDate(endDate),
-    });
-    return reply.send({
-      commits: rows.slice(0, limit).map((c) => ({
-        sha: c.commitSha,
+    return {
+      commits: commits.map((c) => ({
+        sha: c.sha,
         message: c.message,
-        author: c.author ?? "",
-        date: c.committedAt.toISOString(),
-        url: c.commitUrl || commitUrl(gitProvider, owner, repo, c.commitSha),
+        author: c.author,
+        date: c.date,
+        url: c.url,
       })),
-    });
-  } catch (error: any) {
-    console.error("Error fetching commits:", error);
-    return reply.status(500).send({ error: "Failed to fetch commits" });
+    };
   }
+
+  const project = await projectsStore.getProjectByOwnerRepo({
+    gitProvider: providerQuery ?? "github",
+    providerOwner: owner,
+    repositoryName: repo,
+  });
+  if (!project) return { commits: [] };
+
+  const gitProvider = project.gitProvider;
+  const rows = await commitEmbeddingsStore.listCommitsForProject({
+    repoId: project.id,
+    branch: branch || project.defaultBranch,
+    startDate: parseDate(startDate),
+    endDate: parseDate(endDate),
+  });
+  return {
+    commits: rows.slice(0, limit).map((c) => ({
+      sha: c.commitSha,
+      message: c.message,
+      author: c.author ?? "",
+      date: c.committedAt.toISOString(),
+      url: c.commitUrl || commitUrl(gitProvider, owner, repo, c.commitSha),
+    })),
+  };
 }
 
 export async function countCommits(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof CountCommitsRoute>,
+  _reply: TypeBoxReply<typeof CountCommitsRoute>,
 ) {
-  const { owner, repo } = req.params as Static<typeof RepoOwnerParams>;
-  const {
-    provider: providerQuery,
-    startDate,
-    endDate,
-    branch,
-  } = req.query as Static<typeof CommitsCountQuery>;
+  const { owner, repo } = req.params;
+  const { provider: providerQuery, startDate, endDate, branch } = req.query;
 
-  try {
-    if (env.isDemoMode) {
-      // Demo has no guaranteed project row; the client supplies the provider.
-      const gitProvider = providerQuery ?? "github";
-      const unsupported = unsupportedInDemo(gitProvider);
-      if (unsupported) return reply.status(400).send({ error: unsupported });
-      const ref =
-        branch ||
-        (await getGitProvider(gitProvider, await resolveGitToken(gitProvider)).getDefaultBranch(
-          owner,
-          repo,
-        ));
-      if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
-        return reply.send({ count: 0 });
-      }
-      const commits = await githubApiClient.listCommits({
-        owner,
-        repo,
-        branch: ref,
-        since: parseDate(startDate),
-        until: parseDate(endDate),
-        max: 1000,
-      });
-      return reply.send({ count: commits.length });
+  if (env.isDemoMode) {
+    // Demo has no guaranteed project row; the client supplies the provider.
+    const gitProvider = providerQuery ?? "github";
+    const ref =
+      branch ||
+      (await getGitProvider(
+        gitProvider,
+        await resolveGitToken(gitProvider),
+      ).getDefaultBranch(owner, repo));
+    if (!(await demoBranchAllowed(gitProvider, owner, repo, ref))) {
+      return { count: 0 };
     }
-
-    const project = await projectsStore.getProjectByOwnerRepo({
-      gitProvider: providerQuery ?? "github",
-      providerOwner: owner,
-      repositoryName: repo,
+    const commits = await githubApiClient.listCommits({
+      owner,
+      repo,
+      branch: ref,
+      since: parseDate(startDate),
+      until: parseDate(endDate),
+      max: 1000,
     });
-    if (!project) return reply.send({ count: 0 });
-
-    const rows = await commitEmbeddingsStore.listCommitsForProject({
-      repoId: project.id,
-      branch: branch || project.defaultBranch,
-      startDate: parseDate(startDate),
-      endDate: parseDate(endDate),
-    });
-    return reply.send({ count: rows.length });
-  } catch (error: any) {
-    console.error("Error fetching commit count:", error);
-    return reply.status(500).send({ error: "Failed to fetch commit count" });
+    return { count: commits.length };
   }
+
+  const project = await projectsStore.getProjectByOwnerRepo({
+    gitProvider: providerQuery ?? "github",
+    providerOwner: owner,
+    repositoryName: repo,
+  });
+  if (!project) return { count: 0 };
+
+  const rows = await commitEmbeddingsStore.listCommitsForProject({
+    repoId: project.id,
+    branch: branch || project.defaultBranch,
+    startDate: parseDate(startDate),
+    endDate: parseDate(endDate),
+  });
+  return { count: rows.length };
 }
+
+export const discoveryRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.addHook("preHandler", demoProviderGuard);
+
+  app.get(
+    "/repositories",
+    { schema: ListRepositoriesRoute },
+    listRepositories,
+  );
+  app.get(
+    "/repositories/:owner/:repo/branches",
+    { schema: ListBranchesRoute },
+    listBranches,
+  );
+  app.get(
+    "/repositories/:owner/:repo/commits",
+    { schema: ListCommitsRoute },
+    listCommits,
+  );
+  app.get(
+    "/repositories/:owner/:repo/commits/count",
+    { schema: CountCommitsRoute },
+    countCommits,
+  );
+};

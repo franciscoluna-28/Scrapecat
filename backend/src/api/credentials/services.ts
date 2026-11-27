@@ -1,4 +1,5 @@
 import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
 import { getProviderConfig, isProviderSupported } from "@/shared/integrations/providers/registry";
 import { encrypt, decrypt, maskApiKey } from "@/api/credentials/encryption";
 import type { CredentialProvider } from "@/db/schema";
@@ -17,7 +18,7 @@ export function toSafeCredential(row: CredentialRow) {
     id: row.id,
     provider: row.provider,
     keyHint: row.keyHint,
-    createdAt: row.createdAt,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -37,7 +38,7 @@ export async function createCredential(data: {
   key: string;
 }): Promise<string> {
   if (!isProviderSupported(data.provider)) {
-    throw new Error(`Unsupported provider: ${data.provider}`);
+    throw httpErrors.badRequest(`Unsupported provider: ${data.provider}`);
   }
 
   const row = await credentialsStore.upsertCredential({

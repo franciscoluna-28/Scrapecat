@@ -1,4 +1,5 @@
 import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
 import type { IngestProgress, IngestResult } from "@/rag/indexing/ingest";
 import { commitEmbeddingsStore } from "@/rag/indexing/commit-embeddings-store";
 import { branchSyncStore } from "@/rag/indexing/branch-sync-store";
@@ -53,7 +54,7 @@ export async function listProjects() {
  */
 export async function prepareProjectBranch(projectId: string, branch: string, onProgress?: IngestProgress) {
   const project = await projectsStore.getProjectById(projectId);
-  if (!project) throw new Error("Project not found");
+  if (!project) throw httpErrors.notFound("Project not found");
 
   const existing = await commitEmbeddingsStore.countCommitsForProject({
     repoId: projectId,

@@ -9,7 +9,7 @@ const mockedCheckDatabase = vi.mocked(checkDatabase);
 
 function fakeReply() {
   return {
-    status: vi.fn().mockReturnThis(),
+    code: vi.fn().mockReturnThis(),
     send: vi.fn(),
   };
 }
@@ -21,19 +21,19 @@ describe("GET /api/v1/health/ready", () => {
     mockedCheckDatabase.mockResolvedValue(true);
     const reply = fakeReply();
 
-    await ready({} as never, reply as never);
+    const result = await ready({} as never, reply as never);
 
-    expect(reply.send).toHaveBeenCalledWith({ status: "ok" });
-    expect(reply.status).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "ok" });
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it("returns 503 when the database is unavailable", async () => {
     mockedCheckDatabase.mockResolvedValue(false);
     const reply = fakeReply();
 
-    await ready({} as never, reply as never);
+    const result = await ready({} as never, reply as never);
 
-    expect(reply.status).toHaveBeenCalledWith(503);
-    expect(reply.send).toHaveBeenCalledWith({ status: "error" });
+    expect(reply.code).toHaveBeenCalledWith(503);
+    expect(result).toEqual({ status: "error" });
   });
 });

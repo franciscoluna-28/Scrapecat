@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyTypeBox } from "@/shared/fastify";
 import { createServer } from "@/startup/create-server";
 import { registerRoutes } from "@/startup/register-routes";
 
@@ -7,8 +7,8 @@ import { registerRoutes } from "@/startup/register-routes";
  * Server composition and route registration are split so feature work does not
  * have to edit Fastify setup or unrelated route groups.
  */
-export async function buildApp(instance?: FastifyInstance) {
+export async function buildApp(instance?: FastifyTypeBox) {
   const app = await createServer(instance);
-  registerRoutes(app);
+  await registerRoutes(app);
   return app;
 }

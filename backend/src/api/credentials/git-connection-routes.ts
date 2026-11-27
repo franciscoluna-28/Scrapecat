@@ -1,71 +1,71 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
-import type { Static } from "@sinclair/typebox";
-import { env } from "@/shared/config/env";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { httpErrors } from "@/shared/errors";
+import { demoWriteGuard } from "@/shared/guards";
 import {
   connectGitProvider,
   disconnectGitProvider,
   getGitProviderConnection,
 } from "@/api/credentials/git-connections";
 import {
-  ConnectGitProviderBody,
-  GitProviderParams,
+  ConnectGitProviderRoute,
+  DisconnectGitProviderRoute,
+  GetGitProviderConnectionRoute,
 } from "@/api/credentials/schemas";
 
+const DEMO_TOKENS_MESSAGE =
+  "Git provider tokens are managed by the server in demo mode";
+
 export async function connectProvider(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ConnectGitProviderRoute>,
+  reply: TypeBoxReply<typeof ConnectGitProviderRoute>,
 ) {
-  if (env.isDemoRestrictKeys) {
-    return reply
-      .status(403)
-      .send({ error: "Git provider tokens are managed by the server in demo mode" });
-  }
-
-  const { provider } = req.params as Static<typeof GitProviderParams>;
-  const { token } = req.body as Static<typeof ConnectGitProviderBody>;
-
-  try {
-    return reply.code(201).send(await connectGitProvider(provider, token));
-  } catch (error) {
-    console.error(`Error connecting ${provider}:`, error);
-    return reply.status(400).send({ error: "Invalid token or insufficient scopes" });
-  }
+  const { provider } = req.params;
+  const { token } = req.body;
+  const connection = await connectGitProvider(provider, token);
+  reply.code(201);
+  return connection;
 }
 
 export async function getProviderConnection(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof GetGitProviderConnectionRoute>,
+  _reply: TypeBoxReply<typeof GetGitProviderConnectionRoute>,
 ) {
-  const { provider } = req.params as Static<typeof GitProviderParams>;
-
-  try {
-    return reply.send(await getGitProviderConnection(provider));
-  } catch (error) {
-    console.error(`Error reading ${provider} connection:`, error);
-    return reply.status(500).send({ error: "Failed to read git provider connection" });
-  }
+  return getGitProviderConnection(req.params.provider);
 }
 
 export async function disconnectProvider(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof DisconnectGitProviderRoute>,
+  reply: TypeBoxReply<typeof DisconnectGitProviderRoute>,
 ) {
-  if (env.isDemoRestrictKeys) {
-    return reply
-      .status(403)
-      .send({ error: "Git provider tokens are managed by the server in demo mode" });
-  }
-
-  const { provider } = req.params as Static<typeof GitProviderParams>;
-
-  try {
-    const deleted = await disconnectGitProvider(provider);
-    if (!deleted) {
-      return reply.status(404).send({ error: "No connected git provider found" });
-    }
-    return reply.code(204).send();
-  } catch (error) {
-    console.error(`Error disconnecting ${provider}:`, error);
-    return reply.status(500).send({ error: "Failed to disconnect git provider" });
-  }
+  const deleted = await disconnectGitProvider(req.params.provider);
+  if (!deleted) throw httpErrors.notFound("No connected git provider found");
+  reply.code(204);
+  return;
 }
+
+export const gitConnectionRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.post(
+    "/git-providers/:provider/connection",
+    {
+      schema: ConnectGitProviderRoute,
+      preHandler: demoWriteGuard(DEMO_TOKENS_MESSAGE),
+    },
+    connectProvider,
+  );
+
+  app.get(
+    "/git-providers/:provider/connection",
+    { schema: GetGitProviderConnectionRoute },
+    getProviderConnection,
+  );
+
+  app.delete(
+    "/git-providers/:provider/connection",
+    {
+      schema: DisconnectGitProviderRoute,
+      preHandler: demoWriteGuard(DEMO_TOKENS_MESSAGE),
+    },
+    disconnectProvider,
+  );
+};

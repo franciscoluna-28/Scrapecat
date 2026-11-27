@@ -1,4 +1,5 @@
 import { logger } from "@/shared/logger";
+import { httpErrors } from "@/shared/errors";
 import { getGitProvider } from "@/shared/integrations/git-provider";
 import { resolveGitToken } from "@/shared/integrations/git-provider/token";
 import { type AIResponse, aiClient, resolveChatModel } from "@/rag/answer/ai";
@@ -195,7 +196,7 @@ export function createReportsService(
 
   async function requireProject(projectId: string): Promise<ProjectRow> {
     const project = await deps.projects.getProjectById(projectId);
-    if (!project) throw new Error(REPORT_ERROR_MESSAGES.projectNotFound);
+    if (!project) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.projectNotFound);
     return project;
   }
 
@@ -207,14 +208,14 @@ export function createReportsService(
     try {
       exists = await deps.branchExists(project, branch);
     } catch {
-      throw new Error(REPORT_ERROR_MESSAGES.branchUnavailable);
+      throw httpErrors.badRequest(REPORT_ERROR_MESSAGES.branchUnavailable);
     }
-    if (!exists) throw new Error(REPORT_ERROR_MESSAGES.branchNotFound);
+    if (!exists) throw httpErrors.badRequest(REPORT_ERROR_MESSAGES.branchNotFound);
   }
 
   function requireTimeZone(timeZone: string): void {
     if (!isValidTimeZone(timeZone)) {
-      throw new Error(REPORT_ERROR_MESSAGES.invalidTimezone);
+      throw httpErrors.badRequest(REPORT_ERROR_MESSAGES.invalidTimezone);
     }
   }
 
@@ -239,7 +240,7 @@ export function createReportsService(
       input.projectId,
       input.branch,
     );
-    if (existing) throw new Error(REPORT_ERROR_MESSAGES.duplicateSchedule);
+    if (existing) throw httpErrors.conflict(REPORT_ERROR_MESSAGES.duplicateSchedule);
 
     const now = deps.now();
     const cadence = input.cadence ?? DEFAULT_CADENCE;
@@ -265,13 +266,13 @@ export function createReportsService(
       });
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
-        throw new Error(REPORT_ERROR_MESSAGES.duplicateSchedule);
+        throw httpErrors.conflict(REPORT_ERROR_MESSAGES.duplicateSchedule);
       }
       throw error;
     }
 
     const view = await deps.store.getScheduleView(row.id);
-    if (!view) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!view) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
     return toScheduleDTO(view);
   }
 
@@ -286,7 +287,7 @@ export function createReportsService(
     },
   ): Promise<ReportScheduleDTO> {
     const current = await deps.store.getSchedule(id);
-    if (!current) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!current) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
 
     const now = deps.now();
     const cadence = input.cadence ?? (current.cadence as ReportCadence);
@@ -307,16 +308,16 @@ export function createReportsService(
         now,
       ),
     });
-    if (!updated) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!updated) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
 
     const view = await deps.store.getScheduleView(id);
-    if (!view) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!view) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
     return toScheduleDTO(view);
   }
 
   async function deleteSchedule(id: string): Promise<void> {
     const deleted = await deps.store.deleteSchedule(id);
-    if (!deleted) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!deleted) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
   }
 
   async function listReports(input: {
@@ -330,7 +331,7 @@ export function createReportsService(
 
   async function getReport(id: string): Promise<ReportDTO> {
     const row = await deps.store.getReport(id);
-    if (!row) throw new Error(REPORT_ERROR_MESSAGES.reportNotFound);
+    if (!row) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.reportNotFound);
     return toReportDTO(row);
   }
 
@@ -442,14 +443,14 @@ export function createReportsService(
     id: string,
   ): Promise<{ scheduleId: string; status: ReportStatus }> {
     const current = await deps.store.getSchedule(id);
-    if (!current) throw new Error(REPORT_ERROR_MESSAGES.scheduleNotFound);
+    if (!current) throw httpErrors.notFound(REPORT_ERROR_MESSAGES.scheduleNotFound);
 
     const now = deps.now();
     if (
       current.lastRunAt &&
       now.getTime() - current.lastRunAt.getTime() < REPORT_RUN_COOLDOWN_MS
     ) {
-      throw new Error(REPORT_ERROR_MESSAGES.scheduleCooldown);
+      throw httpErrors.conflict(REPORT_ERROR_MESSAGES.scheduleCooldown);
     }
     const claimed = await deps.store.markScheduleRunning({
       id,
@@ -459,7 +460,7 @@ export function createReportsService(
           ? computeNextRun(current, now)
           : undefined,
     });
-    if (!claimed) throw new Error(REPORT_ERROR_MESSAGES.scheduleRunning);
+    if (!claimed) throw httpErrors.conflict(REPORT_ERROR_MESSAGES.scheduleRunning);
 
     void executeSchedule(claimed, now).catch((error) => {
       logger.error(

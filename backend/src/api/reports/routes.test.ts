@@ -198,7 +198,7 @@ describe("report routes", () => {
 
   it("maps a missing report to 404", async () => {
     mockReportsService.getReport.mockRejectedValue(
-      new Error("Report not found"),
+      Object.assign(new Error("Report not found"), { statusCode: 404 }),
     );
 
     const res = await app.inject({

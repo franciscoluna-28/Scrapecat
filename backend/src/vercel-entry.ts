@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyTypeBox } from "@/shared/fastify";
 import { buildApp } from "@/build-app";
 
 /**
@@ -8,6 +8,8 @@ import { buildApp } from "@/build-app";
  * `scripts/build-vercel.mjs`, which resolves the `@/` path aliases Vercel's Node
  * runtime does not support.
  */
-export function buildVercelApp(instance?: FastifyInstance): Promise<FastifyInstance> {
+export function buildVercelApp(
+  instance?: FastifyTypeBox,
+): Promise<FastifyTypeBox> {
   return buildApp(instance);
 }

@@ -28,6 +28,13 @@ const ROUTES = [
   ["GET", "/api/v1/chat/sessions/:id/messages"],
   ["DELETE", "/api/v1/chat/sessions/:id"],
   ["POST", "/api/v1/chat/sessions/:id/messages"],
+  ["GET", "/api/v1/report-schedules"],
+  ["POST", "/api/v1/report-schedules"],
+  ["PATCH", "/api/v1/report-schedules/:id"],
+  ["DELETE", "/api/v1/report-schedules/:id"],
+  ["POST", "/api/v1/report-schedules/:id/run"],
+  ["GET", "/api/v1/reports"],
+  ["GET", "/api/v1/reports/:id"],
 ] as const;
 
 describe("buildApp", () => {
@@ -35,6 +42,7 @@ describe("buildApp", () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    await app.ready();
   });
 
   afterAll(async () => {
@@ -53,7 +61,8 @@ describe("buildApp", () => {
         server.hasRoute({ method: "GET", url: "/api/v1/health" }),
       ).toBe(false);
 
-      registerRoutes(server);
+      await registerRoutes(server);
+      await server.ready();
 
       expect(
         server.hasRoute({ method: "GET", url: "/api/v1/health" }),

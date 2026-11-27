@@ -1,4 +1,6 @@
 import { Type } from "@sinclair/typebox";
+import type { FastifySchema } from "fastify";
+import { ErrorResponse } from "@/shared/typebox";
 
 export const HealthResponse = Type.Object({
   status: Type.Literal("ok"),
@@ -21,3 +23,22 @@ export const MetaResponse = Type.Object({
     }),
   ),
 });
+
+export const HealthRoute = {
+  description: "Health check endpoint",
+  tags: ["health"],
+  response: { 200: HealthResponse },
+} satisfies FastifySchema;
+
+export const HealthReadyRoute = {
+  description: "Readiness check (verifies the database connection)",
+  tags: ["health"],
+  response: { 200: HealthReadyResponse, 503: HealthReadyResponse },
+} satisfies FastifySchema;
+
+export const MetaRoute = {
+  description:
+    "Describe the data backing the API (bundled demo dataset vs database)",
+  tags: ["meta"],
+  response: { 200: MetaResponse, 500: ErrorResponse },
+} satisfies FastifySchema;

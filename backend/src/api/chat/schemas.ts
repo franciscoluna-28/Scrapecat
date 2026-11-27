@@ -1,5 +1,17 @@
 import { Type, type Static } from "@sinclair/typebox";
+import type { FastifySchema } from "fastify";
+import { ErrorResponse } from "@/shared/typebox";
 import { BRANCH_PATTERN } from "@/shared/utils";
+
+/** Visitor id header, validated when present and ignored when absent. */
+export const AnonymousIdHeaders = Type.Object(
+  {
+    "x-anonymous-id": Type.Optional(
+      Type.String({ minLength: 1, maxLength: 128 }),
+    ),
+  },
+  { additionalProperties: true },
+);
 
 const ChatCitation = Type.Object({
   commitSha: Type.String(),
@@ -71,3 +83,63 @@ export const DeleteSessionResponse = Type.Object({
 
 export type ChatCitationDTO = Static<typeof ChatCitation>;
 export type ChatMessageDTO = Static<typeof ChatMessageResponse>;
+
+export const CreateSessionRoute = {
+  description: "Create a new chat session for a project",
+  tags: ["chat"],
+  headers: AnonymousIdHeaders,
+  body: CreateSessionBody,
+  response: {
+    201: CreateSessionResponse,
+    400: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const ListChatSessionsRoute = {
+  description: "List chat sessions, optionally filtered by project",
+  tags: ["chat"],
+  headers: AnonymousIdHeaders,
+  querystring: ChatSessionsQuery,
+  response: {
+    200: ChatSessionsListResponse,
+    400: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const GetChatMessagesRoute = {
+  description: "List messages for a chat session",
+  tags: ["chat"],
+  headers: AnonymousIdHeaders,
+  params: ChatSessionIdParams,
+  response: {
+    200: ChatMessagesResponse,
+    400: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const DeleteChatSessionRoute = {
+  description: "Delete a chat session",
+  tags: ["chat"],
+  headers: AnonymousIdHeaders,
+  params: ChatSessionIdParams,
+  response: {
+    200: DeleteSessionResponse,
+    400: ErrorResponse,
+    404: ErrorResponse,
+    500: ErrorResponse,
+  },
+} satisfies FastifySchema;
+
+export const SendChatMessageRoute = {
+  description: "Send a message and stream the assistant reply (SSE)",
+  tags: ["chat"],
+  headers: AnonymousIdHeaders,
+  params: ChatSessionIdParams,
+  body: SendMessageBody,
+  response: { 400: ErrorResponse, 404: ErrorResponse },
+} satisfies FastifySchema;

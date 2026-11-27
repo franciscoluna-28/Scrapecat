@@ -139,7 +139,7 @@ describe("GET /api/v1/repositories", () => {
 
     const res = await app.inject({ method: "GET", url: "/api/v1/repositories" });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: "Failed to fetch repositories" });
+    expect(res.json()).toEqual({ error: "Internal Server Error" });
   });
 });
 
@@ -185,7 +185,7 @@ describe("GET /api/v1/repositories/:owner/:repo/branches", () => {
       url: "/api/v1/repositories/owner1/repo1/branches",
     });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: "Failed to fetch branches" });
+    expect(res.json()).toEqual({ error: "Internal Server Error" });
   });
 });
 
@@ -289,7 +289,7 @@ describe("GET /api/v1/repositories/:owner/:repo/commits", () => {
       url: "/api/v1/repositories/owner1/repo1/commits",
     });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: "Failed to fetch commits" });
+    expect(res.json()).toEqual({ error: "Internal Server Error" });
   });
 
   it("rejects an invalid limit", async () => {
@@ -356,6 +356,6 @@ describe("GET /api/v1/repositories/:owner/:repo/commits/count", () => {
       url: "/api/v1/repositories/owner1/repo1/commits/count",
     });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error: "Failed to fetch commit count" });
+    expect(res.json()).toEqual({ error: "Internal Server Error" });
   });
 });

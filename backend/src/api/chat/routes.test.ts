@@ -92,7 +92,9 @@ describe("chat routes", () => {
   });
 
   it("returns 404 when the project does not exist", async () => {
-    mockCreateSession.mockRejectedValue(new Error("Project not found"));
+    mockCreateSession.mockRejectedValue(
+      Object.assign(new Error("Project not found"), { statusCode: 404 }),
+    );
 
     const res = await app.inject({
       method: "POST",

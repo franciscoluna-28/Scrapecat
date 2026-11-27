@@ -1,85 +1,86 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import type { Static } from "@sinclair/typebox";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
+import { demoWriteGuard } from "@/shared/guards";
 import {
   listCredentials,
   createCredential,
   deleteCredential,
   verifyCredential,
 } from "@/api/credentials/services";
-import { AddCredentialBody, VerifyCredentialBody, CredentialIdParams } from "@/api/credentials/schemas";
-import { env } from "@/shared/config/env";
+import {
+  AddCredentialRoute,
+  DeleteCredentialRoute,
+  ListCredentialsRoute,
+  VerifyCredentialRoute,
+} from "@/api/credentials/schemas";
+
+const DEMO_KEYS_MESSAGE =
+  "API keys are managed by the server in demo mode";
 
 export async function listKeys(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof ListCredentialsRoute>,
+  _reply: TypeBoxReply<typeof ListCredentialsRoute>,
 ) {
-  const provider = (req.query as { provider?: string }).provider;
-
-  try {
-    // Demo deployments don't expose BYOK — the server's env keys are used.
-    if (env.isDemoRestrictKeys) return reply.send({ keys: [] });
-    const keys = await listCredentials(provider);
-    return reply.send({ keys });
-  } catch (error) {
-    console.error("Error listing credentials:", error);
-    return reply.status(500).send({ error: "Failed to list credentials" });
-  }
+  // Demo deployments don't expose BYOK — the server's env keys are used.
+  if (env.isDemoRestrictKeys) return { keys: [] };
+  return { keys: await listCredentials(req.query.provider) };
 }
 
 export async function addKey(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof AddCredentialRoute>,
+  reply: TypeBoxReply<typeof AddCredentialRoute>,
 ) {
-  if (env.isDemoRestrictKeys) {
-    return reply.status(403).send({ error: "API keys are managed by the server in demo mode" });
-  }
-  const { provider, key } = req.body as Static<typeof AddCredentialBody>;
-
-  try {
-    const id = await createCredential({ provider, key });
-    return reply.code(201).send({ id });
-  } catch (error: any) {
-    if (error?.message?.startsWith("Unsupported provider")) {
-      return reply.status(400).send({ error: error.message });
-    }
-    console.error("Error adding credential:", error);
-    return reply.status(500).send({ error: "Failed to add credential" });
-  }
+  const { provider, key } = req.body;
+  const id = await createCredential({ provider, key });
+  reply.code(201);
+  return { id };
 }
 
 export async function deleteKey(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof DeleteCredentialRoute>,
+  reply: TypeBoxReply<typeof DeleteCredentialRoute>,
 ) {
-  if (env.isDemoRestrictKeys) {
-    return reply.status(403).send({ error: "API keys are managed by the server in demo mode" });
-  }
-  const { id } = req.params as Static<typeof CredentialIdParams>;
-
-  try {
-    const deleted = await deleteCredential(id);
-    if (!deleted) {
-      return reply.status(404).send({ error: "Credential not found" });
-    }
-
-    return reply.code(204).send();
-  } catch (error) {
-    console.error("Error deleting credential:", error);
-    return reply.status(500).send({ error: "Failed to delete credential" });
-  }
+  const deleted = await deleteCredential(req.params.id);
+  if (!deleted) throw httpErrors.notFound("Credential not found");
+  reply.code(204);
+  return;
 }
 
 export async function verifyKey(
-  req: FastifyRequest,
-  reply: FastifyReply,
+  req: TypeBoxRequest<typeof VerifyCredentialRoute>,
+  _reply: TypeBoxReply<typeof VerifyCredentialRoute>,
 ) {
-  const { provider, key } = req.body as Static<typeof VerifyCredentialBody>;
-
-  try {
-    const valid = await verifyCredential(provider, key);
-    return reply.send({ valid });
-  } catch (error) {
-    console.error("Error verifying credential:", error);
-    return reply.status(500).send({ error: "Failed to verify credential" });
-  }
+  const { provider, key } = req.body;
+  return { valid: await verifyCredential(provider, key) };
 }
+
+export const credentialRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.get(
+    "/credentials",
+    { schema: ListCredentialsRoute },
+    listKeys,
+  );
+
+  app.post(
+    "/credentials",
+    { schema: AddCredentialRoute, preHandler: demoWriteGuard(DEMO_KEYS_MESSAGE) },
+    addKey,
+  );
+
+  app.delete(
+    "/credentials/:id",
+    {
+      schema: DeleteCredentialRoute,
+      preHandler: demoWriteGuard(DEMO_KEYS_MESSAGE),
+    },
+    deleteKey,
+  );
+
+  app.post(
+    "/credentials/verify",
+    { schema: VerifyCredentialRoute },
+    verifyKey,
+  );
+};

@@ -1,4 +1,5 @@
 import { env } from "@/shared/config/env";
+import { httpErrors } from "@/shared/errors";
 import { encrypt, maskApiKey } from "@/api/credentials/encryption";
 import { credentialsStore } from "@/api/credentials/stores/credentials-store";
 import {
@@ -24,7 +25,12 @@ export async function connectGitProvider(
   provider: GitProviderId,
   token: string,
 ): Promise<GitConnection> {
-  const status = await getGitProvider(provider, token).verifyConnection();
+  let status: { login?: string };
+  try {
+    status = await getGitProvider(provider, token).verifyConnection();
+  } catch {
+    throw httpErrors.badRequest("Invalid token or insufficient scopes");
+  }
 
   await credentialsStore.upsertCredential({
     provider,
