@@ -180,4 +180,24 @@ describe("ingestCommits", () => {
     expect(result.summarized).toBe(1);
     expect(result.embedded).toBe(0);
   });
+
+  it("stops embedding after a fatal provider error", async () => {
+    const second = { ...commit, sha: "def456" };
+    const src = source({
+      listCommits: vi.fn(async () => ({
+        commits: [commit, second],
+        tipSha: "tip",
+      })),
+    });
+    mockEmbed.mockRejectedValue(
+      Object.assign(new Error("Key limit exceeded"), { status: 403 }),
+    );
+
+    const result = await ingestCommits(src, call);
+
+    expect(mockEmbed).toHaveBeenCalledTimes(1);
+    expect(mockUpsert).toHaveBeenCalledTimes(2);
+    expect(result.chunksWritten).toBe(2);
+    expect(result.embedded).toBe(0);
+  });
 });

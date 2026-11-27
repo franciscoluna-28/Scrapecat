@@ -49,6 +49,26 @@ async function resolveSpaceSafe(): Promise<EmbeddingSpace | null> {
   }
 }
 
+function isFatalEmbeddingError(error: unknown): boolean {
+  const err = error as {
+    status?: number;
+    code?: number | string;
+    message?: string;
+  };
+  const status =
+    typeof err?.status === "number"
+      ? err.status
+      : typeof err?.code === "number"
+        ? err.code
+        : undefined;
+  if (status === 401 || status === 403) return true;
+
+  const message = (err?.message ?? String(error)).toLowerCase();
+  return /invalid api key|incorrect api key|key limit exceeded|quota|unauthorized|authentication|missing authentication/.test(
+    message,
+  );
+}
+
 async function resolveSummaryModelSafe(): Promise<ResolvedChatModel | null> {
   try {
     return await commitSummaryService.resolveModel();
@@ -108,6 +128,7 @@ export async function ingestCommits(
   let written = 0;
   let summarized = 0;
   let embedded = 0;
+  let embeddingDisabled = false;
 
   for (const commit of commits) {
     const existing = await commitEmbeddingsStore.getByKey({
@@ -186,20 +207,25 @@ export async function ingestCommits(
         model: space.model,
       };
       embedded += 1;
-    } else if (space) {
+    } else if (space && !embeddingDisabled) {
       try {
         const [vector] = await embedTexts([contentText], space);
         embedding = { vector, provider: space.provider, model: space.model };
         embedded += 1;
       } catch (error) {
-        logger.warn(
-          {
-            ...base,
-            sha: commit.sha,
-            err: (error as Error)?.message ?? String(error),
-          },
-          "commit embedding failed; stored summary without a vector",
-        );
+        const message = (error as Error)?.message ?? String(error);
+        if (isFatalEmbeddingError(error)) {
+          embeddingDisabled = true;
+          logger.warn(
+            { ...base, err: message },
+            "embedding provider rejected credentials; skipping embeddings for the rest of this run",
+          );
+        } else {
+          logger.warn(
+            { ...base, sha: commit.sha, err: message },
+            "commit embedding failed; stored summary without a vector",
+          );
+        }
       }
     }
 
