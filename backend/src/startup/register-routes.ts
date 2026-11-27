@@ -9,6 +9,7 @@ import { repositoryRoutes } from "@/api/repositories/routes";
 import { settingsRoutes } from "@/api/settings/routes";
 import { chatRoutes } from "@/api/chat/routes";
 import { reportRoutes } from "@/api/reports/routes";
+import { telemetryRoutes } from "@/api/telemetry/routes";
 
 /**
  * All HTTP routes live under `/api/v1`. Each domain exports a typed Fastify
@@ -26,6 +27,7 @@ const apiV1: FastifyPluginAsyncTypebox = async (api) => {
   await api.register(settingsRoutes);
   await api.register(chatRoutes);
   await api.register(reportRoutes);
+  await api.register(telemetryRoutes);
 };
 
 export async function registerRoutes(app: FastifyTypeBox) {
