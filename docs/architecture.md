@@ -40,6 +40,14 @@ The backend is grouped by tier (see `backend/AGENTS.md` → "API layer"):
   `register-routes.ts`); `src/build-app.ts` is the public entrypoint.
 - `src/db/` — DB client, schema, and migrations.
 
+Each HTTP domain exports a `FastifyPluginAsyncTypebox`; `register-routes.ts`
+composes them under `/api/v1` (which also applies API-scoped helmet). Handlers
+are typed through `@fastify/type-provider-typebox` via `TypeBoxRequest` /
+`TypeBoxReply` (`src/shared/fastify.ts`), read validated inputs directly, return
+response payloads, and throw `httpErrors.*` mapped by one `setErrorHandler`.
+`@fastify/sse` provides the `reply.sse` streaming helper (route option
+`sse: 'manual'`), and a `fastify-plugin` module provides the request identity.
+
 ## RAG pipeline
 
 `POST /api/v1/chat/sessions/:id/messages` ingests the branch if needed, then

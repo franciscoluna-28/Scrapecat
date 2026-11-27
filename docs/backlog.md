@@ -21,10 +21,6 @@ None open. P1-1–P1-5 are complete — see [Done](#done--completed).
 | ID | Item | Area | Why / notes |
 |---|---|---|---|
 | P2-3 | **Project deletion** | storage | There is no project-delete route or store method today. Add `DELETE /api/v1/projects/:id`; `commit_embeddings`, chat data, and `project_branches` already cascade in Postgres, and repo clones are ephemeral so nothing else needs cleaning up. |
-| P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete repeat the session lookup + `canAccessSession` check (`backend/src/api/chat/routes.ts:56-107`). Add a `preHandler` + `req.chatSession` decorator so one lookup serves all session routes. Authorization behavior itself is already fixed by P2-5a. |
-| P2-6 | **SSE reply plugin** | chat | `backend/src/api/chat/routes.ts:109-183` hand-rolls hijack, CORS reflection, SSE headers, heartbeat, and close cleanup. Extract `reply.sse.open/send/close()` so future streaming endpoints (e.g. ingest progress) share one implementation. |
-| P2-7 | **Centralized error handling** | backend | Every handler try/catches → `console.error` → 500 across `chat`, `credentials`, `repositories`, `settings`, and `reports` routes. Introduce a typed `ApiError` mapped by the existing `setErrorHandler` (`backend/src/startup/create-server.ts:47-55`), log via the shared pino logger, and let handlers throw. |
-| P2-8 | **Demo/write guards** | backend | `isDemoRestrictKeys` / `allowAddRepos` checks are repeated in `backend/src/api/credentials/routes.ts:20,33,54`, `backend/src/api/credentials/git-connection-routes.ts:18,53`, `backend/src/api/repositories/routes.ts:42`, and all seven handlers in `backend/src/api/reports/routes.ts:58,72,87,103,119,134,155`; `unsupportedInDemo` is at `backend/src/api/repositories/discovery.ts:67,132,191,235,310`. Extract `preHandler` guards applied in `backend/src/startup/register-routes.ts`. |
 | P2-10 | **Remove GitLab provider support** | integrations | Poor adoption, and GitHub is the only provider the product needs while GitHub's native features keep improving. A second adapter costs a REST client, `GITLAB_TOKEN`/`GITLAB_HOST`, `git_provider`/`credential_provider` enum values, discovery fanout, clone/auth branches, and frontend provider selection/URL parsing. Remove it, then collapse the remaining git-provider registry/interface to GitHub-only. See `architecture.md` → Tech debt → "GitLab removal (planned)". P2-1 added the adapter; this item removes it. |
 
 Frontend-specific debt (chat streaming/state, API error boundary, project
@@ -73,11 +69,9 @@ quality is measurable and the platform is multi-tenant-ready. See
 `docs/architecture.md` ("Tech debt" / "What needs to happen") for the underlying
 structural debt.
 
-The Fastify refactors (P2-5–P2-8) are independent and can land between product
-items. P2-6 is a good first follow-up: it is self-contained and reusable for
-future streaming endpoints. P2-7 is the broadest cleanup, P2-8 is a
-narrow guard extraction, and P2-5 is now only a dedupe refactor because its
-authorization half (P2-5a) already landed.
+The Fastify refactors (P2-5–P2-8) have landed: route domains are now typed
+plugins using the TypeBox type provider, errors are centralized, guards are
+`preHandler`s, and SSE uses the official `@fastify/sse` plugin.
 
 ## Done — completed
 
@@ -107,3 +101,7 @@ authorization half (P2-5a) already landed.
 | P3-3 | **Persona-driven synthesis** | product | Per-conversation `persona` (`founder` / `cto` / `engineer`) flows from `ChatComposer` through `useAIChat` and the chat API into `buildSystemPrompt`, which maps each persona to audience-specific tone rules. Frontend and backend persona lists are kept in sync. |
 | P3-7 | **Production Docker images** | deployment | Workspace-aware `backend/Dockerfile` and `frontend/Dockerfile`, plus `docker-compose.prod.yml`. Backend bundles `main` and the migration runner with esbuild, installs prod deps only, ships native git, runs as non-root, healthchecks readiness, and migrates on boot. Frontend builds a Docker-only Next standalone bundle (guarded by `NEXT_OUTPUT`, so Vercel is unchanged) and runs `server.js` as non-root. See `docs/deployment.md`. |
 | — | **Embedding resilience** | ingestion | Provider failures do not fail an ingest: the commit is stored without a vector, the failure is logged, and retrieval falls back to lexical search. `reindex-embeddings` / `pnpm embed:backfill` rebuild vectors from stored messages. |
+| P2-5 | **Chat-session access guard refactor** | chat | Read/stream/delete share one `requireChatSession` `preHandler`; the handlers no longer repeat the session lookup + `canAccessSession` check. |
+| P2-6 | **SSE reply plugin** | chat | Uses the official `@fastify/sse` plugin with route option `sse: 'manual'`; no manual hijack. `reply.sse.onClose()` aborts upstream work, and `reply.sse.send()` frames tokens with backpressure. |
+| P2-7 | **Centralized error handling** | backend | Handlers throw `httpErrors.*`; `setErrorHandler` maps `statusCode` to `{ error }` and logs 5xx via the request logger. No handler-level try/catch or `console.error` remains in the request path. |
+| P2-8 | **Demo/write guards** | backend | `preHandler` guards in `backend/src/shared/guards.ts` replace the repeated demo/BYOK/`allowAddRepos`/provider checks across credentials, projects, settings, reports, and discovery. |

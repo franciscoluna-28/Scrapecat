@@ -16,13 +16,13 @@ Normative rules for working on the Fastify/TypeScript backend. Architecture and 
 - DB migrations: `pnpm db:generate` then `pnpm db:migrate`. **Never use `db:push`** — it bypasses migrations and won't create the `vector` extension or enum types. Always apply schema changes via generated migrations + `db:migrate`.
 - Codegen (frontend types): `pnpm codegen` from project root — builds the Fastify app in-process, writes a temporary OpenAPI spec, and runs openapi-typescript; no backend server or database needed
 
-## API layer (per-domain `routes.ts` + `src/startup/register-routes.ts`)
+## API layer (per-domain Fastify plugins + `src/startup/register-routes.ts`)
 
 Structure is routes → services, organized by **domain** (screaming architecture), grouped by tier:
 
-- `src/api/` — HTTP domains (`chat`, `credentials`, `repositories`, `settings`, `reports`, `system`). Each owns its handlers, TypeBox schemas, services, stores, and colocated tests.
+- `src/api/` — HTTP domains (`chat`, `credentials`, `repositories`, `settings`, `reports`, `system`). Each owns its handlers, route plugins, TypeBox schemas, services, stores, and colocated tests.
 - `src/rag/` — the retrieval/indexing pipeline (`answer`, `context`, `retrieval`, `indexing`, `git`, `github`, `eval`).
-- `src/shared/` — cross-cutting infrastructure (`integrations/`, `queue/`, `config/`, `utils/`).
+- `src/shared/` — cross-cutting infrastructure (`integrations/`, `queue/`, `config/`, `utils/`, `plugins/`).
 - `src/startup/` — server composition (`create-server.ts`, `register-routes.ts`).
 - `src/db/` — DB client, schema, and migrations.
 
@@ -30,25 +30,28 @@ Structure is routes → services, organized by **domain** (screaming architectur
 
 Route handlers stay thin; business logic goes in services.
 
-All route registration is imperative in `src/startup/register-routes.ts` — each route specifies a `schema` object (TypeBox for OpenAPI generation) and a handler function imported from the owning domain (e.g. `src/api/repositories/routes.ts`). `src/build-app.ts` is the public composition entrypoint: it creates the server (`src/startup/create-server.ts`) and registers routes. There is no router/index.ts or decorator-based routing.
+Each HTTP domain exports a `FastifyPluginAsyncTypebox` that owns its routes, schemas, guards, and rate-limit config. `src/startup/register-routes.ts` only composes them under `/api/v1` (and applies API-scoped helmet). `src/build-app.ts` is the public composition entrypoint: it creates the server (`src/startup/create-server.ts`) and registers routes. There is no router/index.ts or decorator-based routing.
 
-**Route handler pattern** (every handler must follow this):
-1. Accept `req: FastifyRequest, reply: FastifyReply` — do **not** use generic type parameters on `FastifyRequest<{ Params, Body, Querystring }>`; validation is enforced at the route `schema` level, not via compile-time generics
-2. Read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts (e.g. `const { id } = req.params as Static<typeof ProjectIdParams>`) — Fastify already validated and applied defaults before the handler runs
-3. Call the appropriate service / git-provider method
-4. Return data or catch with a generic `500`
+**Route handler convention** (every handler must follow this):
+1. Declare the endpoint's schema once in the domain `schemas.ts` as a `*Route` constant (`{ tags, description, params, querystring, body, headers, response } satisfies FastifySchema`). **Every input the handler reads must be in the schema** — path params, query, body, and any custom headers.
+2. Type the handler with that schema: `req: TypeBoxRequest<typeof FooRoute>, reply: TypeBoxReply<typeof FooRoute>` (from `@/shared/fastify`). `req.params`/`req.query`/`req.body`/`req.headers` are inferred from the schema — never cast, never re-validate by hand.
+3. Register `app.METHOD("/path", { schema: FooRoute }, handler)` inside the domain's `FastifyPluginAsyncTypebox`.
+4. Return the response payload: `return data`, or `reply.code(201); return data` for non-200s, or `reply.code(204); return;`. Do **not** `return reply.send(...)` — the typed reply requires the declared response payload union.
+5. Throw `httpErrors.*` (from `@/shared/errors`) for failures. Do not catch-and-send `500` in handlers.
 
 Validation uses **TypeBox-first, Fastify-owned validation**:
-- **TypeBox** — the single source of truth for request validation, response serialization, and OpenAPI generation. Every route registers a `schema` object (TypeBox `params`/`querystring`/`body`/`response`) in `src/startup/register-routes.ts`; Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses. TypeBox schemas live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
-- Handlers read `req.params`/`req.query`/`req.body` directly, typed with `Static<typeof X>` casts — no Zod schemas in the request path.
-- A global `setErrorHandler` in `src/startup/create-server.ts` maps validation failures to `{ error: string }` (matching `ErrorResponse`) so the error contract stays uniform.
+- **TypeBox** is the single source of truth for request validation, response serialization, and OpenAPI generation. TypeBox schemas and `*Route` constants live in each domain's `schemas.ts`; the shared error body is `ErrorResponse` in `src/shared/typebox.ts`.
+- Fastify/Ajv validates requests *before* the handler runs (400 on failure) and serializes responses against the declared schema. Types are provided by `@fastify/type-provider-typebox` (applied in `src/startup/create-server.ts`). Do **not** enable `TypeBoxValidatorCompiler` — Ajv must keep handling `format: "uuid" | "date" | "date-time"`.
+- The global `setErrorHandler` in `src/startup/create-server.ts` maps any thrown `statusCode` to `{ error: string }` (matching `ErrorResponse`) and logs 5xx without leaking internal messages.
 - **Zod is reserved for non-request validation only:** `src/shared/config/env.ts` (env parsing). Do not reintroduce Zod for route input.
 
 Never return API key values from any endpoint — metadata only (key hints).
 
-Errors: return standard `{ error: ... }` objects with appropriate HTTP status codes. No custom exception classes — use inline `reply.status(N).send(...)`.
+Errors: throw `httpErrors.notFound(...)`, `.badRequest(...)`, `.forbidden(...)`, `.conflict(...)`, etc. (`@/shared/errors`). Services may throw the same constructors when the status is part of the domain contract. Use the `preHandler` guards in `src/shared/guards.ts` for demo/write restrictions instead of inline `if (env.isDemoMode)` checks.
 
 CORS is open by default (env `CORS_ORIGIN`, default `http://localhost:3000`). Per-IP rate limiting is registered globally (`RATE_LIMIT_MAX`) with a tighter limit on chat (`CHAT_RATE_LIMIT_MAX`). No authentication middleware — `GITHUB_TOKEN` is server-side only, and the API is intended for trusted networks only.
+
+Fastify plugins live in `src/startup/create-server.ts`: `@fastify/cors`, `@fastify/rate-limit`, `@fastify/request-context`, `@fastify/swagger(-ui)`, `@fastify/sensible` (reply helpers + `httpErrors`), `@fastify/compress` (global), and `@fastify/sse` (streaming). Streaming routes opt in with the route option `sse: 'manual'` (the endpoint always streams) and use `reply.sse.send(...)`; the plugin owns the raw response, heartbeat, header transfer, and close. Never hand-roll `reply.hijack()` for SSE. `@fastify/helmet` is registered only in the `/api/v1` scope so Swagger UI at `/docs` is not blocked. `@fastify/rate-limit` per-route overrides are declared in the owning domain plugin.
 
 Liveness is `GET /api/v1/health`; readiness is `GET /api/v1/health/ready`, which runs `select 1` against Postgres and returns 503 when the database is unavailable. Docker healthchecks use the readiness route.
 
