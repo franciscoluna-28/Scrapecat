@@ -10,13 +10,14 @@ import {
   useVerifyCredential,
 } from "@/src/_features/credentials/services";
 import { errorMessage } from "@/src/shared/api/client";
+import { PROVIDERS } from "@/src/shared/constants";
 import { ProviderIcon } from "./ProviderIcon";
 
 export function CredentialField({
   provider,
   credential,
 }: {
-  provider: { id: string; label: string };
+  provider: (typeof PROVIDERS)[number];
   credential?: {
     id: string;
     provider: string;

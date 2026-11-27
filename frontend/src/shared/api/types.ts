@@ -160,7 +160,9 @@ export interface paths {
         /** @description List stored credentials (key hints only, no full keys returned) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    provider?: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama" | "github" | "gitlab";
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -209,7 +211,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        provider: string;
+                        provider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                         key: string;
                     };
                 };
@@ -228,6 +230,17 @@ export interface paths {
                 };
                 /** @description Default Response */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -277,6 +290,28 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -314,7 +349,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        provider: string;
+                        provider: "openrouter" | "deepseek" | "openai" | "groq" | "opencode-go" | "ollama";
                         key: string;
                     };
                 };
@@ -449,6 +484,17 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
             };
         };
         /** @description Disconnect a git provider (removes the stored token) */
@@ -474,6 +520,17 @@ export interface paths {
                 };
                 /** @description Default Response */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -852,6 +909,39 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 500: {
                     headers: {
                         [name: string]: unknown;
@@ -907,6 +997,17 @@ export interface paths {
                             branch: string;
                             commitsFound: number;
                             chunksWritten: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
@@ -1029,6 +1130,17 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 500: {
                     headers: {
                         [name: string]: unknown;
@@ -1119,7 +1231,9 @@ export interface paths {
                 query?: {
                     projectId?: string;
                 };
-                header?: never;
+                header?: {
+                    "x-anonymous-id"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -1173,7 +1287,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-anonymous-id"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -1255,7 +1371,9 @@ export interface paths {
         get: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-anonymous-id"?: string;
+                };
                 path: {
                     id: string;
                 };
@@ -1278,6 +1396,7 @@ export interface paths {
                                 citations: {
                                     commitSha: string;
                                     commitMessage: string;
+                                    summary?: string;
                                     author: string | null;
                                     committedAt: string;
                                     filesChanged: string[];
@@ -1329,7 +1448,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-anonymous-id"?: string;
+                };
                 path: {
                     id: string;
                 };
@@ -1393,7 +1514,9 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-anonymous-id"?: string;
+                };
                 path: {
                     id: string;
                 };
@@ -2027,6 +2150,7 @@ export interface paths {
                             sourceCommits: {
                                 commitSha: string;
                                 commitMessage: string;
+                                summary?: string;
                                 author: string | null;
                                 /** Format: date-time */
                                 committedAt: string;

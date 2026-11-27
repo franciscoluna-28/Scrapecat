@@ -15,3 +15,9 @@ export type ChatMessage =
 
 export type AIModel =
   paths["/api/v1/models"]["get"]["responses"]["200"]["content"]["application/json"]["models"][number];
+
+export type AddCredentialBody =
+  paths["/api/v1/credentials"]["post"]["requestBody"]["content"]["application/json"];
+
+export type VerifyCredentialBody =
+  paths["/api/v1/credentials/verify"]["post"]["requestBody"]["content"]["application/json"];
