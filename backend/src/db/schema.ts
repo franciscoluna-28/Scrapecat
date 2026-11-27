@@ -338,9 +338,68 @@ export const jobs = pgTable(
   }),
 );
 
+export type IngestionRunType = "ingest-branch" | "reindex-embeddings";
+
+export type IngestionRunStatus = "succeeded" | "failed";
+
+export const ingestionRuns = pgTable(
+  "ingestion_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Null for serverless inline runs, which have no durable jobs row, and
+    // after the jobs row is pruned.
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    jobType: text("job_type").$type<IngestionRunType>().notNull(),
+    // Null once the project is deleted; history outlives discovery data.
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    // Null for the global reindex-embeddings run.
+    branch: text("branch"),
+    status: text("status").$type<IngestionRunStatus>().notNull(),
+
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    gitMs: integer("git_ms"),
+    dbMs: integer("db_ms"),
+    embeddingMs: integer("embedding_ms"),
+
+    // Null when the run fails before producing a result.
+    commitsFound: integer("commits_found"),
+    commitsWritten: integer("commits_written"),
+    commitsEmbedded: integer("commits_embedded"),
+
+    // Embedding space and billed tokens for this run, split by direction.
+    // Null when any provider response omitted usage.
+    embeddingProvider: text("embedding_provider"),
+    embeddingModel: text("embedding_model"),
+    embeddingInputTokens: integer("embedding_input_tokens"),
+    embeddingOutputTokens: integer("embedding_output_tokens"),
+
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+
+    // Append-only: rows are inserted when a run ends, never updated.
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    jobIdIdx: index("ingestion_runs_job_id_idx").on(table.jobId),
+    projectCreatedIdx: index("ingestion_runs_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
+    ),
+    typeCreatedIdx: index("ingestion_runs_type_created_idx").on(
+      table.jobType,
+      table.createdAt,
+    ),
+  }),
+);
+
 export type ReportScheduleRow = typeof reportSchedules.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
 export type JobRow = typeof jobs.$inferSelect;
+export type IngestionRunRow = typeof ingestionRuns.$inferSelect;
 export type ProjectBranchRow = typeof projectBranches.$inferSelect;
 export type CommitEmbeddingRow = typeof commitEmbeddings.$inferSelect;
 export type CredentialProvider = (typeof credentialProviderEnum)["enumValues"][number];
