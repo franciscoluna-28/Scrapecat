@@ -19,6 +19,7 @@ import {
   type CommitEmbeddingRow,
 } from "@/db/schema";
 import type { EmbeddingSpace } from "@/rag/indexing/embeddings";
+import { lexicalSearchTerms } from "@/rag/indexing/search-terms";
 
 export type EmbeddingWrite = {
   vector: number[];
@@ -372,8 +373,11 @@ export function createCommitEmbeddingsStore(client: DbOrTx = db) {
       startDate?: Date;
       endDate?: Date;
     }): Promise<CommitDocument[]> {
-      const english = sql`websearch_to_tsquery('english', ${input.query})`;
-      const simple = sql`websearch_to_tsquery('simple', ${input.query})`;
+      const terms = lexicalSearchTerms(input.query);
+      if (terms.length === 0) return [];
+      const queryText = terms.join(" or ");
+      const english = sql`websearch_to_tsquery('english', ${queryText})`;
+      const simple = sql`websearch_to_tsquery('simple', ${queryText})`;
       const tsQuery = sql`(${english} || ${simple})`;
       const rank = sql`(ts_rank_cd(${commitEmbeddings.searchVector}, ${english}) + ts_rank_cd(${commitEmbeddings.searchVector}, ${simple}))`;
 
