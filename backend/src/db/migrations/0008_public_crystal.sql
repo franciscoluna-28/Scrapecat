@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
---> statement-breakpoint
 CREATE TYPE "public"."sync_job_status" AS ENUM('pending', 'running', 'succeeded', 'failed');--> statement-breakpoint
 CREATE TABLE "sync_jobs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

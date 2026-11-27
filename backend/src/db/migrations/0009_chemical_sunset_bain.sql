@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
---> statement-breakpoint
 CREATE TYPE "public"."git_provider" AS ENUM('github', 'gitlab');
 --> statement-breakpoint
 ALTER TABLE "github_projects" RENAME TO "projects";--> statement-breakpoint

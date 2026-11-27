@@ -1,4 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;--> statement-breakpoint
 CREATE TABLE "report_schedules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"project_id" uuid NOT NULL,

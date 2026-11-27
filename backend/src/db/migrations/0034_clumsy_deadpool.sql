@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
---> statement-breakpoint
 CREATE TABLE "commit_embeddings" (
 	"repo_id" uuid NOT NULL,
 	"branch" text NOT NULL,

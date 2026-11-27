@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
---> statement-breakpoint
 ALTER TABLE "commit_embeddings" ALTER COLUMN "summary" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "commit_embeddings" ALTER COLUMN "summary_version" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "commit_embeddings" ALTER COLUMN "summary_model" DROP NOT NULL;--> statement-breakpoint

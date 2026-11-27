@@ -1,4 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;--> statement-breakpoint
 CREATE TABLE "app_settings" (
 	"id" text PRIMARY KEY NOT NULL,
 	"report_provider" text DEFAULT 'openrouter' NOT NULL,
