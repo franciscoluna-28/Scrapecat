@@ -1,7 +1,10 @@
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import type { TypeBoxReply, TypeBoxRequest } from "@/shared/fastify";
+import { demoModeGuard } from "@/shared/guards";
 import { telemetryService } from "@/api/telemetry/service";
 import { ListIngestionRunsRoute } from "@/api/telemetry/schemas";
+
+const DEMO_ERROR = "Ingestion telemetry is not available in demo mode";
 
 export async function listIngestionRuns(
   req: TypeBoxRequest<typeof ListIngestionRunsRoute>,
@@ -17,6 +20,8 @@ export async function listIngestionRuns(
 }
 
 export const telemetryRoutes: FastifyPluginAsyncTypebox = async (app) => {
+  app.addHook("preHandler", demoModeGuard(DEMO_ERROR));
+
   app.get(
     "/telemetry/ingestion-runs",
     { schema: ListIngestionRunsRoute },

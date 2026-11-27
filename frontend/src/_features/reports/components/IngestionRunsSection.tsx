@@ -30,6 +30,7 @@ import {
   formatTokenUsage,
 } from "@/src/_features/reports/lib/time";
 import { errorMessage } from "@/src/shared/api/client";
+import { IS_DEMO } from "@/src/shared/constants";
 import { cn } from "@/src/shared/lib/utils";
 
 const CHIP =
@@ -163,7 +164,7 @@ function RunRow({
   );
 }
 
-export function IngestionRunsSection() {
+function IngestionRunsContent() {
   const { runs, summary, isLoading, error, refetch } = useIngestionRuns();
   const [selected, setSelected] = useState<IngestionRun | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -277,4 +278,10 @@ export function IngestionRunsSection() {
       </Dialog>
     </section>
   );
+}
+
+/** Demo deployments have no telemetry access; never mount (or fetch) the UI. */
+export function IngestionRunsSection() {
+  if (IS_DEMO) return null;
+  return <IngestionRunsContent />;
 }
