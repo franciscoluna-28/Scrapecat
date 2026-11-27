@@ -30,7 +30,8 @@ let numstat: string;
 let cloneDir: string | null;
 let failClone: boolean;
 
-const runGit = vi.fn(async (opts: { args: string[] }) => {
+const runGit = vi.fn(
+  async (opts: { args: string[]; env?: Record<string, string> }) => {
   const { args } = opts;
   if (args.includes("clone")) {
     cloneDir = args[args.length - 1];
@@ -46,6 +47,11 @@ const runGit = vi.fn(async (opts: { args: string[] }) => {
 });
 
 const listCommitsInRange = vi.fn(async () => [COMMIT]);
+const AUTH_ENV = {
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "http.extraheader",
+  GIT_CONFIG_VALUE_0: "AUTHORIZATION: test",
+};
 
 function service() {
   return createGitRepositoryService({
@@ -54,8 +60,8 @@ function service() {
     cloneUrl: (_provider, owner, repo) => `https://github.com/${owner}/${repo}.git`,
     commitUrl: (_provider, owner, repo, sha) =>
       `https://github.com/${owner}/${repo}/commit/${sha}`,
-    authEnv: () => undefined,
-    resolveGitToken: async () => null,
+    authEnv: () => AUTH_ENV,
+    resolveGitToken: async () => "token",
     workspaceRoot,
   });
 }
@@ -112,6 +118,11 @@ describe("git repository service", () => {
       ]),
     );
 
+    await handle.listCommits({});
+    expect(listCommitsInRange).toHaveBeenCalledWith(
+      expect.objectContaining({ env: AUTH_ENV }),
+    );
+
     const diff = await handle.diff({ sha: "a", parentSha: null });
     expect(diff).toMatchObject({
       filesChanged: ["src/a.ts"],
@@ -119,6 +130,10 @@ describe("git repository service", () => {
       deletions: 5,
       binaryFiles: 0,
     });
+    const numstat = runGit.mock.calls.find(([opts]) =>
+      opts.args.includes("--numstat"),
+    )?.[0];
+    expect(numstat?.env).toEqual(AUTH_ENV);
     expect(diff?.stat).toContain("src/a.ts | +10 -5");
     expect(diff?.patch).toContain("+new");
     expect(diff?.hash).toHaveLength(64);

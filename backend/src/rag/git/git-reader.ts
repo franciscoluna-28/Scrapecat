@@ -29,6 +29,7 @@ export async function listCommitsInRange(opts: {
   ref: string;
   since?: Date;
   until?: Date;
+  env?: Record<string, string>;
 }): Promise<LocalCommit[]> {
   const start = performance.now();
   const sinceMs = opts.since?.getTime();
@@ -39,7 +40,12 @@ export async function listCommitsInRange(opts: {
   }
   args.push("-z", `--pretty=format:${FORMAT}`, opts.ref);
 
-  const stdout = await runGit({ cwd: opts.dir, args, label: "git log" });
+  const stdout = await runGit({
+    cwd: opts.dir,
+    args,
+    env: opts.env,
+    label: "git log",
+  });
 
   const untilMs = opts.until?.getTime();
   const commits: LocalCommit[] = [];

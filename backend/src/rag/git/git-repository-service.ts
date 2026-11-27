@@ -172,6 +172,7 @@ export function createGitRepositoryService(
               ref: branch,
               since: opts.since,
               until: opts.until,
+              env: auth,
             }),
         ),
       diff: (commit) =>
@@ -192,7 +193,14 @@ export function createGitRepositoryService(
             const pathspecs = ["--", ...DIFF_PATHSPECS];
             const numstat = await deps.runGit({
               cwd: dir,
-              args: [...baseArgs, "--numstat", "--no-color", "--no-ext-diff", ...pathspecs],
+              args: [
+                ...baseArgs,
+                "--numstat",
+                "--no-color",
+                "--no-ext-diff",
+                ...pathspecs,
+              ],
+              env: auth,
               label: "git diff --numstat",
             });
             const files = parseNumstat(numstat);
@@ -208,6 +216,7 @@ export function createGitRepositoryService(
                 "--no-ext-diff",
                 ...pathspecs,
               ],
+              env: auth,
               label: "git diff --patch",
             });
             return buildDiff(files, patch);
