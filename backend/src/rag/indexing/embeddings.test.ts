@@ -37,7 +37,10 @@ vi.mock("@/shared/config/env", () => ({
   },
 }));
 
-import { embedTexts } from "@/rag/indexing/embeddings";
+import {
+  embedTexts,
+  embedTextsWithUsage,
+} from "@/rag/indexing/embeddings";
 import { resolveApiKey } from "@/api/credentials/services";
 import { EMBEDDING_DIMENSIONS } from "@/shared/utils";
 
@@ -173,5 +176,73 @@ describe("embedTexts", () => {
     ).rejects.toThrow(
       `Embedding model "nomic-embed-text" returned 3 dims, expected ${EMBEDDING_DIMENSIONS}`,
     );
+  });
+});
+
+describe("embedTextsWithUsage", () => {
+  beforeEach(() => {
+    mockCreate.mockReset();
+    mockCtor.mockReset();
+  });
+
+  it("returns the resolved space and billed input tokens", async () => {
+    mockCreate.mockResolvedValue({
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
+      usage: { prompt_tokens: 17, total_tokens: 17 },
+    });
+
+    const result = await embedTextsWithUsage(["x"]);
+
+    expect(result.embeddings).toHaveLength(1);
+    expect(result.usage).toEqual({
+      provider: "openrouter",
+      model: "openai/text-embedding-3-small",
+      inputTokens: 17,
+      outputTokens: 0,
+    });
+  });
+
+  it("keeps provider-reported output tokens", async () => {
+    mockCreate.mockResolvedValue({
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
+      usage: { prompt_tokens: 17, completion_tokens: 3, total_tokens: 20 },
+    });
+
+    const result = await embedTextsWithUsage(["x"]);
+
+    expect(result.usage.inputTokens).toBe(17);
+    expect(result.usage.outputTokens).toBe(3);
+  });
+
+  it("falls back to total_tokens when prompt_tokens is absent", async () => {
+    mockCreate.mockResolvedValue({
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
+      usage: { total_tokens: 9 },
+    });
+
+    const result = await embedTextsWithUsage(["x"]);
+
+    expect(result.usage.inputTokens).toBe(9);
+    expect(result.usage.outputTokens).toBe(0);
+  });
+
+  it("returns null tokens when the provider omits usage", async () => {
+    mockCreate.mockResolvedValue({
+      data: [{ index: 0, embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0) }],
+    });
+
+    const result = await embedTextsWithUsage(["x"]);
+
+    expect(result.usage.inputTokens).toBeNull();
+    expect(result.usage.outputTokens).toBeNull();
+  });
+
+  it("does not call the provider for an empty input", async () => {
+    const result = await embedTextsWithUsage([], { provider: "openrouter" });
+
+    expect(result.embeddings).toEqual([]);
+    expect(result.usage.inputTokens).toBeNull();
+    expect(result.usage.outputTokens).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });

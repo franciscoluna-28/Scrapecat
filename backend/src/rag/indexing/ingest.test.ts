@@ -14,7 +14,7 @@ vi.mock("@/rag/indexing/commit-embeddings-store", () => ({
 
 vi.mock("@/rag/indexing/embeddings", () => ({
   resolveEmbeddingSpace: (...args: unknown[]) => mockResolveSpace(...args),
-  embedTexts: (...args: unknown[]) => mockEmbed(...args),
+  embedTextsWithUsage: (...args: unknown[]) => mockEmbed(...args),
 }));
 
 import { ingestCommits } from "@/rag/indexing/ingest";
@@ -67,7 +67,10 @@ beforeEach(() => {
   mockGetByKey.mockReset().mockResolvedValue(null);
   mockUpsert.mockReset().mockResolvedValue(undefined);
   mockResolveSpace.mockReset().mockResolvedValue(space);
-  mockEmbed.mockReset().mockResolvedValue([[0.1, 0.2]]);
+  mockEmbed.mockReset().mockResolvedValue({
+    embeddings: [[0.1, 0.2]],
+    usage: { ...space, inputTokens: 12, outputTokens: 0 },
+  });
 });
 
 describe("ingestCommits", () => {
@@ -93,8 +96,16 @@ describe("ingestCommits", () => {
       chunksWritten: 1,
       summarized: 0,
       embedded: 1,
+      gitMs: expect.any(Number),
+      dbMs: expect.any(Number),
+      embeddingMs: expect.any(Number),
+      embeddingProvider: "openrouter",
+      embeddingModel: "openai/text-embedding-3-small",
+      embeddingInputTokens: 12,
+      embeddingOutputTokens: 0,
       tipSha: "tip",
     });
+    expect(result.embeddingMs).toBeGreaterThanOrEqual(0);
   });
 
   it("skips embedding when the stored vector is current", async () => {
@@ -109,6 +120,11 @@ describe("ingestCommits", () => {
     expect(mockEmbed).not.toHaveBeenCalled();
     expect(mockUpsert.mock.calls[0][0]).not.toHaveProperty("embedding");
     expect(result.embedded).toBe(1);
+    expect(result.embeddingMs).toBe(0);
+    expect(result.embeddingProvider).toBe("openrouter");
+    expect(result.embeddingModel).toBe("openai/text-embedding-3-small");
+    expect(result.embeddingInputTokens).toBe(0);
+    expect(result.embeddingOutputTokens).toBe(0);
   });
 
   it("skips commits with no summarizable diff", async () => {
@@ -119,6 +135,7 @@ describe("ingestCommits", () => {
 
     expect(mockUpsert).not.toHaveBeenCalled();
     expect(result.chunksWritten).toBe(0);
+    expect(result.embeddingMs).toBe(0);
   });
 
   it("keeps the commit when embedding fails", async () => {
@@ -131,6 +148,19 @@ describe("ingestCommits", () => {
     );
     expect(result.summarized).toBe(0);
     expect(result.embedded).toBe(0);
+  });
+
+  it("stores null tokens when a provider omits usage", async () => {
+    mockEmbed.mockResolvedValue({
+      embeddings: [[0.1, 0.2]],
+      usage: { ...space, inputTokens: null, outputTokens: null },
+    });
+
+    const result = await ingestCommits(source(), call);
+
+    expect(result.embedded).toBe(1);
+    expect(result.embeddingInputTokens).toBeNull();
+    expect(result.embeddingOutputTokens).toBeNull();
   });
 
   it("stops embedding after a fatal provider error", async () => {

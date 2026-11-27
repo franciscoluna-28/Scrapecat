@@ -10,7 +10,7 @@ import {
   type EmbeddingWrite,
 } from "@/rag/indexing/commit-embeddings-store";
 import {
-  embedTexts,
+  embedTextsWithUsage,
   resolveEmbeddingSpace,
   type EmbeddingSpace,
 } from "@/rag/indexing/embeddings";
@@ -21,6 +21,13 @@ export type IngestResult = {
   chunksWritten: number;
   summarized: number;
   embedded: number;
+  gitMs: number;
+  dbMs: number;
+  embeddingMs: number;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
+  embeddingInputTokens: number | null;
+  embeddingOutputTokens: number | null;
   tipSha: string;
 };
 
@@ -93,10 +100,16 @@ export async function ingestCommits(
     ...(opts.requestId ? { reqId: opts.requestId } : {}),
   };
 
+  let gitMs = 0;
+  let dbMs = 0;
+
+  const listStart = performance.now();
   const { commits, tipSha } = await source.listCommits({
     since: startDate,
     until: endDate,
   });
+  gitMs += performance.now() - listStart;
+
   onProgress?.(
     "commits",
     `Found ${commits.length} commits`,
@@ -104,20 +117,31 @@ export async function ingestCommits(
     commits.length,
   );
 
+  const spaceStart = performance.now();
   const space = env.EMBEDDING_ENABLED ? await resolveSpaceSafe() : null;
+  dbMs += performance.now() - spaceStart;
 
   let written = 0;
   let embedded = 0;
+  let embeddingMs = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let inputTokensKnown = true;
+  let outputTokensKnown = true;
   let embeddingDisabled = false;
 
   for (const commit of commits) {
+    const existingStart = performance.now();
     const existing = await commitEmbeddingsStore.getByKey({
       repoId: projectId,
       branch,
       commitSha: commit.sha,
     });
+    dbMs += performance.now() - existingStart;
 
+    const diffStart = performance.now();
     const diff = await source.readDiff(commit);
+    gitMs += performance.now() - diffStart;
     if (!diff) continue;
 
     const contentText = commitEmbeddingText(diff.filesChanged, commit.message);
@@ -132,10 +156,22 @@ export async function ingestCommits(
     if (existingEmbeddingIsCurrent) {
       embedded += 1;
     } else if (space && !embeddingDisabled) {
+      const embedStart = performance.now();
       try {
-        const [vector] = await embedTexts([contentText], space);
+        const { embeddings, usage } = await embedTextsWithUsage([contentText], space);
+        const vector = embeddings[0]!;
         embedding = { vector, provider: space.provider, model: space.model };
         embedded += 1;
+        if (usage.inputTokens === null) {
+          inputTokensKnown = false;
+        } else {
+          inputTokens += usage.inputTokens;
+        }
+        if (usage.outputTokens === null) {
+          outputTokensKnown = false;
+        } else {
+          outputTokens += usage.outputTokens;
+        }
       } catch (error) {
         const message = (error as Error)?.message ?? String(error);
         if (isFatalEmbeddingError(error)) {
@@ -150,9 +186,12 @@ export async function ingestCommits(
             "commit embedding failed; stored commit without a vector",
           );
         }
+      } finally {
+        embeddingMs += performance.now() - embedStart;
       }
     }
 
+    const upsertStart = performance.now();
     await commitEmbeddingsStore.upsertCommit({
       repoId: projectId,
       branch,
@@ -167,6 +206,7 @@ export async function ingestCommits(
       contentHash,
       ...(embedding ? { embedding } : {}),
     });
+    dbMs += performance.now() - upsertStart;
 
     written += 1;
     onProgress?.(
@@ -181,6 +221,12 @@ export async function ingestCommits(
     onProgress?.("embedding", `Embedded ${embedded} commits`);
   }
 
+  const totalGitMs = Math.round(gitMs);
+  const totalDbMs = Math.round(dbMs);
+  const totalEmbeddingMs = Math.round(embeddingMs);
+  const totalInputTokens = inputTokensKnown ? inputTokens : null;
+  const totalOutputTokens = outputTokensKnown ? outputTokens : null;
+
   logger.info(
     {
       ...base,
@@ -188,6 +234,13 @@ export async function ingestCommits(
       chunksWritten: written,
       summarized: 0,
       embedded,
+      gitMs: totalGitMs,
+      dbMs: totalDbMs,
+      embeddingMs: totalEmbeddingMs,
+      embeddingProvider: space?.provider ?? null,
+      embeddingModel: space?.model ?? null,
+      embeddingInputTokens: totalInputTokens,
+      embeddingOutputTokens: totalOutputTokens,
       tipSha,
     },
     "ingest complete",
@@ -198,6 +251,13 @@ export async function ingestCommits(
     chunksWritten: written,
     summarized: 0,
     embedded,
+    gitMs: totalGitMs,
+    dbMs: totalDbMs,
+    embeddingMs: totalEmbeddingMs,
+    embeddingProvider: space?.provider ?? null,
+    embeddingModel: space?.model ?? null,
+    embeddingInputTokens: totalInputTokens,
+    embeddingOutputTokens: totalOutputTokens,
     tipSha,
   };
 }

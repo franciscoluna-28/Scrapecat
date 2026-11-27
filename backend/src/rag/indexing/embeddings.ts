@@ -14,6 +14,18 @@ export type EmbeddingSpace = {
   model: string;
 };
 
+export type EmbeddingUsage = EmbeddingSpace & {
+  /** Input tokens billed by the provider; null when the response omits usage. */
+  inputTokens: number | null;
+  /** Output tokens billed by the provider; embeddings usually report 0. */
+  outputTokens: number | null;
+};
+
+export type EmbedTextsResult = {
+  embeddings: number[][];
+  usage: EmbeddingUsage;
+};
+
 export async function resolveEmbeddingSpace(
   opts?: { provider?: string; model?: string },
 ): Promise<EmbeddingSpace> {
@@ -28,11 +40,45 @@ export async function resolveEmbeddingSpace(
   };
 }
 
-export async function embedTexts(
+function toTokenCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : null;
+}
+
+function readUsage(response: {
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}): { inputTokens: number | null; outputTokens: number | null } {
+  const inputTokens = toTokenCount(
+    response.usage?.prompt_tokens ?? response.usage?.total_tokens,
+  );
+  // Embedding models do not bill output tokens; report an explicit 0 when the
+  // provider returned usage but omitted the field.
+  const outputTokens =
+    toTokenCount(response.usage?.completion_tokens) ??
+    (inputTokens === null ? null : 0);
+  return { inputTokens, outputTokens };
+}
+
+export async function embedTextsWithUsage(
   texts: string[],
   opts?: { model?: string; apiKey?: string; provider?: string },
-): Promise<number[][]> {
-  if (texts.length === 0) return [];
+): Promise<EmbedTextsResult> {
+  if (texts.length === 0) {
+    return {
+      embeddings: [],
+      usage: {
+        provider: opts?.provider ?? "",
+        model: opts?.model ?? "",
+        inputTokens: null,
+        outputTokens: null,
+      },
+    };
+  }
 
   const { provider, model } = await resolveEmbeddingSpace(opts);
   const config = getProviderConfig(provider);
@@ -84,15 +130,28 @@ export async function embedTexts(
     return emb;
   });
 
+  const { inputTokens, outputTokens } = readUsage(response);
+
   logger.info(
     {
       provider,
       model,
       count: texts.length,
+      inputTokens,
+      outputTokens,
       durationMs: Math.round(performance.now() - start),
     },
     "embedTexts complete",
   );
 
+  return { embeddings, usage: { provider, model, inputTokens, outputTokens } };
+}
+
+/** Vectors-only wrapper for callers that do not track usage (retrieval). */
+export async function embedTexts(
+  texts: string[],
+  opts?: { model?: string; apiKey?: string; provider?: string },
+): Promise<number[][]> {
+  const { embeddings } = await embedTextsWithUsage(texts, opts);
   return embeddings;
 }
